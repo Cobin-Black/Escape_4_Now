@@ -4,17 +4,17 @@ using UnityEngine.InputSystem;
 
 namespace Escape4Now.TurnSystem
 {
-    // Lists the types of turns supported by the game.
+    //Lists the types of turns supported by the game.
     public enum TurnOwner
     {
         Player,
         Enemy
     }
 
-    // Tracks whose turn it is and shows the turn controls.
+    //Tracks whose turn it is and shows the turn controls.
     public sealed class TurnSystemController : MonoBehaviour
     {
-        // Player order, optional enemy turn, and current turn details.
+        //Player order, optional enemy turn, and current turn details.
         [SerializeField] private PlayerCharacter[] players = new PlayerCharacter[0];
         [SerializeField] private bool includeEnemyTurn = false;
         [SerializeField] private string enemyTurnName = "Enemy";
@@ -26,19 +26,19 @@ namespace Escape4Now.TurnSystem
 
         private GUIStyle turnDisplayStyle;
 
-        // Read-only turn details for other scripts.
+        //Read-only turn details for other scripts.
         public TurnOwner CurrentTurnOwner => currentTurnOwner;
         public int CurrentPlayerIndex => currentPlayerIndex;
         public int TurnNumber => turnNumber;
         public string CurrentTurnName => currentTurnName;
 
-        // Starts the scene on Player One's turn.
+        //Starts the scene on Player One's turn.
         private void Start()
         {
             RestartAtPlayerOne();
         }
 
-        // Restarts the turn count when Space is pressed.
+        //Restarts the turn count when Space is pressed.
         private void Update()
         {
             if (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame)
@@ -47,7 +47,7 @@ namespace Escape4Now.TurnSystem
             }
         }
 
-        // Keeps the selected player and turn count within valid limits.
+        //Keeps the selected player and turn count within valid limits.
         private void OnValidate()
         {
             currentPlayerIndex = Mathf.Clamp(currentPlayerIndex, 0, Mathf.Max(0, GetPlayerCount() - 1));
@@ -55,7 +55,7 @@ namespace Escape4Now.TurnSystem
             RefreshCurrentTurnName();
         }
 
-        // Draws the current turn label and End Turn button.
+        //Draws the current turn label and End Turn button.
         private void OnGUI()
         {
             if (!showTurnDisplay)
@@ -79,7 +79,7 @@ namespace Escape4Now.TurnSystem
             }
         }
 
-        // Changes turns after movement has finished.
+        //Changes turns after movement has finished.
         [ContextMenu("Advance Turn")]
         public void AdvanceTurn()
         {
@@ -89,7 +89,7 @@ namespace Escape4Now.TurnSystem
                 return;
             }
 
-            // Finish the current move before changing players.
+            //Finish the current move before changing players.
             foreach (PlayerCharacter player in players)
             {
                 if (player != null && player.IsMoving)
@@ -123,7 +123,7 @@ namespace Escape4Now.TurnSystem
             turnNumber++;
         }
 
-        // Returns to Player One and resets the turn count.
+        //Returns to Player One and resets the turn count.
         [ContextMenu("Restart At Player One")]
         public void RestartAtPlayerOne()
         {
@@ -133,7 +133,7 @@ namespace Escape4Now.TurnSystem
             RefreshCurrentTurnName();
         }
 
-        // Checks that this player owns the current turn.
+        //Checks that this player owns the current turn.
         public bool IsPlayersTurn(PlayerCharacter player)
         {
             return currentTurnOwner == TurnOwner.Player
@@ -143,14 +143,7 @@ namespace Escape4Now.TurnSystem
                 && players[currentPlayerIndex] == player;
         }
 
-        // Stops clicks on the turn controls from also selecting floor tiles.
-        public bool IsPointerOverDisplay(Vector2 position)
-        {
-            return showTurnDisplay && (new Rect(16f, 16f, 420f, 40f).Contains(position)
-                || new Rect(16f, 58f, 120f, 32f).Contains(position));
-        }
-
-        // Selects a player using an index inside the player list.
+        //Selects a player using an index inside the player list.
         private void StartPlayerTurn(int playerIndex)
         {
             currentTurnOwner = TurnOwner.Player;
@@ -158,14 +151,14 @@ namespace Escape4Now.TurnSystem
             RefreshCurrentTurnName();
         }
 
-        // Selects the optional enemy turn and updates its label.
+        //Selects the optional enemy turn and updates its label.
         private void StartEnemyTurn()
         {
             currentTurnOwner = TurnOwner.Enemy;
             RefreshCurrentTurnName();
         }
 
-        // Returns zero when no player list is assigned.
+        //Returns zero when no player list is assigned.
         private int GetPlayerCount()
         {
             if (players == null)
@@ -176,7 +169,7 @@ namespace Escape4Now.TurnSystem
             return players.Length;
         }
 
-        // Uses the current player's name or the enemy label for the display.
+        //Uses the current player's name or the enemy label for the display.
         private void RefreshCurrentTurnName()
         {
             if (currentTurnOwner == TurnOwner.Enemy)
