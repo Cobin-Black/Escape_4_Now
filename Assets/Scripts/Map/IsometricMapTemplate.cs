@@ -7,7 +7,7 @@ namespace Escape4Now.Map
     [ExecuteAlways]
     public sealed class IsometricMapTemplate : MonoBehaviour
     {
-        // Map size, tile shape, and floor colors.
+        //Map size, tile shape, and floor colors.
         [SerializeField, Range(12, 40)] private int width = 18;
         [SerializeField, Range(12, 40)] private int height = 18;
         [SerializeField, Min(0.1f)] private float tileWidth = 1.2f;
@@ -19,28 +19,28 @@ namespace Escape4Now.Map
         [SerializeField] private Color leftSideColor = new Color(0.1f, 0.1f, 0.1f, 1f);
         [SerializeField] private bool generateOnStart = true;
 
-        // Exit placement and how much the front walls fade when a player stands behind them.
+        //Exit placement and how much the front walls fade when a player stands behind them.
         [SerializeField] private bool hasExit = true;
         [SerializeField] private Vector2Int exitGridPosition = new Vector2Int(9, 0);
         [SerializeField] private Color exitColor = new Color(0.2f, 0.75f, 0.35f);
         [SerializeField, Range(0f, 1f)] private float nearWallFadedAlpha = 0.15f;
 
-        // Shared drawing material and the last screen size.
+        //Shared drawing material and the last screen size.
         private Material tileMaterial;
         private int screenWidth;
         private int screenHeight;
 
-        // Generated tiles by grid address and which addresses currently hold a player.
+        //Generated tiles by grid address and which addresses currently hold a player.
         private readonly Dictionary<Vector2Int, IsometricMapTile> tileLookup = new Dictionary<Vector2Int, IsometricMapTile>();
         private readonly HashSet<Vector2Int> occupiedPositions = new HashSet<Vector2Int>();
 
-        // Read-only sizes used by the player and other scripts.
+        //Read-only sizes used by the player and other scripts.
         public int Width => width;
         public int Height => height;
         public float TileWidth => tileWidth;
         public float TileHeight => tileHeight;
 
-        // Creates the map when the scene starts.
+        //Creates the map when the scene starts.
         private void Start()
         {
             if (generateOnStart)
@@ -49,13 +49,13 @@ namespace Escape4Now.Map
             }
         }
 
-        // Checks map settings after changes in the Inspector.
+        //Checks map settings after changes in the Inspector.
         private void OnValidate()
         {
             ValidateSettings();
         }
 
-        // Keeps map sizes within limits before creating tiles.
+        //Keeps map sizes within limits before creating tiles.
         private void ValidateSettings()
         {
             width = Mathf.Clamp(width, 12, 40);
@@ -70,7 +70,7 @@ namespace Escape4Now.Map
             }
         }
 
-        // Moves an exit request onto the nearest border tile that is not a corner.
+        //Moves an exit request onto the nearest border tile that is not a corner.
         private Vector2Int ClampToValidExitPosition(Vector2Int cell)
         {
             int x = Mathf.Clamp(cell.x, 0, width - 1);
@@ -97,7 +97,7 @@ namespace Escape4Now.Map
             return new Vector2Int(x, y);
         }
 
-        // Converts a tile address into a position in the scene.
+        //Converts a tile address into a position in the scene.
         public Vector3 GridToWorld(Vector2Int gridPosition)
         {
             float worldX = (gridPosition.x - gridPosition.y) * tileWidth * 0.5f;
@@ -105,7 +105,7 @@ namespace Escape4Now.Map
             return transform.position + new Vector3(worldX, worldY, 0f);
         }
 
-        // Finds the nearest tile address, including positions outside the map.
+        //Finds the nearest tile address, including positions outside the map.
         public Vector2Int WorldToGrid(Vector3 worldPosition)
         {
             if (TryGetGridPosition(worldPosition, out Vector2Int gridPosition))
@@ -122,7 +122,7 @@ namespace Escape4Now.Map
             return new Vector2Int(gridX, gridY);
         }
 
-        // Finds the tile under a position and rejects positions outside the floor.
+        //Finds the tile under a position and rejects positions outside the floor.
         public bool TryGetGridPosition(Vector3 worldPosition, out Vector2Int gridPosition)
         {
             // Check each tile and find the one the mouse is inside.
@@ -143,7 +143,7 @@ namespace Escape4Now.Map
             return false;
         }
 
-        // Checks whether the tile is inside the map.
+        //Checks whether the tile is inside the map.
         public bool IsInsideMap(Vector2Int gridPosition)
         {
             return gridPosition.x >= 0
@@ -152,31 +152,31 @@ namespace Escape4Now.Map
                 && gridPosition.y < height;
         }
 
-        // Marks the outer tiles as walls, except where the exit replaces one.
+        //Marks the outer tiles as walls, except where the exit replaces one.
         private bool IsWall(Vector2Int cell)
         {
             return IsBorder(cell) && !IsExit(cell);
         }
 
-        // Checks whether a tile sits on the outer edge of the map.
+        //Checks whether a tile sits on the outer edge of the map.
         private bool IsBorder(Vector2Int cell)
         {
             return cell.x == 0 || cell.y == 0 || cell.x == width - 1 || cell.y == height - 1;
         }
 
-        // Checks whether a tile is the exit that ends the game when reached.
+        //Checks whether a tile is the exit that ends the game when reached.
         public bool IsExit(Vector2Int cell)
         {
             return hasExit && cell == exitGridPosition;
         }
 
-        // Allows movement on floor tiles inside the border walls, and onto the exit.
+        //Allows movement on floor tiles inside the border walls, and onto the exit.
         public bool IsWalkable(Vector2Int cell)
         {
             return IsInsideMap(cell) && !IsWall(cell);
         }
 
-        // Tracks where a player stands so the front walls beside it can fade, then refreshes them.
+        //Tracks where a player stands so the front walls beside it can fade, then refreshes them.
         public void SetOccupantPosition(Vector2Int previousPosition, Vector2Int newPosition)
         {
             occupiedPositions.Remove(previousPosition);
@@ -184,14 +184,14 @@ namespace Escape4Now.Map
             RefreshNearWallVisibility();
         }
 
-        // Stops tracking a player, such as when it is destroyed.
+        //Stops tracking a player, such as when it is destroyed.
         public void RemoveOccupant(Vector2Int position)
         {
             occupiedPositions.Remove(position);
             RefreshNearWallVisibility();
         }
 
-        // Fades the front-left and front-bottom border walls whenever a player stands directly behind them.
+        //Fades the front-left and front-bottom border walls whenever a player stands directly behind them.
         private void RefreshNearWallVisibility()
         {
             foreach (KeyValuePair<Vector2Int, IsometricMapTile> entry in tileLookup)
@@ -217,27 +217,30 @@ namespace Escape4Now.Map
             }
         }
 
-        // Finds a shortest route through open tiles or returns false if none exists.
+        //Finds a shortest route through open tiles or returns false if none exists.
         public bool TryFindPath(Vector2Int start, Vector2Int end, out List<Vector2Int> path)
         {
             path = new List<Vector2Int>();
+
             if (!IsWalkable(start) || !IsWalkable(end) || start == end)
             {
                 return false;
             }
 
-            // Search each nearby tile once until the destination is reached.
+            //Search each nearby tile once until the destination is reached.
             Queue<Vector2Int> pending = new Queue<Vector2Int>();
             Dictionary<Vector2Int, Vector2Int> previous = new Dictionary<Vector2Int, Vector2Int>();
             Vector2Int[] steps = { Vector2Int.right, Vector2Int.up, Vector2Int.left, Vector2Int.down };
+
             pending.Enqueue(start);
             previous[start] = start;
+
             while (pending.Count > 0)
             {
                 Vector2Int cell = pending.Dequeue();
                 if (cell == end)
                 {
-                    // Follow the saved steps backward, then put them in walking order.
+                    //Follow the saved steps backward, then put them in walking order.
                     Vector2Int step = end;
                     while (step != start)
                     {
@@ -263,7 +266,7 @@ namespace Escape4Now.Map
             return false;
         }
 
-        // Checks whether a point is inside a tile's diamond shape.
+        //Checks whether a point is inside a tile's diamond shape.
         private bool IsInsideTileFootprint(Vector3 worldPosition, Vector2Int gridPosition)
         {
             Vector3 tileCenter = GridToWorld(gridPosition);
@@ -273,7 +276,7 @@ namespace Escape4Now.Map
             return localX / (tileWidth * 0.5f) + localY / (tileHeight * 0.5f) <= 1f;
         }
 
-        // Replaces the old tiles and fits the camera around the new map.
+        //Replaces the old tiles and fits the camera around the new map.
         public void GenerateBlankMap()
         {
             ValidateSettings();
@@ -289,7 +292,7 @@ namespace Escape4Now.Map
             FitCamera();
         }
 
-        // Creates one floor tile, its click area, and its border wall if needed.
+        //Creates one floor tile, its click area, and its border wall if needed.
         private void CreateTile(Vector2Int gridPosition)
         {
             GameObject tile = new GameObject($"Tile {gridPosition.x}, {gridPosition.y}");
@@ -314,7 +317,7 @@ namespace Escape4Now.Map
             AddBorderWall(tile.transform, gridPosition, mapTile);
         }
 
-        // Adds a low wall, or the exit, to tiles along the map border.
+        //Adds a low wall, or the exit, to tiles along the map border.
         private void AddBorderWall(Transform tile, Vector2Int cell, IsometricMapTile mapTile)
         {
             int order = 500 - (cell.x + cell.y) * 10;
@@ -346,7 +349,7 @@ namespace Escape4Now.Map
             }
         }
 
-        // Draws a raised box with a top and two shaded sides.
+        //Draws a raised box with a top and two shaded sides.
         private Renderer CreateBlock(Transform parent, string label, Vector2 offset, float sizeX,
             float sizeY, float bottom, float blockHeight, Color color, int order)
         {
@@ -378,7 +381,7 @@ namespace Escape4Now.Map
             return renderer;
         }
 
-        // Fits the camera again when the game window changes size.
+        //Fits the camera again when the game window changes size.
         private void Update()
         {
             bool screenSizeChanged = screenWidth != Screen.width || screenHeight != Screen.height;
@@ -388,7 +391,7 @@ namespace Escape4Now.Map
             }
         }
 
-        // Centers the camera and keeps the full map in view.
+        //Centers the camera and keeps the full map in view.
         private void FitCamera()
         {
             Camera camera = Camera.main;
@@ -406,12 +409,12 @@ namespace Escape4Now.Map
             screenHeight = Screen.height;
         }
 
-        // Builds the floor diamond and any visible outside edges.
+        //Builds the floor diamond and any visible outside edges.
         private Mesh CreateTileMesh(Vector2Int gridPosition)
         {
             Color topColor = (gridPosition.x + gridPosition.y) % 2 == 0 ? floorColor : alternateFloorColor;
             List<int> faces = new List<int> { 0, 1, 2, 0, 2, 3 };
-            // Only the outside edge of the floor needs a visible side.
+            //Only the outside edge of the floor needs a visible side.
             if (gridPosition.y == 0)
             {
                 faces.AddRange(new[] { 1, 4, 5, 1, 5, 2 });
