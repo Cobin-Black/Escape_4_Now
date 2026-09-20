@@ -80639,7 +80639,6 @@ GameObject:
   - component: {fileID: 1200000011}
   - component: {fileID: 1200000012}
   - component: {fileID: 1200000013}
-  - component: {fileID: 1200000014}
   m_Layer: 0
   m_Name: Player One
   m_TagString: Untagged
@@ -80731,30 +80730,16 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ec1d52d99628405ab1371d06266ade13, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  m_Name:
+  m_EditorClassIdentifier:
   mapTemplate: {fileID: 1200000002}
+  turnSystem: {fileID: 1200000022}
   gridPosition: {x: 2, y: 2}
   playerColor: {r: 0, g: 0, b: 0, a: 1}
   outlineColor: {r: 0.65, g: 0.65, b: 0.65, a: 1}
   markerWidth: 0.7
   markerHeight: 0.95
   moveSpeed: 4
---- !u!114 &1200000014
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1200000010}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: c72fb0e8f9c84fd68b76d3ee1210f891, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
-  gameplayCamera: {fileID: 519420031}
-  mapTemplate: {fileID: 1200000002}
-  turnSystem: {fileID: 1200000022}
 --- !u!1 &1200000020
 GameObject:
   m_ObjectHideFlags: 0
