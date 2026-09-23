@@ -80734,6 +80734,7 @@ MonoBehaviour:
   m_EditorClassIdentifier:
   mapTemplate: {fileID: 1200000002}
   turnSystem: {fileID: 1200000022}
+  inputActions: {fileID: -944628639613478452, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
   gridPosition: {x: 2, y: 2}
   playerColor: {r: 0, g: 0, b: 0, a: 1}
   outlineColor: {r: 0.65, g: 0.65, b: 0.65, a: 1}

@@ -14,6 +14,7 @@ namespace Escape4Now.Player
         //Starting tile, appearance, and movement speed.
         [SerializeField] private IsometricMapTemplate mapTemplate;
         [SerializeField] private TurnSystemController turnSystem;
+        [SerializeField] private InputActionAsset inputActions;
         [SerializeField] private Vector2Int gridPosition = new Vector2Int(2, 2);
         [SerializeField] private Color playerColor = Color.black;
         [SerializeField] private Color outlineColor = new Color(0.65f, 0.65f, 0.65f, 1f);
@@ -31,12 +32,14 @@ namespace Escape4Now.Player
         private int lastRoll;
         private int movesRemaining;
         private GUIStyle rollDisplayStyle;
+        private InputAction moveAction;
+        private InputAction diceRollAction;
 
         //Read-only movement state for the turn and map scripts.
         public Vector2Int GridPosition => gridPosition;
         public bool IsMoving => moveRoutine != null;
 
-        //Checks settings and places the player on its starting tile.
+        //Checks settings, places the player on its starting tile, and finds its input actions.
         private void Awake()
         {
             ValidateSettings();
@@ -47,22 +50,31 @@ namespace Escape4Now.Player
             {
                 mapTemplate.SetOccupantPosition(gridPosition, gridPosition);
             }
+
+            if (inputActions != null)
+            {
+                InputActionMap playerActionMap = inputActions.FindActionMap("Player");
+                if (playerActionMap != null)
+                {
+                    moveAction = playerActionMap.FindAction("Move");
+                    diceRollAction = playerActionMap.FindAction("Dice Roll");
+                }
+            }
         }
 
-        //Reads dice roll and movement key input each frame.
-        private void Update()
+        //Subscribes to and enables this player's input actions.
+        private void OnEnable()
         {
-            if (hasReachedExit)
+            if (moveAction != null)
             {
-                return;
+                moveAction.performed += OnMovePerformed;
+                moveAction.Enable();
             }
 
-            HandleDiceRollInput();
-
-            Vector2Int direction = ReadDirectionPressedThisFrame();
-            if (direction != Vector2Int.zero)
+            if (diceRollAction != null)
             {
-                TryMoveInDirection(direction);
+                diceRollAction.performed += OnDiceRollPerformed;
+                diceRollAction.Enable();
             }
         }
 
@@ -86,50 +98,45 @@ namespace Escape4Now.Player
             GUI.Label(new Rect(16f, 100f, 420f, 30f), message, rollDisplayStyle);
         }
 
-        //Rolls a six-sided die on Space, giving this turn's move budget.
-        private void HandleDiceRollInput()
+        //Rolls a six-sided die when the Dice Roll action fires, giving this turn's move budget.
+        private void OnDiceRollPerformed(InputAction.CallbackContext context)
         {
-            Keyboard keyboard = Keyboard.current;
-            if (keyboard == null || hasRolled || IsMoving)
+            if (hasReachedExit || hasRolled || IsMoving)
             {
                 return;
             }
 
-            if (keyboard.spaceKey.wasPressedThisFrame)
+            lastRoll = Random.Range(1, 7);
+            movesRemaining = lastRoll;
+            hasRolled = true;
+        }
+
+        //Turns the Move action's value into a single cardinal step when it fires.
+        private void OnMovePerformed(InputAction.CallbackContext context)
+        {
+            if (hasReachedExit)
             {
-                lastRoll = Random.Range(1, 7);
-                movesRemaining = lastRoll;
-                hasRolled = true;
+                return;
+            }
+
+            Vector2Int direction = ToCardinalDirection(context.ReadValue<Vector2>());
+            if (direction != Vector2Int.zero)
+            {
+                TryMoveInDirection(direction);
             }
         }
 
-        //Reads the first movement key pressed this frame, or zero if none was.
-        private Vector2Int ReadDirectionPressedThisFrame()
+        //Collapses a possibly diagonal input value into a single grid-aligned step.
+        private static Vector2Int ToCardinalDirection(Vector2 rawValue)
         {
-            Keyboard keyboard = Keyboard.current;
-            if (keyboard == null)
+            if (Mathf.Abs(rawValue.x) > Mathf.Abs(rawValue.y))
             {
-                return Vector2Int.zero;
+                return rawValue.x > 0f ? Vector2Int.right : Vector2Int.left;
             }
 
-            if (keyboard.upArrowKey.wasPressedThisFrame || keyboard.wKey.wasPressedThisFrame)
+            if (Mathf.Abs(rawValue.y) > 0f)
             {
-                return Vector2Int.up;
-            }
-
-            if (keyboard.downArrowKey.wasPressedThisFrame || keyboard.sKey.wasPressedThisFrame)
-            {
-                return Vector2Int.down;
-            }
-
-            if (keyboard.leftArrowKey.wasPressedThisFrame || keyboard.aKey.wasPressedThisFrame)
-            {
-                return Vector2Int.left;
-            }
-
-            if (keyboard.rightArrowKey.wasPressedThisFrame || keyboard.dKey.wasPressedThisFrame)
-            {
-                return Vector2Int.right;
+                return rawValue.y > 0f ? Vector2Int.up : Vector2Int.down;
             }
 
             return Vector2Int.zero;
@@ -312,17 +319,27 @@ namespace Escape4Now.Player
             Time.timeScale = 0f;
         }
 
-        //Cancels an interrupted move and returns to the last completed tile.
+        //Unsubscribes and disables this player's input actions, and cancels an interrupted move.
         private void OnDisable()
         {
-            if (moveRoutine == null)
+            if (moveAction != null)
             {
-                return;
+                moveAction.performed -= OnMovePerformed;
+                moveAction.Disable();
             }
 
-            StopCoroutine(moveRoutine);
-            moveRoutine = null;
-            SnapToGridPosition();
+            if (diceRollAction != null)
+            {
+                diceRollAction.performed -= OnDiceRollPerformed;
+                diceRollAction.Disable();
+            }
+
+            if (moveRoutine != null)
+            {
+                StopCoroutine(moveRoutine);
+                moveRoutine = null;
+                SnapToGridPosition();
+            }
         }
 
         //Releases the generated image and stops tracking this player on the map.
