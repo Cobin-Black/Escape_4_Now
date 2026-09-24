@@ -34,6 +34,12 @@ namespace Escape4Now.Map
         private readonly Dictionary<Vector2Int, IsometricMapTile> tileLookup = new Dictionary<Vector2Int, IsometricMapTile>();
         private readonly HashSet<Vector2Int> occupiedPositions = new HashSet<Vector2Int>();
 
+        //Addresses covered by obstacles, which players cannot walk onto.
+        private readonly HashSet<Vector2Int> blockedPositions = new HashSet<Vector2Int>();
+
+        //Tells obstacles and other listeners when a player changes tiles.
+        public event System.Action OccupantsChanged;
+
         //Read-only sizes used by the player and other scripts.
         public int Width => width;
         public int Height => height;
@@ -170,10 +176,40 @@ namespace Escape4Now.Map
             return hasExit && cell == exitGridPosition;
         }
 
-        //Allows movement on floor tiles inside the border walls, and onto the exit.
+        //Checks whether a tile is a floor tile inside the border walls.
+        public bool IsInteriorFloor(Vector2Int cell)
+        {
+            return IsInsideMap(cell) && !IsBorder(cell);
+        }
+
+        //Allows movement on floor tiles inside the border walls, and onto the exit, unless an obstacle is there.
         public bool IsWalkable(Vector2Int cell)
         {
-            return IsInsideMap(cell) && !IsWall(cell);
+            return IsInsideMap(cell) && !IsWall(cell) && !blockedPositions.Contains(cell);
+        }
+
+        //Checks whether a player is standing on a tile.
+        public bool IsOccupied(Vector2Int cell)
+        {
+            return occupiedPositions.Contains(cell);
+        }
+
+        //Checks whether an obstacle already covers a tile.
+        public bool IsBlocked(Vector2Int cell)
+        {
+            return blockedPositions.Contains(cell);
+        }
+
+        //Marks a tile as covered by an obstacle. Returns false if another obstacle is already there.
+        public bool RegisterBlockedPosition(Vector2Int cell)
+        {
+            return blockedPositions.Add(cell);
+        }
+
+        //Frees a tile when its obstacle moves or is removed.
+        public void UnregisterBlockedPosition(Vector2Int cell)
+        {
+            blockedPositions.Remove(cell);
         }
 
         //Tracks where a player stands so the front walls beside it can fade, then refreshes them.
@@ -182,6 +218,7 @@ namespace Escape4Now.Map
             occupiedPositions.Remove(previousPosition);
             occupiedPositions.Add(newPosition);
             RefreshNearWallVisibility();
+            OccupantsChanged?.Invoke();
         }
 
         //Stops tracking a player, such as when it is destroyed.
@@ -189,6 +226,7 @@ namespace Escape4Now.Map
         {
             occupiedPositions.Remove(position);
             RefreshNearWallVisibility();
+            OccupantsChanged?.Invoke();
         }
 
         //Fades the front-left and front-bottom border walls whenever a player stands directly behind them.
