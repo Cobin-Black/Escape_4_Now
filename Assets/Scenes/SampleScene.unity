@@ -80260,6 +80260,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1200000001}
   - component: {fileID: 1200000002}
+  - component: {fileID: 1200000003}
   m_Layer: 0
   m_Name: Blank Isometric Map Template
   m_TagString: Untagged
@@ -80628,6 +80629,29 @@ MonoBehaviour:
   rightSideColor: {r: 0.16, g: 0.16, b: 0.16, a: 1}
   leftSideColor: {r: 0.1, g: 0.1, b: 0.1, a: 1}
   generateOnStart: 1
+--- !u!114 &1200000003
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1200000000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4d3b166849ad4ff785f3b43179135ef8, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  tiles:
+  - position: {x: 4, y: 2}
+    type: 0
+  - position: {x: 6, y: 4}
+    type: 1
+  - position: {x: 8, y: 6}
+    type: 2
+  - position: {x: 4, y: 8}
+    type: 3
+  - position: {x: 10, y: 10}
+    type: 4
 --- !u!1 &1200000010
 GameObject:
   m_ObjectHideFlags: 0

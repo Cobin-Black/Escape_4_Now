@@ -1,6 +1,5 @@
 using Escape4Now.Player;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace Escape4Now.TurnSystem
 {
@@ -36,15 +35,6 @@ namespace Escape4Now.TurnSystem
         private void Start()
         {
             RestartAtPlayerOne();
-        }
-
-        //Restarts the turn count when Space is pressed.
-        private void Update()
-        {
-            if (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame)
-            {
-                RestartAtPlayerOne();
-            }
         }
 
         //Keeps the selected player and turn count within valid limits.
@@ -98,10 +88,20 @@ namespace Escape4Now.TurnSystem
                 }
             }
 
+            if (currentTurnOwner == TurnOwner.Player && currentPlayerIndex >= 0 && currentPlayerIndex < playerCount)
+            {
+                PlayerCharacter current = players[currentPlayerIndex];
+                if (current != null)
+                {
+                    current.FinishEventTurn();
+                    if (current.HasReachedExit) return;
+                }
+            }
+
             if (currentTurnOwner == TurnOwner.Enemy)
             {
-                StartPlayerTurn(0);
                 turnNumber++;
+                StartPlayerTurn(0);
                 return;
             }
 
@@ -119,18 +119,22 @@ namespace Escape4Now.TurnSystem
                 return;
             }
 
-            StartPlayerTurn(0);
             turnNumber++;
+            StartPlayerTurn(0);
         }
 
         //Returns to Player One and resets the turn count.
         [ContextMenu("Restart At Player One")]
         public void RestartAtPlayerOne()
         {
+            foreach (PlayerCharacter player in players ?? new PlayerCharacter[0])
+            {
+                if (player != null && player.IsMoving) return;
+            }
             currentTurnOwner = TurnOwner.Player;
             currentPlayerIndex = 0;
             turnNumber = 1;
-            RefreshCurrentTurnName();
+            StartPlayerTurn(0);
         }
 
         //Checks that this player owns the current turn.
@@ -147,8 +151,42 @@ namespace Escape4Now.TurnSystem
         private void StartPlayerTurn(int playerIndex)
         {
             currentTurnOwner = TurnOwner.Player;
-            currentPlayerIndex = Mathf.Clamp(playerIndex, 0, Mathf.Max(0, GetPlayerCount() - 1));
+            int count = GetPlayerCount();
+            currentPlayerIndex = Mathf.Clamp(playerIndex, 0, Mathf.Max(0, count - 1));
+            //Two passes allow every frozen player to skip once, even in a one-player game.
+            for (int attempts = 0; attempts < count * 2; attempts++)
+            {
+                PlayerCharacter player = players[currentPlayerIndex];
+                if (player != null && player.isActiveAndEnabled && !player.HasReachedExit && player.BeginEventTurn())
+                {
+                    RefreshCurrentTurnName();
+                    return;
+                }
+                currentPlayerIndex++;
+                if (currentPlayerIndex >= count)
+                {
+                    currentPlayerIndex = 0;
+                    if (includeEnemyTurn)
+                    {
+                        StartEnemyTurn();
+                        return;
+                    }
+                    turnNumber++;
+                }
+            }
             RefreshCurrentTurnName();
+        }
+
+        //Prevents forced event movement from placing two players on the same tile.
+        public bool IsOccupiedByOtherPlayer(PlayerCharacter movingPlayer, Vector2Int cell)
+        {
+            if (players == null) return false;
+            foreach (PlayerCharacter player in players)
+            {
+                if (player != null && player != movingPlayer && player.isActiveAndEnabled && player.GridPosition == cell)
+                    return true;
+            }
+            return false;
         }
 
         //Selects the optional enemy turn and updates its label.
