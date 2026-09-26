@@ -31,6 +31,14 @@ namespace Escape4Now.Player
         private int lastRoll;
         private int movesRemaining;
         private GUIStyle rollDisplayStyle;
+        private MapEventController mapEvents;
+        private Vector2Int lastDirection = Vector2Int.up;
+        private bool landingPending;
+        private readonly PlayerEventState eventState = new PlayerEventState();
+
+        //Keeps event effects separate for each player.
+        public PlayerEventState EventState => eventState;
+        public bool HasReachedExit => hasReachedExit;
 
         //Read-only movement state for the turn and map scripts.
         public Vector2Int GridPosition => gridPosition;
@@ -45,6 +53,7 @@ namespace Escape4Now.Player
             registeredPosition = gridPosition;
             if (mapTemplate != null)
             {
+                mapEvents = mapTemplate.GetComponent<MapEventController>();
                 mapTemplate.SetOccupantPosition(gridPosition, gridPosition);
             }
         }
@@ -69,6 +78,7 @@ namespace Escape4Now.Player
         //Draws the roll prompt or the current move budget.
         private void OnGUI()
         {
+            if (turnSystem != null && !turnSystem.IsPlayersTurn(this)) return;
             if (rollDisplayStyle == null)
             {
                 rollDisplayStyle = new GUIStyle(GUI.skin.label);
@@ -90,16 +100,25 @@ namespace Escape4Now.Player
         private void HandleDiceRollInput()
         {
             Keyboard keyboard = Keyboard.current;
-            if (keyboard == null || hasRolled || IsMoving)
+            if (keyboard == null || hasRolled || IsMoving
+                || (turnSystem != null && !turnSystem.IsPlayersTurn(this)))
             {
                 return;
             }
 
             if (keyboard.spaceKey.wasPressedThisFrame)
             {
-                lastRoll = Random.Range(1, 7);
-                movesRemaining = lastRoll;
+                int first = Random.Range(1, 7);
+                bool lucky = eventState.HasLuckyRoll;
+                int second = lucky ? Random.Range(1, 7) : first;
+                lastRoll = lucky ? Mathf.Max(first, second) : first;
+                movesRemaining = eventState.UseRoll(first, second);
                 hasRolled = true;
+                if (mapEvents != null && (lucky || movesRemaining != lastRoll))
+                {
+                    string result = lucky ? "Lucky Roll: " + first + " and " + second + ". Kept " + lastRoll + ". " : "";
+                    mapEvents.ShowMessage(this, result + "Movement: " + movesRemaining + ".");
+                }
             }
         }
 
@@ -148,17 +167,32 @@ namespace Escape4Now.Player
                 return false;
             }
 
-            bool moved = MoveToGridPosition(gridPosition + direction);
-            if (moved)
-            {
-                movesRemaining--;
-                if (movesRemaining <= 0)
-                {
-                    hasRolled = false;
-                }
-            }
+            return MoveToGridPosition(gridPosition + direction);
+        }
 
-            return moved;
+        //Starts a fresh movement budget, or consumes one frozen turn.
+        public bool BeginEventTurn()
+        {
+            hasRolled = false;
+            movesRemaining = 0;
+            landingPending = false;
+            bool canPlay = eventState.BeginTurn();
+            if (!canPlay && mapEvents != null) mapEvents.ShowMessage(this, "Frozen: this turn was skipped.");
+            return canPlay;
+        }
+
+        //Applies a landing event once when movement or the turn ends.
+        public void FinishEventTurn()
+        {
+            if (!landingPending || IsMoving || hasReachedExit) return;
+            landingPending = false;
+            if (mapEvents != null) mapEvents.ResolveLanding(this, lastDirection);
+        }
+
+        //Checks the turn's player list before an event moves onto another player.
+        public bool IsOccupiedByOtherPlayer(Vector2Int cell)
+        {
+            return turnSystem != null && turnSystem.IsOccupiedByOtherPlayer(this, cell);
         }
 
         //Checks settings after changes in the Inspector.
@@ -186,13 +220,16 @@ namespace Escape4Now.Player
             gridPosition = newGridPosition;
             SnapToGridPosition();
             UpdateMapOccupancy(newGridPosition);
+            if (mapTemplate.IsExit(newGridPosition)) ReachExit();
             return true;
         }
 
         //Starts a move only when the player is ready and a valid route exists.
         public bool MoveToGridPosition(Vector2Int newGridPosition)
         {
-            if (!isActiveAndEnabled || IsMoving || hasReachedExit || mapTemplate == null)
+            if (!isActiveAndEnabled || IsMoving || hasReachedExit || mapTemplate == null
+                || !hasRolled || movesRemaining <= 0
+                || (turnSystem != null && !turnSystem.IsPlayersTurn(this)))
             {
                 return false;
             }
@@ -202,6 +239,8 @@ namespace Escape4Now.Player
                 return false;
             }
 
+            if (path.Count > movesRemaining) return false;
+            movesRemaining -= path.Count;
             moveRoutine = StartCoroutine(MoveAlongPath(path));
             return true;
         }
@@ -279,7 +318,9 @@ namespace Escape4Now.Player
                     yield return null;
                 }
                 transform.position = targetPosition;
+                lastDirection = next - gridPosition;
                 gridPosition = next;
+                landingPending = true;
                 UpdateMapOccupancy(next);
 
                 if (mapTemplate.IsExit(next))
@@ -289,6 +330,15 @@ namespace Escape4Now.Player
                 }
             }
             moveRoutine = null;
+            if (movesRemaining == 0)
+            {
+                if (turnSystem != null) turnSystem.AdvanceTurn();
+                else
+                {
+                    FinishEventTurn();
+                    BeginEventTurn();
+                }
+            }
         }
 
         //Updates which tile the map thinks this player occupies, for wall fading.
