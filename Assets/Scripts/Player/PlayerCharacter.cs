@@ -1,9 +1,11 @@
 using Escape4Now.Map;
 using Escape4Now.TurnSystem;
+using Escape4Now.Items;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+
 
 namespace Escape4Now.Player
 {
@@ -14,6 +16,7 @@ namespace Escape4Now.Player
         //Starting tile, appearance, and movement speed.
         [SerializeField] private IsometricMapTemplate mapTemplate;
         [SerializeField] private TurnSystemController turnSystem;
+        [SerializeField] private PlayerInventory inventory;
         [SerializeField] private Vector2Int gridPosition = new Vector2Int(2, 2);
         [SerializeField] private Color playerColor = Color.black;
         [SerializeField] private Color outlineColor = new Color(0.65f, 0.65f, 0.65f, 1f);
@@ -31,10 +34,16 @@ namespace Escape4Now.Player
         private int lastRoll;
         private int movesRemaining;
         private GUIStyle rollDisplayStyle;
+        private bool isUsingItem;
 
         //Read-only movement state for the turn and map scripts.
         public Vector2Int GridPosition => gridPosition;
         public bool IsMoving => moveRoutine != null;
+        //Returns true when the player is not currently using a normal movement roll.
+        public bool CanUseItem()
+        {
+            return !hasRolled && !IsMoving && !hasReachedExit;
+        }
 
         //Checks settings and places the player on its starting tile.
         private void Awake()
@@ -53,6 +62,11 @@ namespace Escape4Now.Player
         private void Update()
         {
             if (hasReachedExit)
+            {
+                return;
+            }
+
+            if (isUsingItem)
             {
                 return;
             }
@@ -133,6 +147,22 @@ namespace Escape4Now.Player
             }
 
             return Vector2Int.zero;
+        }
+
+        //Gives the player a movement budget from an item such as the Double Dice.
+        public void SetMovesFromItem(int moveAmount)
+        {
+            if (hasReachedExit || IsMoving || moveAmount <= 0)
+            {
+                return;
+            }
+
+            //Replace the current movement budget with the item's roll.
+            lastRoll = moveAmount;
+            movesRemaining = moveAmount;
+            hasRolled = true;
+
+            Debug.Log($"Item gave the player {moveAmount} moves.");
         }
 
         //Rejects moves before a roll, outside the player's turn, or past the roll's move budget.
@@ -281,6 +311,7 @@ namespace Escape4Now.Player
                 transform.position = targetPosition;
                 gridPosition = next;
                 UpdateMapOccupancy(next);
+                CheckForItem(next);
 
                 if (mapTemplate.IsExit(next))
                 {
@@ -302,6 +333,38 @@ namespace Escape4Now.Player
             mapTemplate.SetOccupantPosition(registeredPosition, newPosition);
             registeredPosition = newPosition;
         }
+
+        //Checks whether the player landed on an item and collects it.
+        private void CheckForItem(Vector2Int position)
+        {
+            if (inventory == null)
+                return;
+
+            Item[] items = FindObjectsByType<Item>(FindObjectsSortMode.None);
+
+            foreach (Item item in items)
+            {
+                if (item == null)
+                    continue;
+
+                if (!item.IsAtPosition(position))
+                    continue;
+                Debug.Log($"[Item System] Found {item.ItemName} at grid position {position}.");
+                item.PickUp(inventory);
+                return;
+            }
+        }
+
+        public void SetUsingItem(bool usingItem)
+        {
+            isUsingItem = usingItem;
+        }
+
+        public bool IsUsingItem()
+        {
+            return isUsingItem;
+        }
+
 
         //Stops the player at the exit and pauses the game to show the win.
         private void ReachExit()
