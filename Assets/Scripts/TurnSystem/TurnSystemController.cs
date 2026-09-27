@@ -25,6 +25,9 @@ namespace Escape4Now.TurnSystem
 
         private GUIStyle turnDisplayStyle;
 
+        //Notifies shared effects when a player finishes or skips a turn.
+        public event System.Action PlayerTurnEnded;
+
         //Read-only turn details for other scripts.
         public TurnOwner CurrentTurnOwner => currentTurnOwner;
         public int CurrentPlayerIndex => currentPlayerIndex;
@@ -93,9 +96,13 @@ namespace Escape4Now.TurnSystem
                 PlayerCharacter current = players[currentPlayerIndex];
                 if (current != null)
                 {
-                    current.FinishEventTurn();
                     if (current.HasReachedExit) return;
                 }
+            }
+
+            if (currentTurnOwner == TurnOwner.Player)
+            {
+                PlayerTurnEnded?.Invoke();
             }
 
             if (currentTurnOwner == TurnOwner.Enemy)
@@ -157,10 +164,15 @@ namespace Escape4Now.TurnSystem
             for (int attempts = 0; attempts < count * 2; attempts++)
             {
                 PlayerCharacter player = players[currentPlayerIndex];
-                if (player != null && player.isActiveAndEnabled && !player.HasReachedExit && player.BeginEventTurn())
+                if (player != null && player.isActiveAndEnabled && !player.HasReachedExit)
                 {
-                    RefreshCurrentTurnName();
-                    return;
+                    if (player.BeginEventTurn())
+                    {
+                        RefreshCurrentTurnName();
+                        return;
+                    }
+                    //A frozen turn still counts as one skipped player turn.
+                    PlayerTurnEnded?.Invoke();
                 }
                 currentPlayerIndex++;
                 if (currentPlayerIndex >= count)
