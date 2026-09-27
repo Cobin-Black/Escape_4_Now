@@ -42,7 +42,7 @@ namespace Escape4Now.Map
             if (turnSystem != null) turnSystem.PlayerTurnEnded -= CountBlackoutTurn;
         }
 
-        //Keeps the triggering turn free, then counts three or four full player turns.
+        //Keeps the triggering turn free, then counts four full player turns.
         private void CountBlackoutTurn()
         {
             if (visibilityTurnsRemaining <= 0) return;
@@ -111,7 +111,7 @@ namespace Escape4Now.Map
             if (player != null) message = player.name + ": " + result;
         }
 
-        //Starts one event chain for this completed step. Warp ends the turn.
+        //Starts one event chain for this completed step.
         public bool ResolveStep(PlayerCharacter player, Vector2Int direction)
         {
             if (player == null || !player.IsResolvingEventStep) return false;
@@ -130,7 +130,8 @@ namespace Escape4Now.Map
             {
                 case MapEventType.Warp:
                     Warp(player);
-                    return true;
+                    //Keep unused moves after teleporting.
+                    return false;
                 case MapEventType.RandomEvent:
                     int result = Random.Range(0, 4);
                     if (result == 0 || result == 1)
@@ -153,7 +154,7 @@ namespace Escape4Now.Map
                     ShowMessage(player, "Freeze. The next turn will be skipped.");
                     break;
                 case MapEventType.Blackout:
-                    visibilityTurnsRemaining = Random.Range(3, 5);
+                    visibilityTurnsRemaining = 4;
                     blackoutStartedThisTurn = true;
                     ShowMessage(player, "Blackout: everyone's visibility is reduced for the next " + visibilityTurnsRemaining + " player turns.");
                     break;
@@ -181,12 +182,12 @@ namespace Escape4Now.Map
 
             if (choices.Count == 0)
             {
-                ShowMessage(player, "Warp: no safe destination. Turn ended.");
+                ShowMessage(player, "Warp: no safe destination.");
                 return;
             }
 
             bool moved = player.SetGridPosition(choices[Random.Range(0, choices.Count)]);
-            ShowMessage(player, moved ? "Warp: teleported. Turn ended." : "Warp: destination unavailable. Turn ended.");
+            ShowMessage(player, moved ? "Warp: teleported. Unused moves are kept." : "Warp: destination unavailable.");
         }
 
         //Rejects walls, exits, and event tiles before choosing a warp destination.
