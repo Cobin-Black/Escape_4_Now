@@ -1,5 +1,6 @@
 using Escape4Now.Map;
 using Escape4Now.TurnSystem;
+using Escape4Now.Items;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -20,6 +21,7 @@ namespace Escape4Now.Player
         [SerializeField, Min(0.1f)] private float markerWidth = 0.38f;
         [SerializeField, Min(0.1f)] private float markerHeight = 0.72f;
         [SerializeField, Min(0.1f)] private float moveSpeed = 4f;
+        [SerializeField] private PlayerInventory inventory;
 
         private SpriteRenderer spriteRenderer;
         private Coroutine moveRoutine;
@@ -38,6 +40,7 @@ namespace Escape4Now.Player
 
         //Keeps event effects separate for each player.
         public PlayerEventState EventState => eventState;
+        private bool isUsingItem;
         public bool HasReachedExit => hasReachedExit;
 
         //Read-only movement state for the turn and map scripts.
@@ -62,6 +65,10 @@ namespace Escape4Now.Player
         private void Update()
         {
             if (hasReachedExit)
+            {
+                return;
+            }
+            if (isUsingItem)
             {
                 return;
             }
@@ -322,6 +329,7 @@ namespace Escape4Now.Player
                 gridPosition = next;
                 landingPending = true;
                 UpdateMapOccupancy(next);
+                CheckForItem(next);
 
                 if (mapTemplate.IsExit(next))
                 {
@@ -373,6 +381,56 @@ namespace Escape4Now.Player
             StopCoroutine(moveRoutine);
             moveRoutine = null;
             SnapToGridPosition();
+        }
+
+        public void SetUsingItem(bool usingItem)
+        {
+            isUsingItem = usingItem;
+        }
+
+        public bool IsUsingItem()
+        {
+            return isUsingItem;
+        }
+
+        public bool CanUseItem()
+        {
+            return !hasRolled && !IsMoving && !hasReachedExit;
+        }
+
+        public void SetMovesFromItem(int moveAmount)
+        {
+            if (hasReachedExit || IsMoving || moveAmount <= 0)
+            {
+                return;
+            }
+
+            lastRoll = moveAmount;
+            movesRemaining = moveAmount;
+            hasRolled = true;
+
+            Debug.Log($"Item gave the player {moveAmount} moves.");
+        }
+
+        private void CheckForItem(Vector2Int position)
+        {
+            if (inventory == null)
+                return;
+
+            Item[] items = FindObjectsByType<Item>(FindObjectsSortMode.None);
+
+            foreach (Item item in items)
+            {
+                if (item == null)
+                    continue;
+
+                if (!item.IsAtPosition(position))
+                    continue;
+
+                Debug.Log($"[Item System] Found {item.ItemName} at grid position {position}.");
+                item.PickUp(inventory);
+                return;
+            }
         }
 
         //Releases the generated image and stops tracking this player on the map.
