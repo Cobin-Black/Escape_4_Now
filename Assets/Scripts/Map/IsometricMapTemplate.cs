@@ -4,7 +4,6 @@ using UnityEngine;
 namespace Escape4Now.Map
 {
     // Builds the floor and border walls on an isometric grid.
-    [ExecuteAlways]
     public sealed class IsometricMapTemplate : MonoBehaviour
     {
         //Map size, tile shape, and floor colors.
@@ -46,7 +45,7 @@ namespace Escape4Now.Map
         public float TileWidth => tileWidth;
         public float TileHeight => tileHeight;
 
-        //Creates the map when the scene starts.
+        //Creates the tiles when Play mode starts, not while editing the scene.
         private void Start()
         {
             if (generateOnStart)
@@ -317,6 +316,9 @@ namespace Escape4Now.Map
         //Replaces the old tiles and fits the camera around the new map.
         public void GenerateBlankMap()
         {
+            //Keeps generated tiles out of the saved scene.
+            if (!Application.isPlaying) return;
+
             ValidateSettings();
             ClearGeneratedTiles();
 
