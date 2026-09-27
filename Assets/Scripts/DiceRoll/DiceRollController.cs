@@ -1,21 +1,29 @@
 using UnityEngine;
-using UnityEngine.UI;
+using UnityEngine.InputSystem;
 using TMPro;
 using Escape4Now.TurnSystem;
 
 public class DiceRollController : MonoBehaviour
 {
-    [SerializeField] private Button rollDiceButton;
+    
     [SerializeField] private TMP_Text diceResultText;
     [SerializeField] private TurnSystemController turnSystem;
     // Start is called once before the first execution of Update after the MonoBehaviour is created
     private void Start()
+    
     {
-      rollDiceButton.onClick.AddListener(RollDice);
-      diceResultText.text = "Roll the dice!";
+      
+      diceResultText.text = "Press Space to Roll";
     }
 
-    // Update is called once per frame
+    private void Update()
+    {
+        if (Keyboard.current != null && Keyboard.current.spaceKey.wasPressedThisFrame)
+        {
+            RollDice();
+        }
+    }
+
     private void RollDice()
     {
         int roll = Random.Range(1, 7);
