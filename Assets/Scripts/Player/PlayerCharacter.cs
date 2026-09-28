@@ -44,6 +44,8 @@ namespace Escape4Now.Player
         //Keeps event effects separate for each player.
         public PlayerEventState EventState => eventState;
         private bool isUsingItem;
+        private bool isInMenu;
+        public PlayerInventory Inventory => inventory;
         public bool HasReachedExit => hasReachedExit;
         public bool HasRolled => hasRolled;
         public int MovesRemaining => movesRemaining;
@@ -76,7 +78,7 @@ namespace Escape4Now.Player
             {
                 return;
             }
-            if (isUsingItem)
+            if (isUsingItem || isInMenu)
             {
                 return;
             }
@@ -413,9 +415,20 @@ namespace Escape4Now.Player
             return isUsingItem;
         }
 
+        //Pauses movement, dice rolls, and item use while a menu such as an obstacle's contents is open.
+        public void SetInMenu(bool inMenu)
+        {
+            isInMenu = inMenu;
+        }
+
+        public bool IsInMenu()
+        {
+            return isInMenu;
+        }
+
         public bool CanUseItem()
         {
-            return !hasRolled && !IsMoving && !hasReachedExit;
+            return !hasRolled && !IsMoving && !hasReachedExit && !isInMenu;
         }
 
         public void SetMovesFromItem(int moveAmount)

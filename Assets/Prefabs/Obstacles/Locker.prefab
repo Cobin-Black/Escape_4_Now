@@ -14,6 +14,7 @@ GameObject:
   - component: {fileID: 8049985892936872278}
   - component: {fileID: 8008263496219192108}
   - component: {fileID: 784154341574169331}
+  - component: {fileID: 5512093847261930571}
   m_Layer: 0
   m_Name: Locker
   m_TagString: Untagged
@@ -185,3 +186,16 @@ PolygonCollider2D:
       - {x: -0.021000013, y: -0.1584}
       - {x: -0.3168, y: -0.010500006}
   m_UseDelaunayMesh: 1
+--- !u!114 &5512093847261930571
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1507815278365026420}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: dd356d89c42f4df4a1d9643b8678d19b, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Obstacles.ObstacleStorage
+  storedItemPrefab: {fileID: 0}

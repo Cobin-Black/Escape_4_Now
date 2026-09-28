@@ -27,10 +27,10 @@ namespace Escape4Now.Items
         private bool ignoreConfirmInput;
 
         //Actions from the project-wide Input System asset used while choosing a number.
-        private InputAction moveAction;
+        private InputAction optionSelectAction;
         private InputAction useItemAction;
 
-        //Finds the Move and Use Item actions in the project-wide Input System asset.
+        //Finds the Item Option Select and Use Item actions in the project-wide Input System asset.
         private void Awake()
         {
             InputActionAsset actions = InputSystem.actions;
@@ -40,9 +40,9 @@ namespace Escape4Now.Items
                 return;
             }
 
-            moveAction = actions.FindAction("Player/Move");
+            optionSelectAction = actions.FindAction("Player/Item Option Select");
             useItemAction = actions.FindAction("Player/Use Item");
-            if (moveAction == null) Debug.LogWarning($"{name}: Input action 'Player/Move' was not found.");
+            if (optionSelectAction == null) Debug.LogWarning($"{name}: Input action 'Player/Item Option Select' was not found.");
             if (useItemAction == null) Debug.LogWarning($"{name}: Input action 'Player/Use Item' was not found.");
         }
 
@@ -146,7 +146,7 @@ namespace Escape4Now.Items
             Debug.Log($"Custom Dice selection: {selectedNumber}");
         }
 
-        //Handles Move (left/right) and Use Item input while the player is choosing a number.
+        //Handles Item Option Select (left/right) and Use Item input while the player is choosing a number.
         private void Update()
         {
             if (!isSelecting)
@@ -190,19 +190,18 @@ namespace Escape4Now.Items
             }
         }
 
-        //Returns 1 for right, -1 for left, or 0 when Move wasn't pressed sideways this frame.
+        //Returns 1 for right, -1 for left, or 0 when Item Option Select wasn't pressed this frame.
         private int ReadHorizontalPressedThisFrame()
         {
-            if (moveAction == null || !moveAction.WasPressedThisFrame())
+            if (optionSelectAction == null || !optionSelectAction.WasPressedThisFrame())
                 return 0;
 
-            Vector2 input = moveAction.ReadValue<Vector2>();
+            float x = optionSelectAction.ReadValue<Vector2>().x;
 
-            //Ignore mostly-vertical presses so W/S or up/down don't change the number.
-            if (Mathf.Abs(input.x) <= Mathf.Abs(input.y))
+            if (Mathf.Approximately(x, 0f))
                 return 0;
 
-            return input.x > 0f ? 1 : -1;
+            return x > 0f ? 1 : -1;
         }
 
         //Confirms the selected number and gives the player that many moves.
