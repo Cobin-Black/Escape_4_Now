@@ -26,6 +26,26 @@ namespace Escape4Now.Items
         private bool hasBeenCollected;
         private bool ignoreConfirmInput;
 
+        //Actions from the project-wide Input System asset used while choosing a number.
+        private InputAction moveAction;
+        private InputAction useItemAction;
+
+        //Finds the Move and Use Item actions in the project-wide Input System asset.
+        private void Awake()
+        {
+            InputActionAsset actions = InputSystem.actions;
+            if (actions == null)
+            {
+                Debug.LogWarning($"{name}: No project-wide Input Actions asset is set, so Custom Dice cannot be controlled.");
+                return;
+            }
+
+            moveAction = actions.FindAction("Player/Move");
+            useItemAction = actions.FindAction("Player/Use Item");
+            if (moveAction == null) Debug.LogWarning($"{name}: Input action 'Player/Move' was not found.");
+            if (useItemAction == null) Debug.LogWarning($"{name}: Input action 'Player/Use Item' was not found.");
+        }
+
         //Places the item on its assigned map tile.
         private void Start()
         {
@@ -126,15 +146,10 @@ namespace Escape4Now.Items
             Debug.Log($"Custom Dice selection: {selectedNumber}");
         }
 
-        //Handles keyboard input while the player is choosing a number.
+        //Handles Move (left/right) and Use Item input while the player is choosing a number.
         private void Update()
         {
             if (!isSelecting)
-                return;
-
-            Keyboard keyboard = Keyboard.current;
-
-            if (keyboard == null)
                 return;
 
             if (ignoreConfirmInput)
@@ -143,8 +158,9 @@ namespace Escape4Now.Items
                 return;
             }
 
-            if (keyboard.dKey.wasPressedThisFrame ||
-                keyboard.rightArrowKey.wasPressedThisFrame)
+            int step = ReadHorizontalPressedThisFrame();
+
+            if (step > 0)
             {
                 selectedNumber++;
 
@@ -156,8 +172,7 @@ namespace Escape4Now.Items
                 Debug.Log($"Custom Dice selection: {selectedNumber}");
             }
 
-            if (keyboard.aKey.wasPressedThisFrame ||
-                keyboard.leftArrowKey.wasPressedThisFrame)
+            if (step < 0)
             {
                 selectedNumber--;
 
@@ -169,10 +184,25 @@ namespace Escape4Now.Items
                 Debug.Log($"Custom Dice selection: {selectedNumber}");
             }
 
-            if (keyboard.eKey.wasPressedThisFrame)
+            if (useItemAction != null && useItemAction.WasPressedThisFrame())
             {
                 ConfirmSelection();
             }
+        }
+
+        //Returns 1 for right, -1 for left, or 0 when Move wasn't pressed sideways this frame.
+        private int ReadHorizontalPressedThisFrame()
+        {
+            if (moveAction == null || !moveAction.WasPressedThisFrame())
+                return 0;
+
+            Vector2 input = moveAction.ReadValue<Vector2>();
+
+            //Ignore mostly-vertical presses so W/S or up/down don't change the number.
+            if (Mathf.Abs(input.x) <= Mathf.Abs(input.y))
+                return 0;
+
+            return input.x > 0f ? 1 : -1;
         }
 
         //Confirms the selected number and gives the player that many moves.

@@ -15,6 +15,9 @@ namespace Escape4Now.Items
         //List of items currently owned by this player.
         private readonly List<Item> items = new List<Item>();
 
+        //Use Item action from the project-wide Input System asset.
+        private InputAction useItemAction;
+
         //Read-only access to the player's current items.
         public IReadOnlyList<Item> Items => items;
 
@@ -53,17 +56,26 @@ namespace Escape4Now.Items
             return item != null && items.Contains(item);
         }
 
-        //Checks for the item-use key each frame.
+        //Finds the Use Item action in the project-wide Input System asset (Assets/Settings/InputSystem_Actions).
+        private void Awake()
+        {
+            useItemAction = InputSystem.actions != null ? InputSystem.actions.FindAction("Player/Use Item") : null;
+
+            if (useItemAction == null)
+            {
+                Debug.LogWarning($"{name}: Input action 'Player/Use Item' was not found.");
+            }
+        }
+
+        //Checks for the Use Item action each frame.
         private void Update()
         {
-            Keyboard keyboard = Keyboard.current;
-
-            if (keyboard == null)
+            if (useItemAction == null)
             {
                 return;
             }
 
-            if (keyboard.eKey.wasPressedThisFrame)
+            if (useItemAction.WasPressedThisFrame())
             {
                 UseFirstItem();
             }

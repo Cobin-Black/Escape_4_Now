@@ -8,7 +8,7 @@ using UnityEngine.InputSystem;
 
 namespace Escape4Now.Player
 {
-    //Draws the player, rolls its move budget, and moves it between floor tiles with WASD or arrow keys.
+    //Draws the player, rolls its move budget, and moves it between floor tiles using the Input System's Player actions.
     [RequireComponent(typeof(SpriteRenderer))]
     public sealed class PlayerCharacter : MonoBehaviour
     {
@@ -38,6 +38,8 @@ namespace Escape4Now.Player
         private Vector2Int lastDirection = Vector2Int.up;
         private bool resolvingStep;
         private readonly PlayerEventState eventState = new PlayerEventState();
+        private InputAction moveAction;
+        private InputAction rollDiceAction;
 
         //Keeps event effects separate for each player.
         public PlayerEventState EventState => eventState;
@@ -56,6 +58,7 @@ namespace Escape4Now.Player
         private void Awake()
         {
             ValidateSettings();
+            SetupInputActions();
             SetupMarker();
             SnapToGridPosition();
             registeredPosition = gridPosition;
@@ -108,16 +111,31 @@ namespace Escape4Now.Player
             GUI.Label(new Rect(16f, 100f, 420f, 30f), message, rollDisplayStyle);
         }
 
-        //Rolls a six-sided die on Space, giving this turn's move budget.
+        //Finds the player's actions in the project-wide Input System asset (Assets/Settings/InputSystem_Actions).
+        private void SetupInputActions()
+        {
+            InputActionAsset actions = InputSystem.actions;
+            if (actions == null)
+            {
+                Debug.LogWarning($"{name}: No project-wide Input Actions asset is set, so the player cannot be controlled.");
+                return;
+            }
+
+            moveAction = actions.FindAction("Player/Move");
+            rollDiceAction = actions.FindAction("Player/Roll Dice");
+            if (moveAction == null) Debug.LogWarning($"{name}: Input action 'Player/Move' was not found.");
+            if (rollDiceAction == null) Debug.LogWarning($"{name}: Input action 'Player/Roll Dice' was not found.");
+        }
+
+        //Rolls a six-sided die on the Roll Dice action, giving this turn's move budget.
         private void HandleDiceRollInput()
         {
-            Keyboard keyboard = Keyboard.current;
-            if (keyboard == null || hasRolled || IsMoving || isUsingItem || (turnSystem != null && !turnSystem.IsPlayersTurn(this)))
+            if (rollDiceAction == null || hasRolled || IsMoving || isUsingItem || (turnSystem != null && !turnSystem.IsPlayersTurn(this)))
             {
                 return;
             }
 
-            if (keyboard.spaceKey.wasPressedThisFrame)
+            if (rollDiceAction.WasPressedThisFrame())
             {
                 int first = Random.Range(1, 7);
                 bool lucky = eventState.HasLuckyRoll;
@@ -133,36 +151,27 @@ namespace Escape4Now.Player
             }
         }
 
-        //Reads the first movement key pressed this frame, or zero if none was.
+        //Reads the Move action once when it is first pressed, snapped to one grid direction, or zero if it wasn't.
         private Vector2Int ReadDirectionPressedThisFrame()
         {
-            Keyboard keyboard = Keyboard.current;
-            if (keyboard == null)
+            if (moveAction == null || !moveAction.WasPressedThisFrame())
             {
                 return Vector2Int.zero;
             }
 
-            if (keyboard.upArrowKey.wasPressedThisFrame || keyboard.wKey.wasPressedThisFrame)
+            Vector2 input = moveAction.ReadValue<Vector2>();
+            if (input == Vector2.zero)
             {
-                return Vector2Int.up;
+                return Vector2Int.zero;
             }
 
-            if (keyboard.downArrowKey.wasPressedThisFrame || keyboard.sKey.wasPressedThisFrame)
+            //Pick the stronger axis so diagonals and analog sticks still move one tile; ties favor up/down.
+            if (Mathf.Abs(input.y) >= Mathf.Abs(input.x))
             {
-                return Vector2Int.down;
+                return input.y > 0f ? Vector2Int.up : Vector2Int.down;
             }
 
-            if (keyboard.leftArrowKey.wasPressedThisFrame || keyboard.aKey.wasPressedThisFrame)
-            {
-                return Vector2Int.left;
-            }
-
-            if (keyboard.rightArrowKey.wasPressedThisFrame || keyboard.dKey.wasPressedThisFrame)
-            {
-                return Vector2Int.right;
-            }
-
-            return Vector2Int.zero;
+            return input.x > 0f ? Vector2Int.right : Vector2Int.left;
         }
 
         //Rejects moves before a roll, outside the player's turn, or past the roll's move budget.
