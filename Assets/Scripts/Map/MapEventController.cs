@@ -23,6 +23,15 @@ namespace Escape4Now.Map
         private Texture2D visibilityMask;
         private PlayerCharacter[] players;
 
+        //Lets other spawners wait until every event has its tile.
+        public bool EventsPlaced { get; private set; }
+
+        //Checks whether an event marker sits on a tile.
+        public bool HasEvent(Vector2Int cell)
+        {
+            return events.ContainsKey(cell);
+        }
+
         //Finds the map used by the event tiles.
         private void Awake()
         {
@@ -69,7 +78,11 @@ namespace Escape4Now.Map
                     if (IsEmptyEventTile(cell)) emptyTiles.Add(cell);
                 }
             }
-            if (eventPrefabs == null) yield break;
+            if (eventPrefabs == null)
+            {
+                EventsPlaced = true;
+                yield break;
+            }
             HashSet<MapEventType> placedTypes = new HashSet<MapEventType>();
             foreach (EventTileMarker prefab in eventPrefabs)
             {
@@ -85,6 +98,7 @@ namespace Escape4Now.Map
                 events.Add(cell, prefab.EventType);
                 emptyTiles.RemoveAt(index);
             }
+            EventsPlaced = true;
         }
 
         //Keeps events off players, obstacles, exits, and other events.
