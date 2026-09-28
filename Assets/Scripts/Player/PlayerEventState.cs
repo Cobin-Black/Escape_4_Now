@@ -6,9 +6,7 @@ namespace Escape4Now.Player
     public sealed class PlayerEventState
     {
         private bool frozen;
-        private bool nextSpeedBoost;
         private bool nextLuckyRoll;
-        private bool speedBoost;
         private bool luckyRoll;
 
         public bool HasLuckyRoll => luckyRoll;
@@ -16,25 +14,19 @@ namespace Escape4Now.Player
         //Saves one skipped turn. Repeated freezes do not add more turns.
         public void GiveFreeze() { frozen = true; }
 
-        //Saves one movement bonus for the next playable turn.
-        public void GiveSpeedBoost() { nextSpeedBoost = true; }
-
         //Saves one double roll for the next playable turn.
         public void GiveLuckyRoll() { nextLuckyRoll = true; }
 
         //Skips one frozen turn or prepares the bonuses for a normal turn.
         public bool BeginTurn()
         {
-            speedBoost = false;
             luckyRoll = false;
             if (frozen)
             {
                 frozen = false;
                 return false;
             }
-            speedBoost = nextSpeedBoost;
             luckyRoll = nextLuckyRoll;
-            nextSpeedBoost = false;
             nextLuckyRoll = false;
             return true;
         }
@@ -47,8 +39,6 @@ namespace Escape4Now.Player
                 throw new ArgumentOutOfRangeException("Dice must be between 1 and 6.");
             }
             int movement = luckyRoll ? Math.Max(first, second) : first;
-            if (speedBoost) movement += 2;
-            speedBoost = false;
             luckyRoll = false;
             return movement;
         }

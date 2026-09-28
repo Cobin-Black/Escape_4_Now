@@ -22,6 +22,7 @@ namespace Escape4Now.Player
         [SerializeField, Min(0.1f)] private float markerHeight = 0.72f;
         [SerializeField, Min(0.1f)] private float moveSpeed = 4f;
         [SerializeField] private PlayerInventory inventory;
+        [SerializeField] private int health = 5;
 
         private SpriteRenderer spriteRenderer;
         private Coroutine moveRoutine;
@@ -35,13 +36,15 @@ namespace Escape4Now.Player
         private GUIStyle rollDisplayStyle;
         private MapEventController mapEvents;
         private Vector2Int lastDirection = Vector2Int.up;
-        private bool landingPending;
+        private bool resolvingStep;
         private readonly PlayerEventState eventState = new PlayerEventState();
 
         //Keeps event effects separate for each player.
         public PlayerEventState EventState => eventState;
         private bool isUsingItem;
         public bool HasReachedExit => hasReachedExit;
+        internal bool IsResolvingEventStep => resolvingStep;
+        public bool IsCurrentTurn => turnSystem == null || turnSystem.IsPlayersTurn(this);
 
         //Read-only movement state for the turn and map scripts.
         public Vector2Int GridPosition => gridPosition;
@@ -121,7 +124,7 @@ namespace Escape4Now.Player
                 lastRoll = lucky ? Mathf.Max(first, second) : first;
                 movesRemaining = eventState.UseRoll(first, second);
                 hasRolled = true;
-                if (mapEvents != null && (lucky || movesRemaining != lastRoll))
+                if (mapEvents != null && lucky)
                 {
                     string result = lucky ? "Lucky Roll: " + first + " and " + second + ". Kept " + lastRoll + ". " : "";
                     mapEvents.ShowMessage(this, result + "Movement: " + movesRemaining + ".");
@@ -182,18 +185,9 @@ namespace Escape4Now.Player
         {
             hasRolled = false;
             movesRemaining = 0;
-            landingPending = false;
             bool canPlay = eventState.BeginTurn();
             if (!canPlay && mapEvents != null) mapEvents.ShowMessage(this, "Frozen: this turn was skipped.");
             return canPlay;
-        }
-
-        //Applies a landing event once when movement or the turn ends.
-        public void FinishEventTurn()
-        {
-            if (!landingPending || IsMoving || hasReachedExit) return;
-            landingPending = false;
-            if (mapEvents != null) mapEvents.ResolveLanding(this, lastDirection);
         }
 
         //Checks the turn's player list before an event moves onto another player.
@@ -219,7 +213,7 @@ namespace Escape4Now.Player
         //Places the player on an open tile without playing a movement animation.
         public bool SetGridPosition(Vector2Int newGridPosition)
         {
-            if (IsMoving || hasReachedExit || mapTemplate == null || !mapTemplate.IsWalkable(newGridPosition))
+            if ((IsMoving && !resolvingStep) || hasReachedExit || mapTemplate == null || !mapTemplate.IsWalkable(newGridPosition))
             {
                 return false;
             }
@@ -247,7 +241,6 @@ namespace Escape4Now.Player
             }
 
             if (path.Count > movesRemaining) return false;
-            movesRemaining -= path.Count;
             moveRoutine = StartCoroutine(MoveAlongPath(path));
             return true;
         }
@@ -315,6 +308,7 @@ namespace Escape4Now.Player
             // Move through the grid one tile at a time.
             foreach (Vector2Int next in path)
             {
+                if (!mapTemplate.IsWalkable(next) || IsOccupiedByOtherPlayer(next)) break;
                 Vector3 targetPosition = mapTemplate.GridToWorld(next);
                 targetPosition.z = -1f;
                 while (Vector3.Distance(transform.position, targetPosition) > 0.01f)
@@ -327,7 +321,7 @@ namespace Escape4Now.Player
                 transform.position = targetPosition;
                 lastDirection = next - gridPosition;
                 gridPosition = next;
-                landingPending = true;
+                movesRemaining--;
                 UpdateMapOccupancy(next);
                 CheckForItem(next);
 
@@ -336,6 +330,22 @@ namespace Escape4Now.Player
                     ReachExit();
                     yield break;
                 }
+
+                //Resolve each crossed tile before starting the next step.
+                bool endTurn = false;
+                resolvingStep = true;
+                try
+                {
+                    if (mapEvents != null) endTurn = mapEvents.ResolveStep(this, lastDirection);
+                }
+                finally
+                {
+                    resolvingStep = false;
+                }
+                if (hasReachedExit) yield break;
+                if (endTurn) movesRemaining = 0;
+                //A teleport or extra move cancels the old route from this point.
+                if (endTurn || gridPosition != next) break;
             }
             moveRoutine = null;
             if (movesRemaining == 0)
@@ -343,7 +353,6 @@ namespace Escape4Now.Player
                 if (turnSystem != null) turnSystem.AdvanceTurn();
                 else
                 {
-                    FinishEventTurn();
                     BeginEventTurn();
                 }
             }
