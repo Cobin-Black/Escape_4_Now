@@ -24,14 +24,16 @@ namespace Escape4Now.Items
         //Provides access to the player who owns this inventory.
         public PlayerCharacter Player => player;
 
+        //Player can only carry one item at a time.
+        public bool IsFull => items.Count >= 1;
+
         //Adds an item to the player's inventory.
         public bool AddItem(Item item)
         {
             if (item == null)
                 return false;
 
-            // Player can only carry one item at a time.
-            if (items.Count >= 1)
+            if (IsFull)
                 return false;
 
             items.Add(item);

@@ -11,6 +11,9 @@ namespace Escape4Now.Items
         [SerializeField] private DoubleDiceItem doubleDicePrefab;
         [SerializeField] private CustomDiceItem customDicePrefab;
 
+        //Lets other spawners wait until every item has its tile.
+        public bool HasSpawnedItems { get; private set; }
+
         private void Start()
         {
             StartCoroutine(SpawnItems());
@@ -24,6 +27,7 @@ namespace Escape4Now.Items
             if (map == null)
             {
                 Debug.LogWarning("[Item System] ItemSpawner could not find the map.");
+                HasSpawnedItems = true;
                 yield break;
             }
 
@@ -44,6 +48,7 @@ namespace Escape4Now.Items
 
             SpawnItem(doubleDicePrefab, emptyTiles);
             SpawnItem(customDicePrefab, emptyTiles);
+            HasSpawnedItems = true;
         }
 
         private bool IsValidItemTile(Vector2Int cell)
