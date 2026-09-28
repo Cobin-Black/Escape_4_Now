@@ -660,6 +660,7 @@ GameObject:
   - component: {fileID: 1200000002}
   - component: {fileID: 1200000003}
   - component: {fileID: 1200000004}
+  - component: {fileID: 1200000005}
   m_Layer: 0
   m_Name: Blank Isometric Map Template
   m_TagString: Untagged
@@ -741,6 +742,28 @@ MonoBehaviour:
   map: {fileID: 1200000002}
   doubleDicePrefab: {fileID: 1119616090794593453, guid: 798c830d404504ec993fb50111c722ba, type: 3}
   customDicePrefab: {fileID: 3571401913704896188, guid: 84be71822083a4daa93b2bdda4645980, type: 3}
+--- !u!114 &1200000005
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1200000000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 19be0689ebb54df98789351881dfe27e, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Obstacles.ObstacleSpawner
+  map: {fileID: 1200000002}
+  obstaclePrefabs:
+  - {fileID: 8008263496219192108, guid: d0329ec4a35ffd94f8f7d200ad63eb7c, type: 3}
+  obstacleCount: 6
+  interactableChance: 0.5
+  possibleItems:
+  - {fileID: 1119616090794593453, guid: 798c830d404504ec993fb50111c722ba, type: 3}
+  - {fileID: 3571401913704896188, guid: 84be71822083a4daa93b2bdda4645980, type: 3}
+  mapEvents: {fileID: 1200000003}
+  itemSpawner: {fileID: 1200000004}
 --- !u!1 &1200000010
 GameObject:
   m_ObjectHideFlags: 0
