@@ -1,5 +1,6 @@
 using Escape4Now.Map;
 using Escape4Now.TurnSystem;
+using Escape4Now.Items;
 using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
@@ -20,6 +21,7 @@ namespace Escape4Now.Player
         [SerializeField, Min(0.1f)] private float markerWidth = 0.38f;
         [SerializeField, Min(0.1f)] private float markerHeight = 0.72f;
         [SerializeField, Min(0.1f)] private float moveSpeed = 4f;
+        [SerializeField] private PlayerInventory inventory;
         [SerializeField] private int health = 5;
 
         private SpriteRenderer spriteRenderer;
@@ -39,7 +41,10 @@ namespace Escape4Now.Player
 
         //Keeps event effects separate for each player.
         public PlayerEventState EventState => eventState;
+        private bool isUsingItem;
         public bool HasReachedExit => hasReachedExit;
+        public bool HasRolled => hasRolled;
+        public int MovesRemaining => movesRemaining;
         internal bool IsResolvingEventStep => resolvingStep;
         public bool IsCurrentTurn => turnSystem == null || turnSystem.IsPlayersTurn(this);
 
@@ -65,6 +70,10 @@ namespace Escape4Now.Player
         private void Update()
         {
             if (hasReachedExit)
+            {
+                return;
+            }
+            if (isUsingItem)
             {
                 return;
             }
@@ -103,8 +112,7 @@ namespace Escape4Now.Player
         private void HandleDiceRollInput()
         {
             Keyboard keyboard = Keyboard.current;
-            if (keyboard == null || hasRolled || IsMoving
-                || (turnSystem != null && !turnSystem.IsPlayersTurn(this)))
+            if (keyboard == null || hasRolled || IsMoving || isUsingItem || (turnSystem != null && !turnSystem.IsPlayersTurn(this)))
             {
                 return;
             }
@@ -176,6 +184,7 @@ namespace Escape4Now.Player
         //Starts a fresh movement budget, or consumes one frozen turn.
         public bool BeginEventTurn()
         {
+            Debug.Log($"[Turn Debug] BeginEventTurn called for {name}. Resetting hasRolled.");
             hasRolled = false;
             movesRemaining = 0;
             bool canPlay = eventState.BeginTurn();
@@ -316,6 +325,7 @@ namespace Escape4Now.Player
                 gridPosition = next;
                 movesRemaining--;
                 UpdateMapOccupancy(next);
+                CheckForItem(next);
 
                 if (mapTemplate.IsExit(next))
                 {
@@ -382,6 +392,56 @@ namespace Escape4Now.Player
             StopCoroutine(moveRoutine);
             moveRoutine = null;
             SnapToGridPosition();
+        }
+
+        public void SetUsingItem(bool usingItem)
+        {
+            isUsingItem = usingItem;
+        }
+
+        public bool IsUsingItem()
+        {
+            return isUsingItem;
+        }
+
+        public bool CanUseItem()
+        {
+            return !hasRolled && !IsMoving && !hasReachedExit;
+        }
+
+        public void SetMovesFromItem(int moveAmount)
+        {
+            if (hasReachedExit || IsMoving || moveAmount <= 0)
+            {
+                return;
+            }
+
+            lastRoll = moveAmount;
+            movesRemaining = moveAmount;
+            hasRolled = true;
+
+            Debug.Log($"Item gave the player {moveAmount} moves.");
+        }
+
+        private void CheckForItem(Vector2Int position)
+        {
+            if (inventory == null)
+                return;
+
+            Item[] items = FindObjectsByType<Item>(FindObjectsSortMode.None);
+
+            foreach (Item item in items)
+            {
+                if (item == null)
+                    continue;
+
+                if (!item.IsAtPosition(position))
+                    continue;
+
+                Debug.Log($"[Item System] Found {item.ItemName} at grid position {position}.");
+                item.PickUp(inventory);
+                return;
+            }
         }
 
         //Releases the generated image and stops tracking this player on the map.
