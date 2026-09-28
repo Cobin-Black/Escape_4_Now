@@ -91,6 +91,20 @@ namespace Escape4Now.Obstacles
             return true;
         }
 
+        //Puts a newly spawned obstacle on a map tile. Returns false if the tile is outside the floor or already blocked.
+        public bool Place(IsometricMapTemplate map, Vector2Int cell)
+        {
+            if (map == null || !map.IsInteriorFloor(cell) || map.IsBlocked(cell))
+            {
+                return false;
+            }
+
+            mapTemplate = map;
+            gridPosition = cell;
+            ApplyPlacement();
+            return ownsRegisteredPosition;
+        }
+
         //Turns the obstacle so its front face points another way.
         public void SetFacing(ObstacleFacing newFacing)
         {
