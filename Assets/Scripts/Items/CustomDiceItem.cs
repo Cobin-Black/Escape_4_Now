@@ -24,6 +24,7 @@ namespace Escape4Now.Items
         private PlayerInventory currentInventory;
 
         private bool hasBeenCollected;
+        private bool ignoreConfirmInput;
 
         //Places the item on its assigned map tile.
         private void Start()
@@ -34,6 +35,17 @@ namespace Escape4Now.Items
             }
 
             transform.position = mapTemplate.GridToWorld(gridPosition);
+        }
+
+        public void SetSpawnPosition(IsometricMapTemplate map, Vector2Int position)
+        {
+            mapTemplate = map;
+            gridPosition = position;
+
+            if (mapTemplate != null)
+            {
+                transform.position = mapTemplate.GridToWorld(gridPosition);
+            }
         }
 
         //Checks whether the item is on the specified tile.
@@ -106,6 +118,7 @@ namespace Escape4Now.Items
             currentInventory = inventory;
             selectedNumber = 1;
             isSelecting = true;
+            ignoreConfirmInput = true;
 
             inventory.Player.SetUsingItem(true);
 
@@ -123,6 +136,12 @@ namespace Escape4Now.Items
 
             if (keyboard == null)
                 return;
+
+            if (ignoreConfirmInput)
+            {
+                ignoreConfirmInput = false;
+                return;
+            }
 
             if (keyboard.dKey.wasPressedThisFrame ||
                 keyboard.rightArrowKey.wasPressedThisFrame)

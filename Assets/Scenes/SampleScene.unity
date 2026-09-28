@@ -659,6 +659,7 @@ GameObject:
   - component: {fileID: 1200000001}
   - component: {fileID: 1200000002}
   - component: {fileID: 1200000003}
+  - component: {fileID: 1200000004}
   m_Layer: 0
   m_Name: Blank Isometric Map Template
   m_TagString: Untagged
@@ -717,14 +718,29 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4d3b166849ad4ff785f3b43179135ef8, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   eventPrefabs:
   - {fileID: 11400000, guid: c5ab702d344b49a7b05f1f81aae29f00, type: 3}
   - {fileID: 11400000, guid: c5ab702d344b49a7b05f1f81aae29f01, type: 3}
   - {fileID: 11400000, guid: c5ab702d344b49a7b05f1f81aae29f02, type: 3}
   - {fileID: 11400000, guid: c5ab702d344b49a7b05f1f81aae29f03, type: 3}
   - {fileID: 11400000, guid: c5ab702d344b49a7b05f1f81aae29f04, type: 3}
+--- !u!114 &1200000004
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1200000000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 5bc2680b88b39443f92f2edcf8c205b0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Items.ItemSpawner
+  map: {fileID: 1200000002}
+  doubleDicePrefab: {fileID: 1119616090794593453, guid: 798c830d404504ec993fb50111c722ba, type: 3}
+  customDicePrefab: {fileID: 3571401913704896188, guid: 84be71822083a4daa93b2bdda4645980, type: 3}
 --- !u!1 &1200000010
 GameObject:
   m_ObjectHideFlags: 0
@@ -736,6 +752,7 @@ GameObject:
   - component: {fileID: 1200000011}
   - component: {fileID: 1200000012}
   - component: {fileID: 1200000013}
+  - component: {fileID: 1200000014}
   m_Layer: 0
   m_Name: Player One
   m_TagString: Untagged
@@ -837,6 +854,21 @@ MonoBehaviour:
   markerWidth: 0.7
   markerHeight: 0.95
   moveSpeed: 4
+  inventory: {fileID: 1200000014}
+  health: 5
+--- !u!114 &1200000014
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1200000010}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 738b1edee6be34ec49fbd04565807b5d, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Items.PlayerInventory
+  player: {fileID: 1200000013}
 --- !u!1 &1200000020
 GameObject:
   m_ObjectHideFlags: 0

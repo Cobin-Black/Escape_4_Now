@@ -43,6 +43,8 @@ namespace Escape4Now.Player
         public PlayerEventState EventState => eventState;
         private bool isUsingItem;
         public bool HasReachedExit => hasReachedExit;
+        public bool HasRolled => hasRolled;
+        public int MovesRemaining => movesRemaining;
         internal bool IsResolvingEventStep => resolvingStep;
         public bool IsCurrentTurn => turnSystem == null || turnSystem.IsPlayersTurn(this);
 
@@ -110,8 +112,7 @@ namespace Escape4Now.Player
         private void HandleDiceRollInput()
         {
             Keyboard keyboard = Keyboard.current;
-            if (keyboard == null || hasRolled || IsMoving
-                || (turnSystem != null && !turnSystem.IsPlayersTurn(this)))
+            if (keyboard == null || hasRolled || IsMoving || isUsingItem || (turnSystem != null && !turnSystem.IsPlayersTurn(this)))
             {
                 return;
             }
@@ -183,6 +184,7 @@ namespace Escape4Now.Player
         //Starts a fresh movement budget, or consumes one frozen turn.
         public bool BeginEventTurn()
         {
+            Debug.Log($"[Turn Debug] BeginEventTurn called for {name}. Resetting hasRolled.");
             hasRolled = false;
             movesRemaining = 0;
             bool canPlay = eventState.BeginTurn();

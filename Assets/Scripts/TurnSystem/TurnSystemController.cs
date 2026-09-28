@@ -98,6 +98,18 @@ namespace Escape4Now.TurnSystem
                 {
                     if (current.HasReachedExit) return;
                 }
+
+                // Do not allow a player turn to end before the player has rolled.
+                if (!current.HasRolled)
+                {
+                    return;
+                }
+
+                // Do not allow the turn to end while the player still has movement.
+                if (current.IsMoving || current.MovesRemaining > 0)
+                {
+                    return;
+                }
             }
 
             if (currentTurnOwner == TurnOwner.Player)

@@ -26,6 +26,17 @@ namespace Escape4Now.Items
             transform.position = mapTemplate.GridToWorld(gridPosition);
         }
 
+        public void SetSpawnPosition(IsometricMapTemplate map, Vector2Int position)
+        {
+            mapTemplate = map;
+            gridPosition = position;
+
+            if (mapTemplate != null)
+            {
+                transform.position = mapTemplate.GridToWorld(gridPosition);
+            }
+        }
+
         //Checks whether the item is on the specified tile.
         public override bool IsAtPosition(Vector2Int position)
         {
