@@ -20,6 +20,7 @@ namespace Escape4Now.Player
         [SerializeField, Min(0.1f)] private float markerWidth = 0.38f;
         [SerializeField, Min(0.1f)] private float markerHeight = 0.72f;
         [SerializeField, Min(0.1f)] private float moveSpeed = 4f;
+        [SerializeField] private int health = 5;
 
         private SpriteRenderer spriteRenderer;
         private Coroutine moveRoutine;
