@@ -705,6 +705,7 @@ MonoBehaviour:
   rightSideColor: {r: 0.16, g: 0.16, b: 0.16, a: 1}
   leftSideColor: {r: 0.1, g: 0.1, b: 0.1, a: 1}
   generateOnStart: 1
+  floorTilePrefab: {fileID: 1877436113, guid: 079ada1107f54d908eea5bcb6018c07c, type: 3}
   hasExit: 1
   exitGridPosition: {x: 9, y: 0}
   exitColor: {r: 0.2, g: 0.75, b: 0.35, a: 1}

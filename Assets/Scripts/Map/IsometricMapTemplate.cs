@@ -17,6 +17,8 @@ namespace Escape4Now.Map
         [SerializeField] private Color rightSideColor = new Color(0.16f, 0.16f, 0.16f, 1f);
         [SerializeField] private Color leftSideColor = new Color(0.1f, 0.1f, 0.1f, 1f);
         [SerializeField] private bool generateOnStart = true;
+        //Reusable tile copied into the grid when the game starts.
+        [SerializeField] private IsometricMapTile floorTilePrefab;
 
         //Exit placement and how much the front walls fade when a player stands behind them.
         [SerializeField] private bool hasExit = true;
@@ -318,6 +320,14 @@ namespace Escape4Now.Map
         {
             //Keeps generated tiles out of the saved scene.
             if (!Application.isPlaying) return;
+            if (floorTilePrefab == null || !floorTilePrefab.gameObject.activeSelf
+                || floorTilePrefab.GetComponent<MeshFilter>() == null
+                || floorTilePrefab.GetComponent<MeshRenderer>() == null
+                || floorTilePrefab.GetComponent<PolygonCollider2D>() == null)
+            {
+                Debug.LogError("Assign a floor tile prefab with a mesh, renderer, and polygon collider.", this);
+                return;
+            }
 
             ValidateSettings();
             ClearGeneratedTiles();
@@ -332,25 +342,25 @@ namespace Escape4Now.Map
             FitCamera();
         }
 
-        //Creates one floor tile, its click area, and its border wall if needed.
+        //Copies the tile prefab, fits it to the grid, and adds a border if needed.
         private void CreateTile(Vector2Int gridPosition)
         {
-            GameObject tile = new GameObject($"Tile {gridPosition.x}, {gridPosition.y}");
-            tile.transform.SetParent(transform, false);
+            IsometricMapTile mapTile = Instantiate(floorTilePrefab, transform);
+            GameObject tile = mapTile.gameObject;
+            tile.name = $"Tile {gridPosition.x}, {gridPosition.y}";
             tile.transform.position = GridToWorld(gridPosition);
 
-            MeshFilter meshFilter = tile.AddComponent<MeshFilter>();
+            MeshFilter meshFilter = tile.GetComponent<MeshFilter>();
             meshFilter.sharedMesh = CreateTileMesh(gridPosition);
 
-            MeshRenderer meshRenderer = tile.AddComponent<MeshRenderer>();
+            MeshRenderer meshRenderer = tile.GetComponent<MeshRenderer>();
             meshRenderer.sharedMaterial = CreateTileMaterial();
             meshRenderer.sortingOrder = -1000 - gridPosition.x - gridPosition.y;
 
-            PolygonCollider2D tileCollider = tile.AddComponent<PolygonCollider2D>();
+            PolygonCollider2D tileCollider = tile.GetComponent<PolygonCollider2D>();
             tileCollider.points = CreateTileColliderPoints();
             tileCollider.isTrigger = true;
 
-            IsometricMapTile mapTile = tile.AddComponent<IsometricMapTile>();
             mapTile.SetGridPosition(gridPosition);
             tileLookup[gridPosition] = mapTile;
 
