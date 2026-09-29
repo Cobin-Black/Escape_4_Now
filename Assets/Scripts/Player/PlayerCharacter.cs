@@ -5,6 +5,7 @@ using System.Collections;
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using UnityEngine.AI;
 
 namespace Escape4Now.Player
 {
@@ -48,6 +49,8 @@ namespace Escape4Now.Player
         public PlayerInventory Inventory => inventory;
         public bool HasReachedExit => hasReachedExit;
         public bool HasRolled => hasRolled;
+        //new thing 
+        public int LastRoll => lastRoll;
         public int MovesRemaining => movesRemaining;
         internal bool IsResolvingEventStep => resolvingStep;
         public bool IsCurrentTurn => turnSystem == null || turnSystem.IsPlayersTurn(this);
@@ -96,22 +99,103 @@ namespace Escape4Now.Player
         private void OnGUI()
         {
             if (turnSystem != null && !turnSystem.IsPlayersTurn(this)) return;
-            if (rollDisplayStyle == null)
+            
+            // Main panel
+            GUIStyle panelStyle = new GUIStyle(GUI.skin.box);
+            panelStyle.normal.background = MakeTransparentTexture(new Color(0.02f, 0.04f, 0.08f, 0.88f));
+            
+            //header style
+            GUIStyle headerStyle = new GUIStyle(GUI.skin.label);
+            headerStyle.fontSize = 13;
+            headerStyle.fontStyle = FontStyle.Bold;
+            headerStyle.alignment = TextAnchor.MiddleCenter;
+            headerStyle.normal.textColor = new Color(0.65f, 0.85f, 1f);
+
+            // Player name style 
+            GUIStyle playerStyle = new GUIStyle(GUI.skin.label);
+            playerStyle.fontSize = 22;
+            playerStyle.fontStyle = FontStyle.Bold;
+            playerStyle.alignment = TextAnchor.MiddleCenter;
+            playerStyle.normal.textColor = Color.white;
+
+            // Large roll number 
+            GUIStyle rollStyle = new GUIStyle(GUI.skin.label);
+            rollStyle.fontSize = 42;
+            rollStyle.fontStyle = FontStyle.Bold;
+            rollStyle.alignment = TextAnchor.MiddleCenter;
+            rollStyle.normal.textColor = Color.white;
+
+            //Small label style
+            GUIStyle smallStyle = new GUIStyle(GUI.skin.label);
+            smallStyle.fontSize = 12;
+            smallStyle.fontStyle = FontStyle.Bold;
+            smallStyle.alignment = TextAnchor.MiddleCenter;
+            smallStyle.normal.textColor = new Color(0.7f, 0.75f, 0.8f);
+            
+            GUIStyle promptStyle = new GUIStyle(smallStyle);
+            promptStyle.fontSize = 16;
+            promptStyle.normal.textColor =  Color.white;
+
+            string turnName = turnSystem != null ? turnSystem.CurrentTurnName : gameObject.name;
+            
+            float panelX = 16f, panelY = 85f, panelW = 360f, panelH = 235f;
+            float padding = 16f;
+            float x = panelX + padding;
+            float contentW = panelW - padding * 2f;
+            float colW = contentW / 2f;
+
+            float moveOffset = -6f;
+
+            GUI.Box(new Rect(panelX, panelY, panelW, panelH), "", panelStyle);
+            
+            
+
+            //header
+            GUI.Label(new Rect(x, 95f , contentW, 22f), "CURRENT TURN", headerStyle);
+
+            // Player name
+            GUI.Label(new Rect(x, 114f , contentW, 34f), turnName.ToUpper(), playerStyle);
+            
+            //Divder
+            Color oldColor = GUI.color;
+            GUI.color = new Color(1f, 1f, 1f, 0.25f);
+            GUI.DrawTexture(new Rect(x + 15f, 164f, contentW - 30f, 2f), Texture2D.whiteTexture);
+            GUI.color = oldColor;
+            
+
+            if (hasReachedExit)
             {
-                rollDisplayStyle = new GUIStyle(GUI.skin.label);
-                rollDisplayStyle.fontSize = 20;
-                rollDisplayStyle.fontStyle = FontStyle.Bold;
-                rollDisplayStyle.normal.textColor = Color.white;
+                GUI.Label(new Rect(x, 180f, contentW, 50f), "EXIT REACHED", playerStyle);
+            }else if (hasRolled)
+            {
+                GUI.Label(new Rect(x, 172f, colW, 20f),"ROLL",smallStyle);
+
+                //Moves Label
+                GUI.Label(new Rect(x + colW, 172f, colW,20f), "MOVES LEFT", smallStyle);
+
+                //Roll Number
+                GUI.Label(new Rect(x, 192f, colW, 55f), lastRoll.ToString(), rollStyle);
+
+                //Moves remaining
+                GUI.Label(new Rect(x + colW, 192f, colW, 55f), movesRemaining.ToString(), rollStyle);
+                //Bottom instruction
+                GUI.Label(new Rect(x, 262f, contentW, 24f), "Press Arrow Keys or WASD to Move", smallStyle); 
             }
-
-            string message = hasReachedExit
-                ? "You reached the exit!"
-                : hasRolled
-                    ? $"Rolled a {lastRoll}. Moves left: {movesRemaining}"
-                    : "Press SPACE to roll the dice";
-
-            GUI.Label(new Rect(16f, 100f, 420f, 30f), message, rollDisplayStyle);
+            else
+            {
+                GUI.Label(new Rect(x, 176f, contentW, 30f), "YOUR TURN", playerStyle);
+                GUI.Label(new Rect(x, 222f, contentW, 24f), "Press Spacebar to Roll Dice", playerStyle);
+            }
         }
+            //
+            private Texture2D MakeTransparentTexture(Color color)
+            {
+                Texture2D texture = new Texture2D(1, 1);
+                texture.SetPixel(0, 0, color);
+                texture.Apply();
+                return texture;
+            }
+        
 
         //Finds the player's actions in the project-wide Input System asset (Assets/Settings/InputSystem_Actions).
         private void SetupInputActions()
