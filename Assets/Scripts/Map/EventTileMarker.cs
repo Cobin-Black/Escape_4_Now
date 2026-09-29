@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace Escape4Now.Map
 {
-    //Draws the prefab marker. The map controller handles its effect.
+    //Draws the event tile's shape and label. MapEventController applies the effect.
     [ExecuteAlways]
     [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
     public sealed class EventTileMarker : MonoBehaviour
@@ -19,13 +19,13 @@ namespace Escape4Now.Map
 
         public MapEventType EventType => eventType;
 
-        //Shows the marker in the scene and in the prefab editor.
+        //Shows the event tile in the game and while editing its reusable template.
         private void OnEnable()
         {
             DrawMarker();
         }
 
-        //Waits until the next update before rebuilding an edited marker.
+        //Marks the drawing for an update when its settings change in Unity.
         private void OnValidate()
         {
             needsRedraw = true;
@@ -39,7 +39,7 @@ namespace Escape4Now.Map
             DrawMarker();
         }
 
-        //Matches the marker to the map's tile size.
+        //Checks the size is valid, then fits the event marker to a map tile.
         public void Configure(float width, float height)
         {
             if (float.IsNaN(width) || float.IsInfinity(width) || width <= 0f
@@ -49,7 +49,7 @@ namespace Escape4Now.Map
             DrawMarker();
         }
 
-        //Builds a colored diamond and keeps the label above the floor.
+        //Makes the colored diamond and draws its text on top.
         private void DrawMarker()
         {
             if (markerMaterial == null)
@@ -84,7 +84,7 @@ namespace Escape4Now.Map
             }
         }
 
-        //Removes only the mesh and material made by this marker.
+        //Removes the temporary shape and appearance data created by this tile.
         private void OnDestroy()
         {
             ReleaseDrawing(markerMesh);

@@ -8,13 +8,13 @@ namespace Escape4Now.Map
     //Lists the five kinds of event tiles.
     public enum MapEventType { Warp, RandomEvent, Freeze, Blackout, LuckyRoll }
 
-    //Places events on empty tiles and activates them when a player steps onto them.
+    //Places special tiles around the map and applies their effects when crossed.
     [RequireComponent(typeof(IsometricMapTemplate))]
     public sealed class MapEventController : MonoBehaviour
     {
         private IsometricMapTemplate map;
         private readonly Dictionary<Vector2Int, MapEventType> events = new Dictionary<Vector2Int, MapEventType>();
-        //Prefabs used for the five event markers.
+        //Reusable templates for the five colored event tiles.
         [SerializeField] private EventTileMarker[] eventPrefabs;
         private string message = "";
         private int visibilityTurnsRemaining;
@@ -38,20 +38,20 @@ namespace Escape4Now.Map
             map = GetComponent<IsometricMapTemplate>();
         }
 
-        //Listens for completed player turns while this component is active.
+        //Starts receiving turn updates so Blackout can count finished player turns.
         private void OnEnable()
         {
             turnSystem = FindFirstObjectByType<TurnSystemController>();
             if (turnSystem != null) turnSystem.PlayerTurnEnded += CountBlackoutTurn;
         }
 
-        //Stops listening when this component is disabled or removed.
+        //Stops receiving turn updates when this script is turned off.
         private void OnDisable()
         {
             if (turnSystem != null) turnSystem.PlayerTurnEnded -= CountBlackoutTurn;
         }
 
-        //Keeps the triggering turn free, then counts four full player turns.
+        //Blackout lasts four player turns after the turn that triggered it.
         private void CountBlackoutTurn()
         {
             if (visibilityTurnsRemaining <= 0) return;
@@ -64,7 +64,7 @@ namespace Escape4Now.Map
             if (visibilityTurnsRemaining == 0) message = "Blackout ended. Visibility restored.";
         }
 
-        //Waits for scene setup, then puts one of each event on a different empty tile.
+        //Waits one frame for setup, then randomly places one of each event where space allows.
         private System.Collections.IEnumerator Start()
         {
             yield return null;
@@ -87,7 +87,7 @@ namespace Escape4Now.Map
             foreach (EventTileMarker prefab in eventPrefabs)
             {
                 if (emptyTiles.Count == 0) break;
-                //Skip missing or repeated prefabs instead of making invisible events.
+                //Skip templates that are missing, turned off, invalid, or already used.
                 if (prefab == null || !prefab.gameObject.activeSelf || !prefab.enabled
                     || !System.Enum.IsDefined(typeof(MapEventType), prefab.EventType)
                     || !placedTypes.Add(prefab.EventType)) continue;
@@ -108,7 +108,7 @@ namespace Escape4Now.Map
                 && !events.ContainsKey(cell);
         }
 
-        //Draws the most recent event result below the dice display.
+        //Shows the last event message and the number of Blackout turns left.
         private void OnGUI()
         {
             if (visibilityTurnsRemaining > 0)
@@ -119,20 +119,20 @@ namespace Escape4Now.Map
             GUI.Label(new Rect(16f, 140f, Mathf.Max(0f, Screen.width - 32f), 65f), message);
         }
 
-        //Shows the effect received by a player.
+        //Adds the player's name to the message explaining what happened.
         public void ShowMessage(PlayerCharacter player, string result)
         {
             if (player != null) message = player.name + ": " + result;
         }
 
-        //Starts one event chain for this completed step.
+        //Checks for an event after each completed step, not just at the end of a turn.
         public bool ResolveStep(PlayerCharacter player, Vector2Int direction)
         {
             if (player == null || !player.IsResolvingEventStep) return false;
             return ResolveEvent(player, direction, new HashSet<Vector2Int>());
         }
 
-        //Visits each event at most once in a chain to prevent repeated movement loops.
+        //Applies the effect. Each event tile can activate only once during this step's effects.
         private bool ResolveEvent(PlayerCharacter player, Vector2Int direction, HashSet<Vector2Int> visited)
         {
             if (player == null || player.HasReachedExit || map == null
@@ -180,7 +180,7 @@ namespace Escape4Now.Map
             return false;
         }
 
-        //Chooses from a finite list of safe tiles, so the search cannot loop forever.
+        //Lists safe destinations first, then picks one randomly for Warp.
         private void Warp(PlayerCharacter player)
         {
             List<Vector2Int> choices = new List<Vector2Int>();
@@ -204,13 +204,13 @@ namespace Escape4Now.Map
             ShowMessage(player, moved ? "Warp: teleported. Unused moves are kept." : "Warp: destination unavailable.");
         }
 
-        //Rejects walls, exits, and event tiles before choosing a warp destination.
+        //Keeps Warp away from blocked tiles, players, the exit, and other events.
         private bool IsWarpDestination(Vector2Int cell)
         {
             return IsEmptyEventTile(cell);
         }
 
-        //Moves at most two spaces in a straight line and stops before a blocked tile.
+        //Moves up to two extra spaces, checking each tile and any event along the way.
         private bool MoveExtra(PlayerCharacter player, Vector2Int direction, bool forward, HashSet<Vector2Int> visited)
         {
             if (direction != Vector2Int.up && direction != Vector2Int.down
@@ -236,7 +236,7 @@ namespace Escape4Now.Map
         }
 
 
-        //Covers the shared map, leaving a small clear area around the active player.
+        //Darkens the shared screen except for a small area around the current player.
         private void DrawReducedVisibility()
         {
             Camera camera = Camera.main;
@@ -278,7 +278,7 @@ namespace Escape4Now.Map
             GUI.depth = oldDepth;
         }
 
-        //Creates a soft circular opening once, then reuses it during blackouts.
+        //Makes an image with a clear center and dark edges for the Blackout effect.
         private void CreateVisibilityMask()
         {
             const int size = 128;

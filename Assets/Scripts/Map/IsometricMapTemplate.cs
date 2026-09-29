@@ -3,7 +3,7 @@ using UnityEngine;
 
 namespace Escape4Now.Map
 {
-    // Builds the floor and border walls on an isometric grid.
+    // Builds the diamond-shaped floor grid and its border walls.
     public sealed class IsometricMapTemplate : MonoBehaviour
     {
         //Map size, tile shape, and floor colors.
@@ -17,7 +17,7 @@ namespace Escape4Now.Map
         [SerializeField] private Color rightSideColor = new Color(0.16f, 0.16f, 0.16f, 1f);
         [SerializeField] private Color leftSideColor = new Color(0.1f, 0.1f, 0.1f, 1f);
         [SerializeField] private bool generateOnStart = true;
-        //Reusable tile copied into the grid when the game starts.
+        //A prefab is a reusable template. The map makes a copy for each grid space.
         [SerializeField] private IsometricMapTile floorTilePrefab;
 
         //Exit placement and how much the front walls fade when a player stands behind them.
@@ -104,7 +104,7 @@ namespace Escape4Now.Map
             return new Vector2Int(x, y);
         }
 
-        //Converts a tile address into a position in the scene.
+        //Turns a grid address, such as (2, 3), into a position on the game map.
         public Vector3 GridToWorld(Vector2Int gridPosition)
         {
             float worldX = (gridPosition.x - gridPosition.y) * tileWidth * 0.5f;
@@ -112,7 +112,7 @@ namespace Escape4Now.Map
             return transform.position + new Vector3(worldX, worldY, 0f);
         }
 
-        //Finds the nearest tile address, including positions outside the map.
+        //Turns a position on the map into its nearest grid address.
         public Vector2Int WorldToGrid(Vector3 worldPosition)
         {
             if (TryGetGridPosition(worldPosition, out Vector2Int gridPosition))
@@ -129,10 +129,10 @@ namespace Escape4Now.Map
             return new Vector2Int(gridX, gridY);
         }
 
-        //Finds the tile under a position and rejects positions outside the floor.
+        //Finds which tile contains a position. Returns false if it is off the map.
         public bool TryGetGridPosition(Vector3 worldPosition, out Vector2Int gridPosition)
         {
-            // Check each tile and find the one the mouse is inside.
+            // Check each diamond to find the one containing the supplied position.
             for (int y = height - 1; y >= 0; y--)
             {
                 for (int x = width - 1; x >= 0; x--)
@@ -256,7 +256,7 @@ namespace Escape4Now.Map
             }
         }
 
-        //Finds a shortest route through open tiles or returns false if none exists.
+        //Finds a shortest path around walls and obstacles, or reports that no path exists.
         public bool TryFindPath(Vector2Int start, Vector2Int end, out List<Vector2Int> path)
         {
             path = new List<Vector2Int>();
@@ -266,7 +266,7 @@ namespace Escape4Now.Map
                 return false;
             }
 
-            //Search each nearby tile once until the destination is reached.
+            //Check nearby tiles first and remember where each step came from.
             Queue<Vector2Int> pending = new Queue<Vector2Int>();
             Dictionary<Vector2Int, Vector2Int> previous = new Dictionary<Vector2Int, Vector2Int>();
             Vector2Int[] steps = { Vector2Int.right, Vector2Int.up, Vector2Int.left, Vector2Int.down };
@@ -279,7 +279,7 @@ namespace Escape4Now.Map
                 Vector2Int cell = pending.Dequeue();
                 if (cell == end)
                 {
-                    //Follow the saved steps backward, then put them in walking order.
+                    //Trace the steps back to the start, then reverse them into walking order.
                     Vector2Int step = end;
                     while (step != start)
                     {
@@ -315,10 +315,10 @@ namespace Escape4Now.Map
             return localX / (tileWidth * 0.5f) + localY / (tileHeight * 0.5f) <= 1f;
         }
 
-        //Replaces the old tiles and fits the camera around the new map.
+        //Builds the grid one row at a time, then adjusts the camera to show the whole map.
         public void GenerateBlankMap()
         {
-            //Keeps generated tiles out of the saved scene.
+            //Do not build tiles while editing, so they are not saved in the shared scene.
             if (!Application.isPlaying) return;
             if (floorTilePrefab == null || !floorTilePrefab.gameObject.activeSelf
                 || floorTilePrefab.GetComponent<MeshFilter>() == null
@@ -342,7 +342,7 @@ namespace Escape4Now.Map
             FitCamera();
         }
 
-        //Copies the tile prefab, fits it to the grid, and adds a border if needed.
+        //Copies the tile template, sets its position and color, and adds a border if needed.
         private void CreateTile(Vector2Int gridPosition)
         {
             IsometricMapTile mapTile = Instantiate(floorTilePrefab, transform);
@@ -399,7 +399,7 @@ namespace Escape4Now.Map
             }
         }
 
-        //Draws a raised box with a top and two shaded sides.
+        //Makes a raised block from triangles, with darker sides to show its depth.
         private Renderer CreateBlock(Transform parent, string label, Vector2 offset, float sizeX,
             float sizeY, float bottom, float blockHeight, Color color, int order)
         {
@@ -459,7 +459,7 @@ namespace Escape4Now.Map
             screenHeight = Screen.height;
         }
 
-        //Builds the floor diamond and any visible outside edges.
+        //Makes the tile shape from triangles and alternates colors for the checkerboard.
         private Mesh CreateTileMesh(Vector2Int gridPosition)
         {
             Color topColor = (gridPosition.x + gridPosition.y) % 2 == 0 ? floorColor : alternateFloorColor;
@@ -527,7 +527,7 @@ namespace Escape4Now.Map
             };
         }
 
-        // Removes old generated tiles and releases their mesh data.
+        // Removes only generated tiles and their shapes before building the grid again.
         private void ClearGeneratedTiles()
         {
             tileLookup.Clear();
@@ -567,7 +567,7 @@ namespace Escape4Now.Map
             }
         }
 
-        // Shows the grid outlines while editing the scene.
+        // Shows guide lines in the editor without creating saved tiles.
         private void OnDrawGizmos()
         {
             Gizmos.color = new Color(0.95f, 0.95f, 0.95f, 0.35f);
