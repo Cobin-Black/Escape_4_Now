@@ -2,7 +2,7 @@ using System;
 
 namespace Escape4Now.Player
 {
-    //Stores one-use effects separately for each player.
+    //Remembers whether this player has Freeze or Lucky Roll waiting to be used.
     public sealed class PlayerEventState
     {
         private bool frozen;
@@ -11,13 +11,13 @@ namespace Escape4Now.Player
 
         public bool HasLuckyRoll => luckyRoll;
 
-        //Saves one skipped turn. Repeated freezes do not add more turns.
+        //Skips the next turn. Getting Freeze again does not add extra skipped turns.
         public void GiveFreeze() { frozen = true; }
 
-        //Saves one double roll for the next playable turn.
+        //Saves Lucky Roll for the next turn the player can take. Extra Lucky Rolls do not stack.
         public void GiveLuckyRoll() { nextLuckyRoll = true; }
 
-        //Skips one frozen turn or prepares the bonuses for a normal turn.
+        //Returns false to skip a frozen turn; otherwise makes any saved Lucky Roll ready.
         public bool BeginTurn()
         {
             luckyRoll = false;
@@ -31,7 +31,7 @@ namespace Escape4Now.Player
             return true;
         }
 
-        //Checks both dice and uses the saved bonuses only once.
+        //Accepts dice from 1 to 6. Lucky Roll keeps the higher roll and is then removed.
         public int UseRoll(int first, int second)
         {
             if (first < 1 || first > 6 || second < 1 || second > 6)
