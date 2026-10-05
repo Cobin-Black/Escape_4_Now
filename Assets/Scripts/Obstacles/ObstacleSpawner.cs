@@ -14,7 +14,9 @@ namespace Escape4Now.Obstacles
 
         //Obstacle prefabs to pick from, and how many to place.
         [SerializeField] private ObstacleGridControl[] obstaclePrefabs;
-        [SerializeField, Min(0)] private int obstacleCount = 6;
+        [SerializeField] private ObstacleGridControl lockerPrefab;
+        [SerializeField] private KeyItem keyItemPrefab;
+        [SerializeField, Min(1)] private int obstacleCount = 6;
 
         //Chance that each placed obstacle can be opened, and the item prefabs one of them may hold.
         [SerializeField, Range(0f, 1f)] private float interactableChance = 0.5f;
@@ -27,6 +29,41 @@ namespace Escape4Now.Obstacles
         private void Start()
         {
             StartCoroutine(SpawnObstacles());
+        }
+
+        private bool SpawnLocker(Vector2Int cell)
+        {
+            ObstacleGridControl locker = Instantiate(
+                lockerPrefab,
+                map.GridToWorld(cell),
+                Quaternion.identity,
+                transform
+            );
+
+            locker.name = lockerPrefab.name;
+
+            if (!locker.Place(map, cell))
+            {
+                Destroy(locker.gameObject);
+                return false;
+            }
+
+            locker.IsInteractable = true;
+
+            ObstacleStorage storage = locker.GetComponent<ObstacleStorage>();
+
+            if (storage == null)
+            {
+                storage = locker.gameObject.AddComponent<ObstacleStorage>();
+            }
+
+            storage.SetStoredItem(keyItemPrefab);
+
+            Debug.Log(
+                $"[Obstacle System] Spawned guaranteed {locker.name} with key at {cell}."
+            );
+
+            return true;
         }
 
         private IEnumerator SpawnObstacles()
@@ -63,6 +100,19 @@ namespace Escape4Now.Obstacles
             }
 
             int placed = 0;
+
+            if (lockerPrefab != null && keyItemPrefab != null && emptyTiles.Count > 0)
+            {
+                int index = Random.Range(0, emptyTiles.Count);
+                Vector2Int lockerCell = emptyTiles[index];
+                emptyTiles.RemoveAt(index);
+
+                if (KeepsMapConnected(lockerCell) && SpawnLocker(lockerCell))
+                {
+                    placed++;
+                }
+            }
+
             while (placed < obstacleCount && emptyTiles.Count > 0)
             {
                 int index = Random.Range(0, emptyTiles.Count);

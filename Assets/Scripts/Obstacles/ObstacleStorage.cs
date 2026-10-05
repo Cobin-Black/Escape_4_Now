@@ -173,12 +173,15 @@ namespace Escape4Now.Obstacles
         private void TakeItemOrClose()
         {
             PlayerInventory inventory = viewingPlayer.Inventory;
+            bool isKey = storedItemPrefab is KeyItem;
 
-            if (HasItem && inventory != null && !inventory.IsFull)
+            if (HasItem && inventory != null && (isKey || !inventory.IsFull))
             {
                 //The obstacle only stores the prefab, so a real copy is made at the moment it is taken.
                 Item item = Instantiate(storedItemPrefab, transform.position, Quaternion.identity, transform.parent);
                 item.PickUp(inventory);
+
+                bool wasTaken = isKey ? inventory.HasKey() : inventory.HasItem(item);
 
                 if (inventory.HasItem(item))
                 {
@@ -229,7 +232,8 @@ namespace Escape4Now.Obstacles
             {
                 string description = string.IsNullOrEmpty(storedItemPrefab.Description) ? "" : $"\n{storedItemPrefab.Description}";
                 PlayerInventory inventory = viewingPlayer != null ? viewingPlayer.Inventory : null;
-                string action = inventory != null && !inventory.IsFull
+                bool isKey = storedItemPrefab is KeyItem;
+                string action = inventory != null && (isKey || !inventory.IsFull)
                     ? $"Press {key} to take it."
                     : $"You can only carry one item.\nPress {key} to close.";
                 body = $"Inside: {storedItemPrefab.ItemName}{description}\n\n{action}";
