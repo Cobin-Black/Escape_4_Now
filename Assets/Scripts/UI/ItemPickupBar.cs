@@ -9,11 +9,18 @@ namespace Escape4Now.UI
     //Draws the current player's item slots at the bottom of the screen and announces pickups and item use.
     public sealed class ItemPickupBar : MonoBehaviour
     {
+        public enum BarAnchor { BottomCenter, BottomLeft }
+
         //Matches PlayerInventory.IsFull, which lets a player carry one item.
         [SerializeField, Min(1)] private int slotCount = 1;
         [SerializeField, Min(24f)] private float slotSize = 64f;
         [SerializeField, Min(0f)] private float slotSpacing = 8f;
         [SerializeField, Min(0f)] private float bottomMargin = 16f;
+        //Where the bar sits along the bottom of the screen.
+        [SerializeField] private BarAnchor anchor = BarAnchor.BottomCenter;
+        [SerializeField, Min(0f)] private float sideMargin = 16f;
+        //Header text. Empty shows the player's name, such as "Player One's Items".
+        [SerializeField] private string title = "";
         [SerializeField, Min(0.1f)] private float popupSeconds = 2.5f;
         [SerializeField] private Color panelColor = new Color(0f, 0f, 0f, 0.65f);
         [SerializeField] private Color slotColor = new Color(1f, 1f, 1f, 0.12f);
@@ -28,6 +35,9 @@ namespace Escape4Now.UI
         private PlayerCharacter highlightPlayer;
         private Item highlightItem;
         private GUIStyle titleStyle;
+
+        //Where the bar was last drawn on screen, so the tutorial can point at it.
+        public Rect PanelRect { get; private set; }
         private GUIStyle nameStyle;
         private GUIStyle hintStyle;
         private GUIStyle popupStyle;
@@ -107,6 +117,7 @@ namespace Escape4Now.UI
             PlayerCharacter player = GetShownPlayer();
             if (player == null || player.Inventory == null) return;
             CreateStyles();
+            Matrix4x4 oldMatrix = HudScale.Apply();
 
             IReadOnlyList<Item> items = player.Inventory.Items;
             int count = Mathf.Max(slotCount, items.Count);
@@ -115,10 +126,12 @@ namespace Escape4Now.UI
             float hintHeight = 18f;
             float barWidth = Mathf.Max(180f, count * slotSize + (count - 1) * slotSpacing + padding * 2f);
             float barHeight = titleHeight + slotSize + hintHeight + padding * 2f;
-            Rect panel = new Rect((Screen.width - barWidth) * 0.5f, Screen.height - barHeight - bottomMargin, barWidth, barHeight);
+            float panelX = anchor == BarAnchor.BottomLeft ? sideMargin : (HudScale.Width - barWidth) * 0.5f;
+            Rect panel = new Rect(panelX, HudScale.Height - barHeight - bottomMargin, barWidth, barHeight);
+            PanelRect = panel;
 
             DrawBox(panel, panelColor);
-            GUI.Label(new Rect(panel.x + padding, panel.y + 4f, panel.width - padding * 2f, titleHeight), player.name + "'s Items", titleStyle);
+            GUI.Label(new Rect(panel.x + padding, panel.y + 4f, panel.width - padding * 2f, titleHeight), string.IsNullOrEmpty(title) ? player.name + "'s Items" : title, titleStyle);
 
             float elapsed = Time.unscaledTime - popupStartTime;
             float slotsWidth = count * slotSize + (count - 1) * slotSpacing;
@@ -149,9 +162,14 @@ namespace Escape4Now.UI
             {
                 Color oldColor = GUI.color;
                 GUI.color = new Color(1f, 1f, 1f, Mathf.Clamp01((popupSeconds - elapsed) / 0.5f));
-                GUI.Label(new Rect(0f, panel.y - 34f, Screen.width, 30f), popupText, popupStyle);
+                popupStyle.alignment = anchor == BarAnchor.BottomLeft ? TextAnchor.MiddleLeft : TextAnchor.MiddleCenter;
+                Rect popupRect = anchor == BarAnchor.BottomLeft
+                    ? new Rect(panel.x, panel.y - 34f, 480f, 30f)
+                    : new Rect(0f, panel.y - 34f, HudScale.Width, 30f);
+                GUI.Label(popupRect, popupText, popupStyle);
                 GUI.color = oldColor;
             }
+            GUI.matrix = oldMatrix;
         }
 
         //Uses the key bound to Use Item so the hint stays right if the controls change.

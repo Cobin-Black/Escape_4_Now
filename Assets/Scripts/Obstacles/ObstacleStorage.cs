@@ -21,6 +21,7 @@ namespace Escape4Now.Obstacles
         private PlayerCharacter viewingPlayer;
         private InputAction interactAction;
         private GUIStyle menuTextStyle;
+        private GUIStyle menuTitleStyle;
 
         //Read-only contents for other scripts.
         public Item StoredItemPrefab => storedItemPrefab;
@@ -213,10 +214,25 @@ namespace Escape4Now.Obstacles
                 menuTextStyle.normal.textColor = Color.white;
             }
 
+            //Scales the menu with the window size, like the rest of the HUD.
+            Matrix4x4 oldMatrix = Escape4Now.UI.HudScale.Apply();
             const float menuWidth = 360f;
             const float menuHeight = 180f;
-            Rect menuRect = new Rect((Screen.width - menuWidth) * 0.5f, (Screen.height - menuHeight) * 0.5f, menuWidth, menuHeight);
-            GUI.Box(menuRect, name);
+            Rect menuRect = new Rect((Escape4Now.UI.HudScale.Width - menuWidth) * 0.5f, (Escape4Now.UI.HudScale.Height - menuHeight) * 0.5f, menuWidth, menuHeight);
+
+            //Dark panel with a light border and the obstacle's name as a header.
+            Color oldColor = GUI.color;
+            GUI.color = new Color(0.5f, 0.77f, 1f, 1f);
+            GUI.DrawTexture(new Rect(menuRect.x - 2f, menuRect.y - 2f, menuRect.width + 4f, menuRect.height + 4f), Texture2D.whiteTexture);
+            GUI.color = new Color(0.02f, 0.04f, 0.08f, 0.96f);
+            GUI.DrawTexture(menuRect, Texture2D.whiteTexture);
+            GUI.color = oldColor;
+            if (menuTitleStyle == null)
+            {
+                menuTitleStyle = new GUIStyle(GUI.skin.label) { fontSize = 14, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
+                menuTitleStyle.normal.textColor = new Color(0.65f, 0.85f, 1f);
+            }
+            GUI.Label(new Rect(menuRect.x, menuRect.y + 6f, menuRect.width, 22f), name.ToUpper(), menuTitleStyle);
 
             string key = interactAction != null ? interactAction.GetBindingDisplayString() : "Interact";
             string body;
@@ -235,7 +251,8 @@ namespace Escape4Now.Obstacles
                 body = $"Inside: {storedItemPrefab.ItemName}{description}\n\n{action}";
             }
 
-            GUI.Label(new Rect(menuRect.x + 16f, menuRect.y + 32f, menuWidth - 32f, menuHeight - 40f), body, menuTextStyle);
+            GUI.Label(new Rect(menuRect.x + 16f, menuRect.y + 36f, menuWidth - 32f, menuHeight - 44f), body, menuTextStyle);
+            GUI.matrix = oldMatrix;
         }
     }
 }

@@ -42,6 +42,13 @@ namespace Escape4Now.GameModes
         //Scene loaded when the tutorial is finished. Empty stays on the tutorial.
         [SerializeField] private string sceneAfterTutorial = "";
 
+        //Multi-scene tutorial: the scene loaded when this scene's lesson is done. Empty moves to the next section in this scene.
+        [SerializeField] private string nextTutorialScene = "";
+        //Marks the last scene of a multi-scene tutorial, so finishing it ends the tutorial.
+        [SerializeField] private bool isLastTutorialScene;
+        //Places every event type in the Event Triggers section, and any of them ends the lesson, instead of only the Warp.
+        [SerializeField] private bool showAllEventTypes;
+
         //Section to load next. It survives the scene reload, and is cleared when Play mode starts.
         private static TutorialSection? pendingSection;
 
@@ -64,7 +71,10 @@ namespace Escape4Now.GameModes
         //Read-only tutorial state for the UI.
         public TutorialSection CurrentSection => currentSection;
         public bool IsSectionComplete => sectionComplete;
-        public bool IsFinalSection => currentSection == TutorialSection.Exit;
+        public bool IsFinalSection => currentSection == TutorialSection.Exit || isLastTutorialScene;
+        public bool ShowsAllEventTypes => showAllEventTypes;
+        //True when each lesson is its own scene, false when every section plays in this one scene.
+        public bool UsesSceneParts => !string.IsNullOrEmpty(nextTutorialScene) || isLastTutorialScene;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetSharedState()
@@ -169,7 +179,24 @@ namespace Escape4Now.GameModes
                 return;
             }
 
+            //Each lesson has its own scene, so go to the next scene instead of reloading this one.
+            if (!string.IsNullOrEmpty(nextTutorialScene))
+            {
+                pendingSection = null;
+                Time.timeScale = 1f;
+                SceneManager.LoadScene(nextTutorialScene);
+                return;
+            }
+
             GoToSection(currentSection + 1);
+        }
+
+        //Starts a tutorial scene from its own first lesson, such as going back to part 1 to play again.
+        public void LoadTutorialScene(string sceneName)
+        {
+            pendingSection = null;
+            Time.timeScale = 1f;
+            SceneManager.LoadScene(sceneName);
         }
 
         //Starts the current section over from the beginning.
@@ -208,7 +235,7 @@ namespace Escape4Now.GameModes
                 mapEvents.enabled = useEvents;
                 if (useEvents)
                 {
-                    mapEvents.OnlyPlaceEvents(MapEventType.Warp);
+                    if (!showAllEventTypes) mapEvents.OnlyPlaceEvents(MapEventType.Warp);
                     mapEvents.ForceEventTile(MapEventType.Warp, start + warpOffset);
                 }
             }
@@ -273,10 +300,10 @@ namespace Escape4Now.GameModes
             return finished;
         }
 
-        //Ends the Event Triggers section once the player lands on the Warp tile.
+        //Ends the Event Triggers section once the player lands on the Warp tile, or on any event tile when all types are shown.
         private void OnEventTriggered(PlayerCharacter triggeringPlayer, MapEventType type)
         {
-            if (currentSection == TutorialSection.EventTriggers && type == MapEventType.Warp && triggeringPlayer == player)
+            if (currentSection == TutorialSection.EventTriggers && (type == MapEventType.Warp || showAllEventTypes) && triggeringPlayer == player)
             {
                 CompleteCurrentSection();
             }
