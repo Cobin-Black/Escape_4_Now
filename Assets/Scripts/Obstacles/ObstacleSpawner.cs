@@ -24,6 +24,27 @@ namespace Escape4Now.Obstacles
         [SerializeField] private MapEventController mapEvents;
         [SerializeField] private ItemSpawner itemSpawner;
 
+        //Tile the first obstacle must use, such as the tutorial placing one beside the player. Null keeps every obstacle random.
+        private Vector2Int? forcedTile;
+
+        //Changes how many obstacles are placed. Call before the obstacles are placed.
+        public void SetObstacleCount(int count)
+        {
+            obstacleCount = Mathf.Max(0, count);
+        }
+
+        //Changes the chance that each obstacle holds an item. Call before the obstacles are placed.
+        public void SetInteractableChance(float chance)
+        {
+            interactableChance = Mathf.Clamp01(chance);
+        }
+
+        //Places the first obstacle on a set tile instead of a random one. Call before the obstacles are placed.
+        public void ForceObstacleTile(Vector2Int cell)
+        {
+            forcedTile = cell;
+        }
+
         private void Start()
         {
             StartCoroutine(SpawnObstacles());
@@ -63,6 +84,19 @@ namespace Escape4Now.Obstacles
             }
 
             int placed = 0;
+            if (forcedTile.HasValue && obstacleCount > 0)
+            {
+                Vector2Int cell = forcedTile.Value;
+                if (emptyTiles.Remove(cell) && KeepsMapConnected(cell) && SpawnObstacle(cell))
+                {
+                    placed++;
+                }
+                else
+                {
+                    Debug.LogWarning($"[Obstacle System] Could not place the forced obstacle at {cell}.");
+                }
+            }
+
             while (placed < obstacleCount && emptyTiles.Count > 0)
             {
                 int index = Random.Range(0, emptyTiles.Count);
@@ -185,7 +219,8 @@ namespace Escape4Now.Obstacles
             }
 
             Item contents = PickRandom(possibleItems);
-            obstacle.IsInteractable = contents != null && Random.value < interactableChance;
+            //Random.value can return exactly 1, so a full chance is checked separately to always hold an item.
+            obstacle.IsInteractable = contents != null && (interactableChance >= 1f || Random.value < interactableChance);
 
             if (obstacle.IsInteractable)
             {
