@@ -47,6 +47,19 @@ namespace Escape4Now.Map
         public float TileWidth => tileWidth;
         public float TileHeight => tileHeight;
 
+        //Turns the exit on or off, such as for a tutorial section. Call before the map is built.
+        public void SetHasExit(bool exitEnabled)
+        {
+            hasExit = exitEnabled;
+        }
+
+        //Moves the exit to another border tile. Call before the map is built.
+        public void SetExitPosition(Vector2Int cell)
+        {
+            exitGridPosition = cell;
+            ValidateSettings();
+        }
+
         //Creates the tiles when Play mode starts, not while editing the scene.
         private void Start()
         {
