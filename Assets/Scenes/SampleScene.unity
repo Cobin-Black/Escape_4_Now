@@ -477,7 +477,7 @@ MonoBehaviour:
   leftSideColor: {r: 0.1, g: 0.1, b: 0.1, a: 1}
   generateOnStart: 1
   floorTilePrefab: {fileID: 1877436113, guid: 079ada1107f54d908eea5bcb6018c07c, type: 3}
-  hasExit: 1
+  hasExit: 0
   exitGridPosition: {x: 9, y: 0}
   exitColor: {r: 0.2, g: 0.75, b: 0.35, a: 1}
   nearWallFadedAlpha: 0.15
@@ -729,10 +729,10 @@ MonoBehaviour:
   m_GameObject: {fileID: 1200000020}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: ac2a116f896944e34bc802ba9ba43da6, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.TurnSystem.GameTimer
-  timeLimit: 300
+m_Script: {fileID: 11500000, guid: ac2a116f896944e34bc802ba9ba43da6, type: 3}
+m_Name:
+m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.TurnSystem.GameTimer
+timeLimit: 300
 --- !u!1 &1200000030
 GameObject:
   m_ObjectHideFlags: 0
