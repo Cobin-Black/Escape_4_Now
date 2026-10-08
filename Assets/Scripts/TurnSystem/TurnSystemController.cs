@@ -24,6 +24,25 @@ namespace Escape4Now.TurnSystem
         [SerializeField] private string currentTurnName = "Player One";
 
         private GUIStyle turnDisplayStyle;
+        private int turnStartedFrame;
+
+        //Registers the separate players created for this local match.
+        public void SetPlayers(PlayerCharacter[] participants)
+        {
+            if (participants == null || participants.Length < 2 || participants.Length > 4)
+                throw new System.ArgumentException("A local match needs two to four players.");
+            var unique = new System.Collections.Generic.HashSet<PlayerCharacter>();
+            foreach (PlayerCharacter participant in participants)
+                if (participant == null || !unique.Add(participant))
+                    throw new System.ArgumentException("Each player must be assigned once.");
+            players = (PlayerCharacter[])participants.Clone();
+        }
+
+        //A key used on the previous turn must not also control the next player.
+        public bool CanReadInput(PlayerCharacter player)
+        {
+            return IsPlayersTurn(player) && Time.frameCount > turnStartedFrame;
+        }
 
         //Notifies shared effects when a player finishes or skips a turn.
         public event System.Action PlayerTurnEnded;
@@ -66,7 +85,8 @@ namespace Escape4Now.TurnSystem
 
             GUI.Label(new Rect(16f, 16f, 420f, 40f), $"Turn {turnNumber}: {currentTurnName}", turnDisplayStyle);
 
-            if (GUI.Button(new Rect(16f, 58f, 120f, 32f), "End Turn"))
+            if (Escape4Now.Multiplayer.LocalMultiplayerSession.AllowTurnButtons
+                && GUI.Button(new Rect(16f, 58f, 120f, 32f), "End Turn"))
             {
                 AdvanceTurn();
             }
@@ -94,6 +114,7 @@ namespace Escape4Now.TurnSystem
             if (currentTurnOwner == TurnOwner.Player && currentPlayerIndex >= 0 && currentPlayerIndex < playerCount)
             {
                 PlayerCharacter current = players[currentPlayerIndex];
+                if (current == null) return;
                 if (current != null)
                 {
                     if (current.HasReachedExit) return;
@@ -105,8 +126,8 @@ namespace Escape4Now.TurnSystem
                     return;
                 }
 
-                // Do not allow the turn to end while the player still has movement.
-                if (current.IsMoving || current.MovesRemaining > 0)
+                //Finish movement and close item menus before passing to another player.
+                if (current.IsMoving || current.IsUsingItem() || current.IsInMenu())
                 {
                     return;
                 }
@@ -169,6 +190,7 @@ namespace Escape4Now.TurnSystem
         //Selects a player using an index inside the player list.
         private void StartPlayerTurn(int playerIndex)
         {
+            turnStartedFrame = Time.frameCount;
             currentTurnOwner = TurnOwner.Player;
             int count = GetPlayerCount();
             currentPlayerIndex = Mathf.Clamp(playerIndex, 0, Mathf.Max(0, count - 1));

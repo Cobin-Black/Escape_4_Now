@@ -54,6 +54,8 @@ namespace Escape4Now.Player
         public int MovesRemaining => movesRemaining;
         internal bool IsResolvingEventStep => resolvingStep;
         public bool IsCurrentTurn => turnSystem == null || turnSystem.IsPlayersTurn(this);
+        //Blocks the previous player's last key press from reaching this player.
+        public bool CanReadTurnInput => turnSystem == null || turnSystem.CanReadInput(this);
 
         //Read-only movement state for the turn and map scripts.
         public Vector2Int GridPosition => gridPosition;
@@ -77,6 +79,7 @@ namespace Escape4Now.Player
         //Reads dice roll and movement key input each frame.
         private void Update()
         {
+            if (!CanReadTurnInput) return;
             if (hasReachedExit)
             {
                 return;
@@ -165,7 +168,8 @@ namespace Escape4Now.Player
 
             if (hasReachedExit)
             {
-                GUI.Label(new Rect(x, 180f, contentW, 50f), "EXIT REACHED", playerStyle);
+                //Reuse the player panel to show who escaped.
+                GUI.Label(new Rect(x, 180f, contentW, 80f), name + " escaped!\nYou win!", playerStyle);
             }else if (hasRolled)
             {
                 GUI.Label(new Rect(x, 172f, colW, 20f),"ROLL",smallStyle);
@@ -293,6 +297,26 @@ namespace Escape4Now.Player
             return turnSystem != null && turnSystem.IsOccupiedByOtherPlayer(this, cell);
         }
 
+        //Sets a local player's starting space and identifying color before the match.
+        public void ConfigureParticipant(IsometricMapTemplate map, TurnSystemController turns,
+            Vector2Int cell, int number, Color color)
+        {
+            if (spriteRenderer != null && mapTemplate != null)
+                mapTemplate.RemoveOccupant(registeredPosition);
+            mapTemplate = map;
+            turnSystem = turns;
+            gridPosition = cell;
+            name = "Player " + number;
+            playerColor = color;
+            if (spriteRenderer != null)
+            {
+                SetupMarker();
+                SnapToGridPosition();
+                registeredPosition = cell;
+                mapTemplate.SetOccupantPosition(cell, cell);
+            }
+        }
+
         //Checks settings after changes in the Inspector.
         private void OnValidate()
         {
@@ -337,6 +361,7 @@ namespace Escape4Now.Player
                 return false;
             }
 
+            if (IsOccupiedByOtherPlayer(newGridPosition)) return false;
             if (path.Count > movesRemaining) return false;
             moveRoutine = StartCoroutine(MoveAlongPath(path));
             return true;
@@ -512,7 +537,7 @@ namespace Escape4Now.Player
 
         public bool CanUseItem()
         {
-            return !hasRolled && !IsMoving && !hasReachedExit && !isInMenu;
+            return CanReadTurnInput && !hasRolled && !IsMoving && !hasReachedExit && !isInMenu;
         }
 
         public void SetMovesFromItem(int moveAmount)
