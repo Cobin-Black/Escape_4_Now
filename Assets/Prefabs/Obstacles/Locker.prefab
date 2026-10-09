@@ -112,10 +112,11 @@ MonoBehaviour:
   footprintWidth: 0.493
   footprintDepth: 0.563
   obstacleHeight: 0.7
-  topColor: {r: 1, g: 0, b: 0.036886215, a: 1}
-  frontFaceColor: {r: 0.55, g: 0.45, b: 0.32, a: 1}
+  topColor: {r: 0.25, g: 0.48, b: 0.7, a: 1}
+  frontFaceColor: {r: 0.25, g: 0.48, b: 0.7, a: 1}
   rightSideShade: 0.7
   leftSideShade: 0.48
+  lockerDetails: 1
   facing: 3
   sortingOrder: 380
 --- !u!114 &8008263496219192108

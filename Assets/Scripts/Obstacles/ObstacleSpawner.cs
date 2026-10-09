@@ -16,7 +16,7 @@ namespace Escape4Now.Obstacles
         [SerializeField] private ObstacleGridControl[] obstaclePrefabs;
         [SerializeField, Min(0)] private int obstacleCount = 6;
 
-        //Chance that each placed obstacle can be opened, and the item prefabs one of them may hold.
+        //Chance that a searchable object holds an item, and the allowed item prefabs.
         [SerializeField, Range(0f, 1f)] private float interactableChance = 0.5f;
         [SerializeField] private Item[] possibleItems;
 
@@ -27,6 +27,14 @@ namespace Escape4Now.Obstacles
         private void Start()
         {
             StartCoroutine(SpawnObstacles());
+        }
+
+        //The current scene uses one obstacle template on every computer.
+        public ObstacleGridControl GetNetworkPrefab()
+        {
+            if (obstaclePrefabs == null) return null;
+            foreach (ObstacleGridControl prefab in obstaclePrefabs) if (prefab != null) return prefab;
+            return null;
         }
 
         private IEnumerator SpawnObstacles()
@@ -63,21 +71,23 @@ namespace Escape4Now.Obstacles
             }
 
             int placed = 0;
-            while (placed < obstacleCount && emptyTiles.Count > 0)
+            int target = Mathf.Min(obstacleCount, Random.Range(2, 4));
+            var decorations = new List<Vector2Int>();
+            foreach (SchoolFurniture furniture in FindObjectsByType<SchoolFurniture>(FindObjectsSortMode.None))
+                if (map.IsHallway(furniture.Cell)) decorations.Add(furniture.Cell);
+            while (placed < target && emptyTiles.Count > 0)
             {
                 int index = Random.Range(0, emptyTiles.Count);
                 Vector2Int cell = emptyTiles[index];
                 emptyTiles.RemoveAt(index);
 
+                //Leave at least two tile steps between hallway objects to avoid clusters.
+                if (decorations.Exists(other => Mathf.Abs(other.x - cell.x) + Mathf.Abs(other.y - cell.y) <= 2)) continue;
                 if (KeepsMapConnected(cell) && SpawnObstacle(cell))
                 {
                     placed++;
+                    decorations.Add(cell);
                 }
-            }
-
-            if (placed < obstacleCount)
-            {
-                Debug.LogWarning($"[Obstacle System] Only found room for {placed} of {obstacleCount} obstacles.");
             }
         }
 
@@ -85,6 +95,7 @@ namespace Escape4Now.Obstacles
         private bool IsValidObstacleTile(Vector2Int cell)
         {
             return map.IsInteriorFloor(cell)
+                && map.IsLockerPosition(cell)
                 && map.IsWalkable(cell)
                 && !map.IsOccupied(cell)
                 && (mapEvents == null || !mapEvents.HasEvent(cell))
@@ -184,19 +195,17 @@ namespace Escape4Now.Obstacles
                 return false;
             }
 
-            Item contents = PickRandom(possibleItems);
-            obstacle.IsInteractable = contents != null && Random.value < interactableChance;
-
-            if (obstacle.IsInteractable)
-            {
-                ObstacleStorage storage = obstacle.GetComponent<ObstacleStorage>();
-                if (storage == null) storage = obstacle.gameObject.AddComponent<ObstacleStorage>();
-                storage.SetStoredItem(contents);
-            }
-
-            string detail = obstacle.IsInteractable ? $" holding {contents.ItemName}" : "";
-            Debug.Log($"[Obstacle System] Spawned {obstacle.name} at {cell}{detail}.");
+            obstacle.IsInteractable = true;
+            ObstacleStorage storage = obstacle.GetComponent<ObstacleStorage>();
+            if (storage == null) storage = obstacle.gameObject.AddComponent<ObstacleStorage>();
+            FillStorage(storage);
             return true;
+        }
+
+        //All furniture can be searched, but some containers start empty.
+        public void FillStorage(ObstacleStorage storage)
+        {
+            if (storage != null) storage.SetStoredItem(Random.value < interactableChance ? PickRandom(possibleItems) : null);
         }
 
         //Picks one entry from a list, skipping empty slots.

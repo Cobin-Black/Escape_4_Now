@@ -54,6 +54,8 @@ namespace Escape4Now.Player
         public int MovesRemaining => movesRemaining;
         internal bool IsResolvingEventStep => resolvingStep;
         public bool IsCurrentTurn => turnSystem == null || turnSystem.IsPlayersTurn(this);
+        //Blocks the previous player's last key press from reaching this player.
+        public bool CanReadTurnInput => turnSystem == null || turnSystem.CanReadInput(this);
 
         //Read-only movement state for the turn and map scripts.
         public Vector2Int GridPosition => gridPosition;
@@ -77,6 +79,8 @@ namespace Escape4Now.Player
         //Reads dice roll and movement key input each frame.
         private void Update()
         {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.Active) return;
+            if (!CanReadTurnInput) return;
             if (hasReachedExit)
             {
                 return;
@@ -165,7 +169,8 @@ namespace Escape4Now.Player
 
             if (hasReachedExit)
             {
-                GUI.Label(new Rect(x, 180f, contentW, 50f), "EXIT REACHED", playerStyle);
+                //Reuse the player panel to show who escaped.
+                GUI.Label(new Rect(x, 180f, contentW, 80f), name + " escaped!\nYou win!", playerStyle);
             }else if (hasRolled)
             {
                 GUI.Label(new Rect(x, 172f, colW, 20f),"ROLL",smallStyle);
@@ -223,18 +228,28 @@ namespace Escape4Now.Player
 
             if (rollDiceAction.WasPressedThisFrame())
             {
-                int first = Random.Range(1, 7);
-                bool lucky = eventState.HasLuckyRoll;
-                int second = lucky ? Random.Range(1, 7) : first;
-                lastRoll = lucky ? Mathf.Max(first, second) : first;
-                movesRemaining = eventState.UseRoll(first, second);
-                hasRolled = true;
-                if (mapEvents != null && lucky)
-                {
-                    string result = lucky ? "Lucky Roll: " + first + " and " + second + ". Kept " + lastRoll + ". " : "";
-                    mapEvents.ShowMessage(this, result + "Movement: " + movesRemaining + ".");
-                }
+                RollDice();
             }
+        }
+
+        //The host uses the same dice rules for local and remote players.
+        public bool RollDice()
+        {
+            if (hasRolled || IsMoving || hasReachedExit || isUsingItem || isInMenu || !IsCurrentTurn) return false;
+            int first = Random.Range(1, 7);
+            bool lucky = eventState.HasLuckyRoll;
+            bool bad = eventState.HasBadRoll;
+            bool bonus = eventState.HasRollBonus;
+            int second = lucky || bad ? Random.Range(1, 7) : first;
+            lastRoll = lucky ? Mathf.Max(first, second) : bad ? Mathf.Min(first, second) : first;
+            movesRemaining = eventState.UseRoll(first, second);
+            hasRolled = true;
+            if (mapEvents != null && (lucky || bad || bonus))
+            {
+                string result = lucky || bad ? (lucky ? "Lucky Roll: " : "Bad Roll: ") + first + " and " + second + ". Kept " + lastRoll + ". " : "Good Luck Day: +1. ";
+                mapEvents.ShowMessage(this, result + "Movement: " + movesRemaining + ".");
+            }
+            return true;
         }
 
         //Reads the Move action once when it is first pressed, snapped to one grid direction, or zero if it wasn't.
@@ -293,6 +308,42 @@ namespace Escape4Now.Player
             return turnSystem != null && turnSystem.IsOccupiedByOtherPlayer(this, cell);
         }
 
+        //Sets a local player's starting space and identifying color before the match.
+        public void ConfigureParticipant(IsometricMapTemplate map, TurnSystemController turns,
+            Vector2Int cell, int number, Color color)
+        {
+            if (spriteRenderer != null && mapTemplate != null)
+                mapTemplate.RemoveOccupant(registeredPosition);
+            mapTemplate = map;
+            turnSystem = turns;
+            gridPosition = cell;
+            name = "Player " + number;
+            playerColor = color;
+            if (spriteRenderer != null)
+            {
+                SetupMarker();
+                SnapToGridPosition();
+                registeredPosition = cell;
+                mapTemplate.SetOccupantPosition(cell, cell);
+            }
+        }
+
+        //Clients show confirmed state without running dice, pickups, or events again.
+        public void ApplyNetworkState(Escape4Now.Multiplayer.LanPlayerState state, bool updateOccupancy = true)
+        {
+            gridPosition = new Vector2Int(state.x, state.y);
+            lastRoll = state.roll;
+            movesRemaining = state.moves;
+            hasRolled = state.rolled;
+            hasReachedExit = state.won;
+            eventState.SetPlayerProtection(state.protectedFromPlayers);
+            if (updateOccupancy) UpdateMapOccupancy(gridPosition);
+            else registeredPosition = gridPosition;
+            transform.position = new Vector3(state.worldX, state.worldY, -1f);
+            float row = (state.worldY - mapTemplate.transform.position.y) / (mapTemplate.TileHeight * 0.5f);
+            spriteRenderer.sortingOrder = 505 - Mathf.RoundToInt(row * 10f);
+        }
+
         //Checks settings after changes in the Inspector.
         private void OnValidate()
         {
@@ -322,6 +373,75 @@ namespace Escape4Now.Player
             return true;
         }
 
+        //Checks the whole swap before moving anyone. Items, turns, and movement stay with their owners.
+        internal static bool SwitchLocations(IReadOnlyList<PlayerCharacter> participants, int[] destinations)
+        {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient || participants == null
+                || participants.Count < 2 || participants.Count > 4 || destinations == null
+                || destinations.Length != participants.Count) return false;
+            var cells = new Vector2Int[participants.Count];
+            var people = new HashSet<PlayerCharacter>();
+            var positions = new HashSet<Vector2Int>();
+            var indices = new HashSet<int>();
+            IsometricMapTemplate map = participants[0] != null ? participants[0].mapTemplate : null;
+            if (map == null) return false;
+            for (int i = 0; i < participants.Count; i++)
+            {
+                PlayerCharacter player = participants[i];
+                int target = destinations[i];
+                if (player == null || !player.isActiveAndEnabled || !people.Add(player) || player.mapTemplate != map
+                    || player.hasReachedExit || (player.IsMoving && !player.resolvingStep)
+                    || !map.IsWalkable(player.gridPosition) || map.IsExit(player.gridPosition)
+                    || !positions.Add(player.gridPosition) || target < 0 || target >= participants.Count
+                    || target == i || !indices.Add(target)) return false;
+                cells[i] = player.gridPosition;
+            }
+            for (int i = 0; i < participants.Count; i++)
+            {
+                PlayerCharacter player = participants[i];
+                player.gridPosition = cells[destinations[i]];
+                player.registeredPosition = player.gridPosition;
+                player.SnapToGridPosition();
+            }
+            //The occupied tile set stays the same; refresh fading after everyone has moved.
+            map.SetOccupantPosition(cells[0], cells[0]);
+            return true;
+        }
+
+        //Event movement cannot go below zero or grow beyond the board's tile count.
+        internal void ChangeEventMovement(int amount)
+        {
+            if (!resolvingStep || mapTemplate == null) return;
+            movesRemaining = Mathf.Clamp(movesRemaining + Mathf.Clamp(amount, -2, 2), 0, mapTemplate.Width * mapTemplate.Height);
+        }
+
+        //Checks all destinations before moving the group, without changing inventory or moves.
+        internal static bool RelocatePlayers(IReadOnlyList<PlayerCharacter> participants, Vector2Int[] targets)
+        {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient || participants == null || targets == null
+                || participants.Count < 2 || participants.Count > 4 || targets.Length != participants.Count) return false;
+            IsometricMapTemplate map = participants[0] != null ? participants[0].mapTemplate : null;
+            if (map == null) return false;
+            var cells = new HashSet<Vector2Int>();
+            var people = new HashSet<PlayerCharacter>();
+            for (int i = 0; i < participants.Count; i++)
+            {
+                PlayerCharacter player = participants[i];
+                if (player == null || !player.isActiveAndEnabled || player.mapTemplate != map || !people.Add(player)
+                    || player.hasReachedExit || (player.IsMoving && !player.resolvingStep)
+                    || !map.IsWalkable(targets[i]) || map.IsOccupied(targets[i]) || map.IsExit(targets[i])
+                    || !cells.Add(targets[i])) return false;
+            }
+            for (int i = 0; i < participants.Count; i++)
+            {
+                participants[i].gridPosition = targets[i];
+                participants[i].registeredPosition = targets[i];
+                participants[i].SnapToGridPosition();
+            }
+            map.ReplacePlayerOccupants(targets);
+            return true;
+        }
+
         //Starts a move only when the player is ready and a valid route exists.
         public bool MoveToGridPosition(Vector2Int newGridPosition)
         {
@@ -332,12 +452,30 @@ namespace Escape4Now.Player
                 return false;
             }
 
-            if (!mapTemplate.TryFindPath(gridPosition, newGridPosition, out List<Vector2Int> path))
+            List<Vector2Int> path;
+            Vector2Int direction = newGridPosition - gridPosition;
+            if (Mathf.Abs(direction.x) + Mathf.Abs(direction.y) == 1 && IsOccupiedByOtherPlayer(newGridPosition))
+            {
+                //A one-tile input passes through players to the next clear tile in that direction.
+                path = new List<Vector2Int>();
+                Vector2Int next = newGridPosition;
+                while (true)
+                {
+                    if (!mapTemplate.IsWalkable(next) || path.Count >= movesRemaining) return false;
+                    path.Add(next);
+                    if (!IsOccupiedByOtherPlayer(next)) break;
+                    next += direction;
+                }
+            }
+            else if (!mapTemplate.TryFindPath(gridPosition, newGridPosition, out path))
             {
                 return false;
             }
 
             if (path.Count > movesRemaining) return false;
+            //An occupied destination stops the route at the last clear tile before it.
+            while (path.Count > 0 && IsOccupiedByOtherPlayer(path[path.Count - 1])) path.RemoveAt(path.Count - 1);
+            if (path.Count == 0) return false;
             moveRoutine = StartCoroutine(MoveAlongPath(path));
             return true;
         }
@@ -402,10 +540,11 @@ namespace Escape4Now.Player
         //Slides through each tile in the route and records completed steps.
         private IEnumerator MoveAlongPath(List<Vector2Int> path)
         {
+            Vector2Int previousStep = gridPosition;
             // Move through the grid one tile at a time.
             foreach (Vector2Int next in path)
             {
-                if (!mapTemplate.IsWalkable(next) || IsOccupiedByOtherPlayer(next)) break;
+                if (!mapTemplate.IsWalkable(next) || movesRemaining <= 0) break;
                 Vector3 targetPosition = mapTemplate.GridToWorld(next);
                 targetPosition.z = -1f;
                 while (Vector3.Distance(transform.position, targetPosition) > 0.01f)
@@ -416,10 +555,15 @@ namespace Escape4Now.Player
                     yield return null;
                 }
                 transform.position = targetPosition;
-                lastDirection = next - gridPosition;
-                gridPosition = next;
+                lastDirection = next - previousStep;
+                previousStep = next;
                 movesRemaining--;
-                UpdateMapOccupancy(next);
+                //Occupied tiles are transit only. Keep a clear stopping tile until the next opening.
+                if (!IsOccupiedByOtherPlayer(next))
+                {
+                    gridPosition = next;
+                    UpdateMapOccupancy(next);
+                }
                 CheckForItem(next);
 
                 if (mapTemplate.IsExit(next))
@@ -430,10 +574,11 @@ namespace Escape4Now.Player
 
                 //Resolve each crossed tile before starting the next step.
                 bool endTurn = false;
+                Vector2Int beforeEvent = gridPosition;
                 resolvingStep = true;
                 try
                 {
-                    if (mapEvents != null) endTurn = mapEvents.ResolveStep(this, lastDirection);
+                    if (mapEvents != null) endTurn = mapEvents.ResolveStep(this, lastDirection, next);
                 }
                 finally
                 {
@@ -442,8 +587,9 @@ namespace Escape4Now.Player
                 if (hasReachedExit) yield break;
                 if (endTurn) movesRemaining = 0;
                 //A teleport or extra move cancels the old route from this point.
-                if (endTurn || gridPosition != next) break;
+                if (endTurn || gridPosition != beforeEvent) break;
             }
+            SnapToGridPosition();
             moveRoutine = null;
             if (movesRemaining == 0)
             {
@@ -453,6 +599,24 @@ namespace Escape4Now.Player
                     BeginEventTurn();
                 }
             }
+        }
+
+        //Future direct actions must check this before changing a victim's items or state.
+        public bool CanBeTargetedBy(PlayerCharacter attacker)
+        {
+            return !Escape4Now.Multiplayer.LanMultiplayerSession.IsClient && attacker != null && attacker != this
+                && isActiveAndEnabled && attacker.isActiveAndEnabled && mapTemplate != null && attacker.mapTemplate == mapTemplate
+                && attacker.turnSystem == turnSystem && attacker.IsCurrentTurn && !attacker.IsMoving
+                && !attacker.HasReachedExit && !attacker.IsInMenu() && !attacker.IsUsingItem()
+                && !IsMoving && !hasReachedExit && !eventState.IsProtectedFromPlayers;
+        }
+
+        //Call only after a direct negative action succeeds, never for environmental events.
+        public bool RecordSuccessfulTargetedAction(PlayerCharacter attacker)
+        {
+            if (!CanBeTargetedBy(attacker)) return false;
+            eventState.SetPlayerProtection(true);
+            return true;
         }
 
         //Updates which tile the map thinks this player occupies, for wall fading.
@@ -512,7 +676,7 @@ namespace Escape4Now.Player
 
         public bool CanUseItem()
         {
-            return !hasRolled && !IsMoving && !hasReachedExit && !isInMenu;
+            return CanReadTurnInput && !hasRolled && !IsMoving && !hasReachedExit && !isInMenu;
         }
 
         public void SetMovesFromItem(int moveAmount)

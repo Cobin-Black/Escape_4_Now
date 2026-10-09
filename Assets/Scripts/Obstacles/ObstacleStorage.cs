@@ -6,7 +6,6 @@ using UnityEngine.InputSystem;
 namespace Escape4Now.Obstacles
 {
     //Holds one item inside an interactable obstacle and shows a simple menu when a player next to it presses Interact.
-    [RequireComponent(typeof(ObstacleGridControl))]
     public sealed class ObstacleStorage : MonoBehaviour
     {
         //Item prefab stored inside. Empty means nothing is left in the obstacle.
@@ -17,15 +16,19 @@ namespace Escape4Now.Obstacles
         private static int lastMenuChangeFrame = -1;
 
         private ObstacleGridControl gridControl;
+        private Escape4Now.Map.SchoolFurniture furniture;
         private PlayerCharacter[] players;
         private PlayerCharacter viewingPlayer;
         private InputAction interactAction;
         private GUIStyle menuTextStyle;
+        private bool networkHasItem;
 
         //Read-only contents for other scripts.
         public Item StoredItemPrefab => storedItemPrefab;
-        public bool HasItem => storedItemPrefab != null;
+        public bool HasItem => Escape4Now.Multiplayer.LanMultiplayerSession.IsClient ? networkHasItem : storedItemPrefab != null;
         public bool IsMenuOpen => openStorage == this;
+        public Vector2Int GridPosition => gridControl != null ? gridControl.GridPosition : furniture != null ? furniture.Cell : new Vector2Int(-1, -1);
+        public bool CanInteract => gridControl != null ? gridControl.IsInteractable : furniture != null;
 
         //Clears the shared menu state when Play mode starts, even if the editor skips reloading scripts.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -39,6 +42,7 @@ namespace Escape4Now.Obstacles
         private void Awake()
         {
             gridControl = GetComponent<ObstacleGridControl>();
+            furniture = GetComponent<Escape4Now.Map.SchoolFurniture>();
             interactAction = InputSystem.actions != null ? InputSystem.actions.FindAction("Player/Interact") : null;
 
             if (interactAction == null)
@@ -65,9 +69,16 @@ namespace Escape4Now.Obstacles
             storedItemPrefab = itemPrefab;
         }
 
+        //Guests see whether storage is empty; only the host gives out real items.
+        public void ApplyNetworkContents(bool hasItem)
+        {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) networkHasItem = hasItem;
+        }
+
         //Opens, takes from, or closes the menu on the Interact action.
         private void Update()
         {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.Active) return;
             if (IsMenuOpen && !CanKeepMenuOpen())
             {
                 CloseMenu();
@@ -91,7 +102,7 @@ namespace Escape4Now.Obstacles
                 return;
             }
 
-            if (openStorage != null || gridControl == null || !gridControl.IsInteractable)
+            if (openStorage != null || !CanInteract)
             {
                 return;
             }
@@ -131,15 +142,28 @@ namespace Escape4Now.Obstacles
         //Checks the four tiles that share a side with this obstacle.
         private bool IsNextTo(Vector2Int cell)
         {
-            Vector2Int offset = cell - gridControl.GridPosition;
+            Vector2Int offset = cell - GridPosition;
             return Mathf.Abs(offset.x) + Mathf.Abs(offset.y) == 1;
+        }
+
+        //The host checks adjacency before giving a remote player the stored item.
+        public bool TakeNetworkItem(PlayerCharacter player)
+        {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient || player == null || !player.isActiveAndEnabled
+                || !player.IsCurrentTurn || player.IsMoving || player.HasReachedExit
+                || player.IsUsingItem() || player.IsInMenu() || !CanInteract
+                || !IsNextTo(player.GridPosition)
+                || player.Inventory == null || player.Inventory.IsFull || !HasItem) return false;
+            OpenMenu(player);
+            TakeItemOrClose();
+            return true;
         }
 
         //Keeps the menu open only while its player is still next to the obstacle on their own turn.
         private bool CanKeepMenuOpen()
         {
             return viewingPlayer != null && viewingPlayer.isActiveAndEnabled && viewingPlayer.IsCurrentTurn
-                && gridControl != null && gridControl.IsInteractable && IsNextTo(viewingPlayer.GridPosition);
+                && CanInteract && IsNextTo(viewingPlayer.GridPosition);
         }
 
         //Shows the contents and pauses the player's other controls.
