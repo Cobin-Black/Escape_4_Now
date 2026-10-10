@@ -181,9 +181,10 @@ namespace Escape4Now.Obstacles
                 Item item = Instantiate(storedItemPrefab, transform.position, Quaternion.identity, transform.parent);
                 item.PickUp(inventory);
 
+
                 bool wasTaken = isKey ? inventory.HasKey() : inventory.HasItem(item);
 
-                if (inventory.HasItem(item))
+                if (wasTaken)
                 {
                     Debug.Log($"[Item System] {viewingPlayer.name} took {item.ItemName} from {name}.");
                     storedItemPrefab = null;
@@ -192,6 +193,7 @@ namespace Escape4Now.Obstacles
                 {
                     Destroy(item.gameObject);
                 }
+
             }
 
             CloseMenu();

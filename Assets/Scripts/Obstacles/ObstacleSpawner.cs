@@ -131,11 +131,34 @@ namespace Escape4Now.Obstacles
             }
         }
 
+        private bool IsNearDoorway(Vector2Int cell)
+        {
+            Vector2Int[] directions =
+            {
+        Vector2Int.right,
+        Vector2Int.up,
+        Vector2Int.left,
+        Vector2Int.down
+    };
+
+            foreach (Vector2Int direction in directions)
+            {
+                if (map.IsDoorway(cell + direction))
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         //Keeps obstacles on open floor and off players, the exit, events, and items.
         private bool IsValidObstacleTile(Vector2Int cell)
         {
             return map.IsInteriorFloor(cell)
                 && map.IsWalkable(cell)
+                && !IsNearDoorway(cell)
+                && !map.IsDoorway(cell)
                 && !map.IsOccupied(cell)
                 && (mapEvents == null || !mapEvents.HasEvent(cell))
                 && !HasItemAt(cell);

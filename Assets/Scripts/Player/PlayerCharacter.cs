@@ -56,6 +56,7 @@ namespace Escape4Now.Player
         public bool IsCurrentTurn => turnSystem == null || turnSystem.IsPlayersTurn(this);
         //Blocks the previous player's last key press from reaching this player.
         public bool CanReadTurnInput => turnSystem == null || turnSystem.CanReadInput(this);
+        private Coroutine sharedTilePositionRoutine;
 
         //Read-only movement state for the turn and map scripts.
         public Vector2Int GridPosition => gridPosition;
@@ -362,7 +363,6 @@ namespace Escape4Now.Player
                 return false;
             }
 
-            if (IsOccupiedByOtherPlayer(newGridPosition)) return false;
             if (path.Count > movesRemaining) return false;
             moveRoutine = StartCoroutine(MoveAlongPath(path));
             return true;
@@ -425,13 +425,81 @@ namespace Escape4Now.Player
             spriteRenderer.sortingOrder = 505 - (gridPosition.x + gridPosition.y) * 10;
         }
 
+        // Adjusts player positions when multiple players share the same tile.
+        private void RefreshSharedTilePositions(Vector2Int tile)
+        {
+            if (mapTemplate == null)
+            {
+                return;
+            }
+
+            PlayerCharacter[] allPlayers =
+                FindObjectsByType<PlayerCharacter>(FindObjectsSortMode.None);
+
+            List<PlayerCharacter> playersOnTile = new List<PlayerCharacter>();
+
+            foreach (PlayerCharacter player in allPlayers)
+            {
+                if (player != null && player.isActiveAndEnabled
+                    && player.mapTemplate == mapTemplate
+                    && player.gridPosition == tile)
+                {
+                    playersOnTile.Add(player);
+                }
+            }
+
+            Vector3 tileCenter = mapTemplate.GridToWorld(tile);
+
+            // Keep one player centered.
+            if (playersOnTile.Count == 1)
+            {
+                PlayerCharacter player = playersOnTile[0];
+                player.transform.position = new Vector3(
+                    tileCenter.x, tileCenter.y, -1f);
+            }
+            else
+            {
+                // Arrange multiple players in a compact diamond.
+                float offsetX = 0.14f;
+                float offsetY = 0.08f;
+
+                Vector2[] offsets =
+                {
+            new Vector2(-offsetX, 0f),
+            new Vector2(offsetX, 0f),
+            new Vector2(0f, offsetY),
+            new Vector2(0f, -offsetY)
+        };
+
+                for (int i = 0; i < playersOnTile.Count; i++)
+                {
+                    PlayerCharacter player = playersOnTile[i];
+                    Vector2 offset = offsets[i % offsets.Length];
+
+                    player.transform.position = new Vector3(
+                        tileCenter.x + offset.x,
+                        tileCenter.y + offset.y,
+                        -1f);
+                }
+            }
+
+            foreach (PlayerCharacter player in playersOnTile)
+            {
+                float row = (player.transform.position.y - mapTemplate.transform.position.y)
+                    / (mapTemplate.TileHeight * 0.5f);
+
+                player.spriteRenderer.sortingOrder =
+                    505 - Mathf.RoundToInt(row * 10f);
+            }
+        }
+
         //Slides through each tile in the route and records completed steps.
         private IEnumerator MoveAlongPath(List<Vector2Int> path)
         {
             // Move through the grid one tile at a time.
             foreach (Vector2Int next in path)
             {
-                if (!mapTemplate.IsWalkable(next) || IsOccupiedByOtherPlayer(next)) break;
+                if (!mapTemplate.IsWalkable(next)) break;
                 if (mapTemplate.IsExit(next) && (inventory == null || !inventory.HasKey()))
                 {
                     Debug.Log("The exit is locked. Go find a key.");
@@ -499,8 +567,13 @@ namespace Escape4Now.Player
                 return;
             }
 
-            mapTemplate.SetOccupantPosition(registeredPosition, newPosition);
+            Vector2Int oldPosition = registeredPosition;
+
+            mapTemplate.SetOccupantPosition(oldPosition, newPosition);
             registeredPosition = newPosition;
+
+            RefreshSharedTilePositions(oldPosition);
+            RefreshSharedTilePositions(newPosition);
         }
 
         //Stops the player at the exit and pauses the game to show the win.
@@ -525,11 +598,13 @@ namespace Escape4Now.Player
             SnapToGridPosition();
         }
 
+        // Sets whether the player is currently using an item.
         public void SetUsingItem(bool usingItem)
         {
             isUsingItem = usingItem;
         }
 
+        // Checks whether the player is using an item.
         public bool IsUsingItem()
         {
             return isUsingItem;
@@ -541,16 +616,19 @@ namespace Escape4Now.Player
             isInMenu = inMenu;
         }
 
+        // Checks whether a menu is currently open for the player.
         public bool IsInMenu()
         {
             return isInMenu;
         }
 
+        // Checks whether the player is allowed to use an item.
         public bool CanUseItem()
         {
             return CanReadTurnInput && !hasRolled && !IsMoving && !hasReachedExit && !isInMenu;
         }
 
+        // Gives the player a movement allowance from an item.
         public void SetMovesFromItem(int moveAmount)
         {
             if (hasReachedExit || IsMoving || moveAmount <= 0)
@@ -565,6 +643,7 @@ namespace Escape4Now.Player
             Debug.Log($"Item gave the player {moveAmount} moves.");
         }
 
+        // Checks whether the player has stepped onto an item and collects it.
         private void CheckForItem(Vector2Int position)
         {
             if (inventory == null)
@@ -582,6 +661,9 @@ namespace Escape4Now.Player
 
                 Debug.Log($"[Item System] Found {item.ItemName} at grid position {position}.");
                 item.PickUp(inventory);
+
+                Debug.Log($"[Key Debug] Player: {name}, " +
+                    $"Inventory: {inventory.name}, Has Key: {inventory.HasKey()}");
                 return;
             }
         }
@@ -615,4 +697,3 @@ namespace Escape4Now.Player
         }
     }
 }
-

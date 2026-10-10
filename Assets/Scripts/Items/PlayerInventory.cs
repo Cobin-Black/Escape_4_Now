@@ -62,10 +62,40 @@ namespace Escape4Now.Items
         }
 
         //Checks whether the player currently has a key.
+
         public bool HasKey()
         {
-            return keyItems.Count > 0;
+            return keyItems.Count > 0 && keyItems[0] != null;
         }
+
+
+        //Removes the key from this player's inventory.
+        public bool RemoveKey()
+        {
+            if (keyItems.Count == 0)
+            {
+                return false;
+            }
+
+            keyItems.Clear();
+            return true;
+        }
+
+        //Gives a key to this player's inventory.
+
+
+        public bool GiveKey(KeyItem keyItem)
+        {
+            if (keyItem == null || keyItems.Count >= 1)
+            {
+                return false;
+            }
+
+            keyItems.Add(keyItem);
+            return true;
+        }
+
+
 
         //Removes an item from the player's inventory.
         public bool RemoveItem(Item item)
@@ -107,6 +137,7 @@ namespace Escape4Now.Items
 
             if (useItemAction.WasPressedThisFrame())
             {
+                Debug.Log("Use Item input detected.");
                 UseFirstItem();
             }
         }
