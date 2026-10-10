@@ -10,6 +10,7 @@ namespace Escape4Now.Items
         [SerializeField] private IsometricMapTemplate map;
         [SerializeField] private DoubleDiceItem doubleDicePrefab;
         [SerializeField] private CustomDiceItem customDicePrefab;
+        [SerializeField] private KeyStealerItem keyStealerPrefab;
 
         //Lets other spawners wait until every item has its tile.
         public bool HasSpawnedItems { get; private set; }
@@ -48,6 +49,7 @@ namespace Escape4Now.Items
 
             SpawnItem(doubleDicePrefab, emptyTiles);
             SpawnItem(customDicePrefab, emptyTiles);
+            SpawnItem(keyStealerPrefab, emptyTiles);
             HasSpawnedItems = true;
         }
 
@@ -55,6 +57,7 @@ namespace Escape4Now.Items
         {
             return map.IsWalkable(cell)
                 && !map.IsExit(cell)
+                && !map.IsDoorway(cell)
                 && !map.IsOccupied(cell);
         }
 
@@ -83,6 +86,10 @@ namespace Escape4Now.Items
             else if (spawnedItem is CustomDiceItem customDice)
             {
                 customDice.SetSpawnPosition(map, cell);
+            }
+            else if (spawnedItem is KeyStealerItem keyStealer)
+            {
+                keyStealer.SetSpawnPosition(map, cell);
             }
 
             emptyTiles.RemoveAt(index);
