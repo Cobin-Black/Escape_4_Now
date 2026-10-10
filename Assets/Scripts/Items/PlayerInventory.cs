@@ -72,6 +72,7 @@ namespace Escape4Now.Items
         //Checks for the Use Item action each frame.
         private void Update()
         {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.Active) return;
             //The shared keyboard belongs only to the player taking this turn.
             if (player == null || !player.CanReadTurnInput) return;
             if (useItemAction == null)
