@@ -550,7 +550,7 @@ MonoBehaviour:
   obstacleSpawner: {fileID: 69550735}
   itemSpawner: {fileID: 69550736}
   player: {fileID: 30058497}
-  startingSection: 3
+  startingSection: 4
   doubleDicePrefab: {fileID: 1119616090794593453, guid: 798c830d404504ec993fb50111c722ba, type: 3}
   obstacleOffset: {x: 1, y: 0}
   warpOffset: {x: 0, y: 2}
@@ -558,8 +558,8 @@ MonoBehaviour:
   exitOnlyInFinalSection: 1
   disableFloorItems: 1
   sceneAfterTutorial: SampleScene
-  nextTutorialScene: Tutorial_3_Events
-  isLastTutorialScene: 0
+  nextTutorialScene: 
+  isLastTutorialScene: 1
   showAllEventTypes: 0
 --- !u!1 &1700000010
 GameObject:
@@ -661,9 +661,9 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   tutorial: {fileID: 1700000003}
-  partNumber: 2
-  partCount: 3
-  nextPartName: Special Events
+  partNumber: 4
+  partCount: 4
+  nextPartName: 
   firstTutorialScene: Tutorial_1_Movement
   cardWidth: 400
   dimSeconds: 1.6

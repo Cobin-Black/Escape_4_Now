@@ -1,4 +1,5 @@
 using Escape4Now.GameModes;
+using Escape4Now.Items;
 using Escape4Now.Map;
 using Escape4Now.Obstacles;
 using Escape4Now.Player;
@@ -103,16 +104,28 @@ namespace Escape4Now.UI
 
                 case TutorialSection.Items:
                     bool holdingItem = player.Inventory != null && player.Inventory.Items.Count > 0;
+                    Item floorItem = tutorial.TutorialItem;
+                    //First find the item on the floor and walk onto it.
+                    if (!holdingItem && floorItem != null && !tutorial.TutorialItemPickedUp)
+                    {
+                        if (!player.HasRolled)
+                            return MakeStep("items-find", "Find an item",
+                                "Items help you escape. See the red Double Dice on the floor? Roll the dice, then walk onto it to pick it up.",
+                                new[] { "SPACE" }, ItemRect(floorItem));
+                        return MakeStep("items-pickup", "Pick up the item",
+                            "Walk onto the Double Dice. It will go straight into your inventory in the bottom-left. Moves left: " + player.MovesRemaining + ".",
+                            new[] { "W", "A", "S", "D" }, ItemRect(floorItem));
+                    }
                     if (holdingItem && !player.HasRolled)
                         return MakeStep("items-use", "Use your item",
-                            "You're holding a Double Dice. Press E before you roll to use it: it rolls two dice and adds them together.",
+                            player.name + " has a Double Dice in their inventory (bottom-left). Items are used at the start of your turn, before you roll. Press E to use it: it rolls two dice and adds them together.",
                             new[] { "E" }, ItemBarRect());
                     if (holdingItem)
                         return MakeStep("items-later", "Use it next turn",
-                            "Items can only be used before you roll. Use up your moves, then press E at the start of your next turn.",
+                            "You rolled before using your item. Items can only be used before you roll, so use up your moves now, then press E at the start of your next turn.",
                             new[] { "W", "A", "S", "D" }, ItemBarRect());
                     return MakeStep("items-walk", "Move with your bonus roll",
-                        "Nice roll! Use up all your moves to finish this step. Moves left: " + player.MovesRemaining + ".",
+                        "The Double Dice is used up and has left your inventory. Use up all your bonus moves to finish this step. Moves left: " + player.MovesRemaining + ".",
                         new[] { "W", "A", "S", "D" }, PlayerRect());
 
                 case TutorialSection.Obstacles:
@@ -150,11 +163,11 @@ namespace Escape4Now.UI
             if (tutorial.IsFinalSection)
                 return MakeStep("done-all", "Tutorial complete!",
                     tutorial.UsesSceneParts
-                        ? "You know how to roll, move, open lockers, and set off special events. Press ENTER to start the game. Good luck!"
+                        ? "You know how to roll, move, pick up and use items, open lockers, and use Warp tiles. Press ENTER to start the game. Good luck!"
                         : "You know how to roll, move, use items, open lockers, set off events, and escape. Press ENTER to start the game. Good luck!",
                     new[] { "ENTER" }, null);
 
-            string[] names = { "", "Movement", "Items", "Lockers", "Special events", "Exit" };
+            string[] names = { "", "Movement", "Items", "Lockers", "Warp", "Exit" };
             string next = !tutorial.UsesSceneParts ? "the next step"
                 : string.IsNullOrEmpty(nextPartName) ? "the next part" : "part " + (partNumber + 1) + ": " + nextPartName;
             return MakeStep("done-" + section, names[(int)section] + " complete!",
@@ -304,6 +317,12 @@ namespace Escape4Now.UI
         private Rect? PlayerRect()
         {
             return WorldRect(player.transform.position, 0.9f, 1.1f, 0.1f);
+        }
+
+        //Box around an item lying on the floor.
+        private static Rect? ItemRect(Item item)
+        {
+            return item == null || !item.gameObject.activeInHierarchy ? null : WorldRect(item.transform.position, 1.1f, 1f, -0.3f);
         }
 
         private Rect? ItemBarRect()

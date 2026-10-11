@@ -558,7 +558,7 @@ MonoBehaviour:
   exitOnlyInFinalSection: 1
   disableFloorItems: 1
   sceneAfterTutorial: SampleScene
-  nextTutorialScene: Tutorial_2_Lockers
+  nextTutorialScene: Tutorial_2_Items
   isLastTutorialScene: 0
   showAllEventTypes: 0
 --- !u!1 &1700000010
@@ -662,8 +662,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   tutorial: {fileID: 1700000003}
   partNumber: 1
-  partCount: 3
-  nextPartName: Lockers
+  partCount: 4
+  nextPartName: Items
   firstTutorialScene: Tutorial_1_Movement
   cardWidth: 400
   dimSeconds: 1.6

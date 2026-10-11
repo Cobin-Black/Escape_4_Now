@@ -27,6 +27,10 @@ namespace Escape4Now.GameModes
 
         //Item placed in the inventory for the Items section.
         [SerializeField] private DoubleDiceItem doubleDicePrefab;
+        //Puts the Double Dice on the floor for the player to pick up, instead of straight into the inventory.
+        [SerializeField] private bool itemOnFloor;
+        //Where the floor item goes, counted from the player's starting tile.
+        [SerializeField] private Vector2Int itemOffset = new Vector2Int(2, 0);
 
         //Where the forced obstacle and Warp tile go, counted from the player's starting tile.
         [SerializeField] private Vector2Int obstacleOffset = new Vector2Int(1, 0);
@@ -56,6 +60,8 @@ namespace Escape4Now.GameModes
         private bool sectionComplete;
         private bool playerHadRolled;
         private bool tutorialItemUsed;
+        private bool tutorialItemPickedUp;
+        private Vector2Int startCell;
         private Item tutorialItem;
         private ObstacleStorage tutorialObstacle;
         private int completedFrame;
@@ -73,6 +79,9 @@ namespace Escape4Now.GameModes
         public bool IsSectionComplete => sectionComplete;
         public bool IsFinalSection => currentSection == TutorialSection.Exit || isLastTutorialScene;
         public bool ShowsAllEventTypes => showAllEventTypes;
+        //The Items section's Double Dice, and whether the player has it yet, for the tutorial UI.
+        public Item TutorialItem => tutorialItem;
+        public bool TutorialItemPickedUp => tutorialItemPickedUp;
         //True when each lesson is its own scene, false when every section plays in this one scene.
         public bool UsesSceneParts => !string.IsNullOrEmpty(nextTutorialScene) || isLastTutorialScene;
 
@@ -108,7 +117,11 @@ namespace Escape4Now.GameModes
         //Gives the section's starting item once the inventory is ready, then announces the section.
         private void Start()
         {
-            if (currentSection == TutorialSection.Items) GiveTutorialItem();
+            if (currentSection == TutorialSection.Items)
+            {
+                if (itemOnFloor) PlaceTutorialItemOnFloor();
+                else GiveTutorialItem();
+            }
             Debug.Log($"[Tutorial] Section {(int)currentSection}: {currentSection}.");
             SectionStarted?.Invoke(currentSection);
         }
@@ -132,8 +145,12 @@ namespace Escape4Now.GameModes
                     if (finishedMoving) CompleteCurrentSection();
                     break;
                 case TutorialSection.Items:
-                    if (tutorialItem != null && player.Inventory != null && !player.Inventory.HasItem(tutorialItem))
-                        tutorialItemUsed = true;
+                    //The item counts as used once it has been in the inventory and is gone again.
+                    if (tutorialItem != null && player.Inventory != null)
+                    {
+                        if (player.Inventory.HasItem(tutorialItem)) tutorialItemPickedUp = true;
+                        else if (tutorialItemPickedUp) tutorialItemUsed = true;
+                    }
                     if (tutorialItemUsed && finishedMoving) CompleteCurrentSection();
                     break;
                 case TutorialSection.Obstacles:
@@ -228,6 +245,7 @@ namespace Escape4Now.GameModes
         {
             //The player has not moved yet, so this is their default tile.
             Vector2Int start = player != null ? player.GridPosition : Vector2Int.zero;
+            startCell = start;
 
             bool useEvents = currentSection == TutorialSection.EventTriggers;
             if (mapEvents != null)
@@ -281,6 +299,22 @@ namespace Escape4Now.GameModes
             {
                 Destroy(item.gameObject);
             }
+        }
+
+        //Places a Double Dice on a tile near the player, so the lesson starts with picking it up.
+        private void PlaceTutorialItemOnFloor()
+        {
+            if (doubleDicePrefab == null || map == null)
+            {
+                Debug.LogWarning("[Tutorial] Assign the Double Dice prefab and a map for the Items section.");
+                return;
+            }
+
+            Vector2Int cell = startCell + itemOffset;
+            if (!map.IsWalkable(cell)) cell = startCell + Vector2Int.right;
+            DoubleDiceItem item = Instantiate(doubleDicePrefab, map.GridToWorld(cell), Quaternion.identity, transform);
+            item.SetSpawnPosition(map, cell);
+            tutorialItem = item;
         }
 
         //Takes the tutorial's Double Dice back out of the inventory if it was not used.
