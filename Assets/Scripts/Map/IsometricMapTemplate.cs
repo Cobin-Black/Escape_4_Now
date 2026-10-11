@@ -521,6 +521,34 @@ namespace Escape4Now.Map
             AddVisualDoor(tile.transform, gridPosition);
         }
 
+        //Checks whether a floor tile is being used as a doorway into a room.
+        public bool IsDoorway(Vector2Int cell)
+        {
+            if (GetTileType(cell) != SchoolTileType.Floor
+                || GetRoomType(cell) != SchoolRoomType.None)
+            {
+                return false;
+            }
+
+            Vector2Int[] directions =
+            {
+        Vector2Int.right,
+        Vector2Int.up,
+        Vector2Int.left,
+        Vector2Int.down
+    };
+
+            foreach (Vector2Int direction in directions)
+            {
+                if (GetRoomType(cell + direction) != SchoolRoomType.None)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
         //Adds an open door at a room entrance. It has no collider or opening rules.
         private void AddVisualDoor(Transform tile, Vector2Int cell)
         {

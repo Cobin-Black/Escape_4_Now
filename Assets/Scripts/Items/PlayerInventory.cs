@@ -15,11 +15,17 @@ namespace Escape4Now.Items
         //List of items currently owned by this player.
         private readonly List<Item> items = new List<Item>();
 
+        //List of important items currently owned by this player.
+        private readonly List<KeyItem> keyItems = new List<KeyItem>();
+
         //Use Item action from the project-wide Input System asset.
         private InputAction useItemAction;
 
         //Read-only access to the player's current items.
         public IReadOnlyList<Item> Items => items;
+
+        //Read-only access to the player's current key items.
+        public IReadOnlyList<KeyItem> KeyItems => keyItems;
 
         //Provides access to the player who owns this inventory.
         public PlayerCharacter Player => player;
@@ -40,6 +46,56 @@ namespace Escape4Now.Items
             Debug.Log($"Picked up {item.ItemName}.");
             return true;
         }
+
+        //Adds a key to the player's key items.
+        public bool AddKey(KeyItem keyItem)
+        {
+            if (keyItem == null)
+                return false;
+
+            if (keyItems.Count >= 1)
+                return false;
+
+            keyItems.Add(keyItem);
+            Debug.Log($"Picked up {keyItem.ItemName}.");
+            return true;
+        }
+
+        //Checks whether the player currently has a key.
+
+        public bool HasKey()
+        {
+            return keyItems.Count > 0 && keyItems[0] != null;
+        }
+
+
+        //Removes the key from this player's inventory.
+        public bool RemoveKey()
+        {
+            if (keyItems.Count == 0)
+            {
+                return false;
+            }
+
+            keyItems.Clear();
+            return true;
+        }
+
+        //Gives a key to this player's inventory.
+
+
+        public bool GiveKey(KeyItem keyItem)
+        {
+            if (keyItem == null || keyItems.Count >= 1)
+            {
+                return false;
+            }
+
+            keyItems.Add(keyItem);
+            return true;
+        }
+
+
 
         //Removes an item from the player's inventory.
         public bool RemoveItem(Item item)
@@ -81,6 +137,7 @@ namespace Escape4Now.Items
 
             if (useItemAction.WasPressedThisFrame())
             {
+                Debug.Log("Use Item input detected.");
                 UseFirstItem();
             }
         }

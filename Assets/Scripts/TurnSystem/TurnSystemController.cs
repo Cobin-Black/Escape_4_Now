@@ -92,17 +92,33 @@ namespace Escape4Now.TurnSystem
             }
         }
 
+        public void EndTurnAfterBattleLoss(PlayerCharacter player)
+        {
+            if (!IsPlayersTurn(player))
+                return;
+
+            if (player.IsMoving)
+                return;
+
+            AdvanceTurn(true);
+        }
+
         //Changes turns after movement has finished.
         [ContextMenu("Advance Turn")]
         public void AdvanceTurn()
         {
+            AdvanceTurn(false);
+        }
+
+        private void AdvanceTurn(bool battleLoss)
+        {
             int playerCount = GetPlayerCount();
+
             if (playerCount == 0)
             {
                 return;
             }
 
-            //Finish the current move before changing players.
             foreach (PlayerCharacter player in players)
             {
                 if (player != null && player.IsMoving)
@@ -111,22 +127,27 @@ namespace Escape4Now.TurnSystem
                 }
             }
 
-            if (currentTurnOwner == TurnOwner.Player && currentPlayerIndex >= 0 && currentPlayerIndex < playerCount)
+            if (currentTurnOwner == TurnOwner.Player
+                && currentPlayerIndex >= 0
+                && currentPlayerIndex < playerCount)
             {
                 PlayerCharacter current = players[currentPlayerIndex];
-                if (current == null) return;
-                if (current != null)
-                {
-                    if (current.HasReachedExit) return;
-                }
 
-                // Do not allow a player turn to end before the player has rolled.
-                if (!current.HasRolled)
+                if (current == null)
                 {
                     return;
                 }
 
-                //Finish movement and close item menus before passing to another player.
+                if (current.HasReachedExit)
+                {
+                    return;
+                }
+
+                if (!current.HasRolled && !battleLoss)
+                {
+                    return;
+                }
+
                 if (current.IsMoving || current.IsUsingItem() || current.IsInMenu())
                 {
                     return;
@@ -272,4 +293,3 @@ namespace Escape4Now.TurnSystem
         }
     }
 }
-

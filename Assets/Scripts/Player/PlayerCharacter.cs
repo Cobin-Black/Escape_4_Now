@@ -56,6 +56,7 @@ namespace Escape4Now.Player
         public bool IsCurrentTurn => turnSystem == null || turnSystem.IsPlayersTurn(this);
         //Blocks the previous player's last key press from reaching this player.
         public bool CanReadTurnInput => turnSystem == null || turnSystem.CanReadInput(this);
+        private Coroutine sharedTilePositionRoutine;
 
         //Read-only movement state for the turn and map scripts.
         public Vector2Int GridPosition => gridPosition;
@@ -102,11 +103,11 @@ namespace Escape4Now.Player
         private void OnGUI()
         {
             if (turnSystem != null && !turnSystem.IsPlayersTurn(this)) return;
-            
+
             // Main panel
             GUIStyle panelStyle = new GUIStyle(GUI.skin.box);
             panelStyle.normal.background = MakeTransparentTexture(new Color(0.02f, 0.04f, 0.08f, 0.88f));
-            
+
             //header style
             GUIStyle headerStyle = new GUIStyle(GUI.skin.label);
             headerStyle.fontSize = 13;
@@ -134,13 +135,13 @@ namespace Escape4Now.Player
             smallStyle.fontStyle = FontStyle.Bold;
             smallStyle.alignment = TextAnchor.MiddleCenter;
             smallStyle.normal.textColor = new Color(0.7f, 0.75f, 0.8f);
-            
+
             GUIStyle promptStyle = new GUIStyle(smallStyle);
             promptStyle.fontSize = 16;
-            promptStyle.normal.textColor =  Color.white;
+            promptStyle.normal.textColor = Color.white;
 
             string turnName = turnSystem != null ? turnSystem.CurrentTurnName : gameObject.name;
-            
+
             float panelX = 16f, panelY = 85f, panelW = 360f, panelH = 235f;
             float padding = 16f;
             float x = panelX + padding;
@@ -150,32 +151,33 @@ namespace Escape4Now.Player
             float moveOffset = -6f;
 
             GUI.Box(new Rect(panelX, panelY, panelW, panelH), "", panelStyle);
-            
-            
+
+
 
             //header
-            GUI.Label(new Rect(x, 95f , contentW, 22f), "CURRENT TURN", headerStyle);
+            GUI.Label(new Rect(x, 95f, contentW, 22f), "CURRENT TURN", headerStyle);
 
             // Player name
-            GUI.Label(new Rect(x, 114f , contentW, 34f), turnName.ToUpper(), playerStyle);
-            
+            GUI.Label(new Rect(x, 114f, contentW, 34f), turnName.ToUpper(), playerStyle);
+
             //Divder
             Color oldColor = GUI.color;
             GUI.color = new Color(1f, 1f, 1f, 0.25f);
             GUI.DrawTexture(new Rect(x + 15f, 164f, contentW - 30f, 2f), Texture2D.whiteTexture);
             GUI.color = oldColor;
-            
+
 
             if (hasReachedExit)
             {
                 //Reuse the player panel to show who escaped.
                 GUI.Label(new Rect(x, 180f, contentW, 80f), name + " escaped!\nYou win!", playerStyle);
-            }else if (hasRolled)
+            }
+            else if (hasRolled)
             {
-                GUI.Label(new Rect(x, 172f, colW, 20f),"ROLL",smallStyle);
+                GUI.Label(new Rect(x, 172f, colW, 20f), "ROLL", smallStyle);
 
                 //Moves Label
-                GUI.Label(new Rect(x + colW, 172f, colW,20f), "MOVES LEFT", smallStyle);
+                GUI.Label(new Rect(x + colW, 172f, colW, 20f), "MOVES LEFT", smallStyle);
 
                 //Roll Number
                 GUI.Label(new Rect(x, 192f, colW, 55f), lastRoll.ToString(), rollStyle);
@@ -183,7 +185,7 @@ namespace Escape4Now.Player
                 //Moves remaining
                 GUI.Label(new Rect(x + colW, 192f, colW, 55f), movesRemaining.ToString(), rollStyle);
                 //Bottom instruction
-                GUI.Label(new Rect(x, 262f, contentW, 24f), "Press Arrow Keys or WASD to Move", smallStyle); 
+                GUI.Label(new Rect(x, 262f, contentW, 24f), "Press Arrow Keys or WASD to Move", smallStyle);
             }
             else
             {
@@ -191,15 +193,15 @@ namespace Escape4Now.Player
                 GUI.Label(new Rect(x, 222f, contentW, 24f), "Press Spacebar to Roll Dice", playerStyle);
             }
         }
-            //
-            private Texture2D MakeTransparentTexture(Color color)
-            {
-                Texture2D texture = new Texture2D(1, 1);
-                texture.SetPixel(0, 0, color);
-                texture.Apply();
-                return texture;
-            }
-        
+        //
+        private Texture2D MakeTransparentTexture(Color color)
+        {
+            Texture2D texture = new Texture2D(1, 1);
+            texture.SetPixel(0, 0, color);
+            texture.Apply();
+            return texture;
+        }
+
 
         //Finds the player's actions in the project-wide Input System asset (Assets/Settings/InputSystem_Actions).
         private void SetupInputActions()
@@ -361,7 +363,6 @@ namespace Escape4Now.Player
                 return false;
             }
 
-            if (IsOccupiedByOtherPlayer(newGridPosition)) return false;
             if (path.Count > movesRemaining) return false;
             moveRoutine = StartCoroutine(MoveAlongPath(path));
             return true;
@@ -424,13 +425,86 @@ namespace Escape4Now.Player
             spriteRenderer.sortingOrder = 505 - (gridPosition.x + gridPosition.y) * 10;
         }
 
+        // Adjusts player positions when multiple players share the same tile.
+        private void RefreshSharedTilePositions(Vector2Int tile)
+        {
+            if (mapTemplate == null)
+            {
+                return;
+            }
+
+            PlayerCharacter[] allPlayers =
+                FindObjectsByType<PlayerCharacter>(FindObjectsSortMode.None);
+
+            List<PlayerCharacter> playersOnTile = new List<PlayerCharacter>();
+
+            foreach (PlayerCharacter player in allPlayers)
+            {
+                if (player != null && player.isActiveAndEnabled
+                    && player.mapTemplate == mapTemplate
+                    && player.gridPosition == tile)
+                {
+                    playersOnTile.Add(player);
+                }
+            }
+
+            Vector3 tileCenter = mapTemplate.GridToWorld(tile);
+
+            // Keep one player centered.
+            if (playersOnTile.Count == 1)
+            {
+                PlayerCharacter player = playersOnTile[0];
+                player.transform.position = new Vector3(
+                    tileCenter.x, tileCenter.y, -1f);
+            }
+            else
+            {
+                // Arrange multiple players in a compact diamond.
+                float offsetX = 0.14f;
+                float offsetY = 0.08f;
+
+                Vector2[] offsets =
+                {
+            new Vector2(-offsetX, 0f),
+            new Vector2(offsetX, 0f),
+            new Vector2(0f, offsetY),
+            new Vector2(0f, -offsetY)
+        };
+
+                for (int i = 0; i < playersOnTile.Count; i++)
+                {
+                    PlayerCharacter player = playersOnTile[i];
+                    Vector2 offset = offsets[i % offsets.Length];
+
+                    player.transform.position = new Vector3(
+                        tileCenter.x + offset.x,
+                        tileCenter.y + offset.y,
+                        -1f);
+                }
+            }
+
+            foreach (PlayerCharacter player in playersOnTile)
+            {
+                float row = (player.transform.position.y - mapTemplate.transform.position.y)
+                    / (mapTemplate.TileHeight * 0.5f);
+
+                player.spriteRenderer.sortingOrder =
+                    505 - Mathf.RoundToInt(row * 10f);
+            }
+        }
+
         //Slides through each tile in the route and records completed steps.
         private IEnumerator MoveAlongPath(List<Vector2Int> path)
         {
             // Move through the grid one tile at a time.
             foreach (Vector2Int next in path)
             {
-                if (!mapTemplate.IsWalkable(next) || IsOccupiedByOtherPlayer(next)) break;
+                if (!mapTemplate.IsWalkable(next)) break;
+                if (mapTemplate.IsExit(next) && (inventory == null || !inventory.HasKey()))
+                {
+                    Debug.Log("The exit is locked. Go find a key.");
+                    break;
+                }
                 Vector3 targetPosition = mapTemplate.GridToWorld(next);
                 targetPosition.z = -1f;
                 while (Vector3.Distance(transform.position, targetPosition) > 0.01f)
@@ -449,8 +523,13 @@ namespace Escape4Now.Player
 
                 if (mapTemplate.IsExit(next))
                 {
-                    ReachExit();
-                    yield break;
+                    if (inventory != null && inventory.HasKey())
+                    {
+                        ReachExit();
+                        yield break;
+                    }
+
+                    Debug.Log("The exit is locked. Go find a key.");
                 }
 
                 //Resolve each crossed tile before starting the next step.
@@ -488,8 +567,13 @@ namespace Escape4Now.Player
                 return;
             }
 
-            mapTemplate.SetOccupantPosition(registeredPosition, newPosition);
+            Vector2Int oldPosition = registeredPosition;
+
+            mapTemplate.SetOccupantPosition(oldPosition, newPosition);
             registeredPosition = newPosition;
+
+            RefreshSharedTilePositions(oldPosition);
+            RefreshSharedTilePositions(newPosition);
         }
 
         //Stops the player at the exit and pauses the game to show the win.
@@ -514,11 +598,13 @@ namespace Escape4Now.Player
             SnapToGridPosition();
         }
 
+        // Sets whether the player is currently using an item.
         public void SetUsingItem(bool usingItem)
         {
             isUsingItem = usingItem;
         }
 
+        // Checks whether the player is using an item.
         public bool IsUsingItem()
         {
             return isUsingItem;
@@ -530,16 +616,19 @@ namespace Escape4Now.Player
             isInMenu = inMenu;
         }
 
+        // Checks whether a menu is currently open for the player.
         public bool IsInMenu()
         {
             return isInMenu;
         }
 
+        // Checks whether the player is allowed to use an item.
         public bool CanUseItem()
         {
             return CanReadTurnInput && !hasRolled && !IsMoving && !hasReachedExit && !isInMenu;
         }
 
+        // Gives the player a movement allowance from an item.
         public void SetMovesFromItem(int moveAmount)
         {
             if (hasReachedExit || IsMoving || moveAmount <= 0)
@@ -554,6 +643,7 @@ namespace Escape4Now.Player
             Debug.Log($"Item gave the player {moveAmount} moves.");
         }
 
+        // Checks whether the player has stepped onto an item and collects it.
         private void CheckForItem(Vector2Int position)
         {
             if (inventory == null)
@@ -571,6 +661,9 @@ namespace Escape4Now.Player
 
                 Debug.Log($"[Item System] Found {item.ItemName} at grid position {position}.");
                 item.PickUp(inventory);
+
+                Debug.Log($"[Key Debug] Player: {name}, " +
+                    $"Inventory: {inventory.name}, Has Key: {inventory.HasKey()}");
                 return;
             }
         }
@@ -604,4 +697,3 @@ namespace Escape4Now.Player
         }
     }
 }
-
