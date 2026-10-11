@@ -81,6 +81,9 @@ namespace Escape4Now.UI
             float sinceStep = now - stepStartTime;
 
             if (step.target.HasValue) DrawHighlight(step.target.Value, sinceStep, now);
+            //The finish screen dims the whole game behind the card.
+            if (tutorial.IsSectionComplete && tutorial.IsFinalSection)
+                DrawBox(new Rect(0f, 0f, HudScale.Width, HudScale.Height), new Color(0.01f, 0.02f, 0.05f, 0.7f * Mathf.Clamp01(sinceStep / 0.4f)));
             DrawCard(step, sinceStep);
             GUI.matrix = oldMatrix;
         }
@@ -153,7 +156,7 @@ namespace Escape4Now.UI
 
                 default:
                     return MakeStep("exit", "Escape!",
-                        "Reach the green exit tile on the edge of the map to escape and win. It may take more than one turn.",
+                        "Last step: get out! Walk to the green EXIT tile on the edge of the map. Stepping on it is how you escape and win. It may take more than one turn.",
                         player.HasRolled ? new[] { "W", "A", "S", "D" } : new[] { "SPACE" }, ExitRect());
             }
         }
@@ -161,10 +164,8 @@ namespace Escape4Now.UI
         private Step BuildCompleteStep(TutorialSection section)
         {
             if (tutorial.IsFinalSection)
-                return MakeStep("done-all", "Tutorial complete!",
-                    tutorial.UsesSceneParts
-                        ? "You know how to roll, move, pick up and use items, open lockers, and use Warp tiles. Press ENTER to start the game. Good luck!"
-                        : "You know how to roll, move, use items, open lockers, set off events, and escape. Press ENTER to start the game. Good luck!",
+                return MakeStep("done-all", section == TutorialSection.Exit ? "You escaped!" : "Tutorial complete!",
+                    "Tutorial complete! You know how to roll, move, use items, open lockers, use Warp tiles, and escape through the exit. Press ENTER to start the real game. Good luck!",
                     new[] { "ENTER" }, null);
 
             string[] names = { "", "Movement", "Items", "Lockers", "Warp", "Exit" };

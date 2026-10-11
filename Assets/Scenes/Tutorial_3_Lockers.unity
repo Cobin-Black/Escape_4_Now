@@ -662,7 +662,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   tutorial: {fileID: 1700000003}
   partNumber: 3
-  partCount: 4
+  partCount: 5
   nextPartName: Warp
   firstTutorialScene: Tutorial_1_Movement
   cardWidth: 400

@@ -558,8 +558,8 @@ MonoBehaviour:
   exitOnlyInFinalSection: 1
   disableFloorItems: 1
   sceneAfterTutorial: SampleScene
-  nextTutorialScene: 
-  isLastTutorialScene: 1
+  nextTutorialScene: Tutorial_5_Exit
+  isLastTutorialScene: 0
   showAllEventTypes: 0
 --- !u!1 &1700000010
 GameObject:
@@ -662,8 +662,8 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   tutorial: {fileID: 1700000003}
   partNumber: 4
-  partCount: 4
-  nextPartName: 
+  partCount: 5
+  nextPartName: Exit
   firstTutorialScene: Tutorial_1_Movement
   cardWidth: 400
   dimSeconds: 1.6

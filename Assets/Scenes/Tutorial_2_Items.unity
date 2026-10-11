@@ -664,7 +664,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   tutorial: {fileID: 1700000003}
   partNumber: 2
-  partCount: 4
+  partCount: 5
   nextPartName: Lockers
   firstTutorialScene: Tutorial_1_Movement
   cardWidth: 400
