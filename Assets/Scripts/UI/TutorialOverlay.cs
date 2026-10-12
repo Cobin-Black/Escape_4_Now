@@ -17,8 +17,8 @@ namespace Escape4Now.UI
         [SerializeField, Min(1)] private int partCount = 3;
         //Name of the next scene's lesson, shown when this part is done. Empty on the last part.
         [SerializeField] private string nextPartName = "";
-        //Scene that "Play again" goes back to.
-        [SerializeField] private string firstTutorialScene = "Tutorial_1_Movement";
+        //Scene that "Play again" goes back to. Empty restarts this scene from step 1.
+        [SerializeField] private string firstTutorialScene = "";
         [SerializeField, Min(260f)] private float cardWidth = 400f;
         //How long the screen stays dimmed around a new highlight before fading so the map is easy to see.
         [SerializeField, Min(0f)] private float dimSeconds = 1.6f;
@@ -135,14 +135,14 @@ namespace Escape4Now.UI
                     if (locker == null) locker = FindFirstObjectByType<ObstacleStorage>();
                     if (locker != null && locker.IsMenuOpen)
                         return MakeStep("obstacles-take", "Take the item",
-                            "The locker is open. Press ENTER again to take what's inside. Keys go into your inventory too.",
+                            "The locker is open. Press ENTER again to take what's inside. It goes into your inventory.",
                             new[] { "ENTER" }, null);
                     if (IsNextToLocker())
                         return MakeStep("obstacles-open", "Open the locker",
                             "You're next to the locker. Press ENTER to open it.",
                             new[] { "ENTER" }, LockerRect());
                     return MakeStep("obstacles-find", "Find the locker",
-                        "Red blocks are obstacles: you can't walk through them. Lockers can hold items, and one of them hides the KEY that unlocks the exit. Stand right next to the locker.",
+                        "Red blocks are obstacles: you can't walk through them. Lockers can hold items you can take. Stand right next to the locker.",
                         player.HasRolled ? new[] { "W", "A", "S", "D" } : new[] { "SPACE" }, LockerRect());
 
                 case TutorialSection.EventTriggers:
@@ -156,9 +156,7 @@ namespace Escape4Now.UI
 
                 default:
                     return MakeStep("exit", "Escape!",
-                        (player.Inventory != null && player.Inventory.HasKey()
-                            ? "Last step: get out! The EXIT door is locked, but you're holding the key. Walk through the door on the school's outside wall to escape and win, just like in the real game."
-                            : "The EXIT door is locked. You need a key from a locker to open it."),
+                        "Last step: get out! Walk through the green EXIT door on the outside wall to escape and win.",
                         player.HasRolled ? new[] { "W", "A", "S", "D" } : new[] { "SPACE" }, ExitRect());
             }
         }
@@ -355,7 +353,20 @@ namespace Escape4Now.UI
         private Rect? LockerRect()
         {
             if (locker == null) locker = FindFirstObjectByType<ObstacleStorage>();
-            return locker == null ? null : WorldRect(locker.transform.position, 1.3f, 1.8f, 0.3f);
+            return locker == null ? null : BoundsRect(locker.gameObject);
+        }
+
+        //Box that fits tightly around everything drawn for an object, such as the locker block.
+        private static Rect? BoundsRect(GameObject target)
+        {
+            Camera camera = Camera.main;
+            Renderer[] renderers = target.GetComponentsInChildren<Renderer>();
+            if (camera == null || renderers.Length == 0) return null;
+            Bounds bounds = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) bounds.Encapsulate(renderers[i].bounds);
+            Vector3 min = camera.WorldToScreenPoint(bounds.min);
+            Vector3 max = camera.WorldToScreenPoint(bounds.max);
+            return HudScale.FromScreen(Rect.MinMaxRect(min.x, Screen.height - max.y, max.x, Screen.height - min.y));
         }
 
         private Rect? WarpRect()

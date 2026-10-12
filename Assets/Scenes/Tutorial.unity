@@ -607,10 +607,13 @@ MonoBehaviour:
   itemSpawner: {fileID: 69550736}
   player: {fileID: 30058497}
   startingSection: 1
+  keyItemPrefab: {fileID: 8324686912643164936, guid: 48deafd2bac804dee8759ec5b673b47b, type: 3}
+  lockerHoldsKey: 0
+  startWithKey: 0
   doubleDicePrefab: {fileID: 1119616090794593453, guid: 798c830d404504ec993fb50111c722ba, type: 3}
   obstacleOffset: {x: 1, y: 0}
   warpOffset: {x: 0, y: 2}
-  exitPosition: {x: 9, y: 0}
+  exitPosition: {x: 6, y: 0}
   exitOnlyInFinalSection: 1
   disableFloorItems: 1
   sceneAfterTutorial: SampleScene
@@ -662,7 +665,7 @@ MonoBehaviour:
   partNumber: 1
   partCount: 3
   nextPartName: Lockers
-  firstTutorialScene: Tutorial_1_Movement
+  firstTutorialScene: 
   cardWidth: 400
   dimSeconds: 1.6
   cardColor: {r: 0.03, g: 0.06, b: 0.12, a: 0.96}

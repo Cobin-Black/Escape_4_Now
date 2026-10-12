@@ -31,6 +31,10 @@ namespace Escape4Now.Player
         private Texture2D markerTexture;
         private Vector2Int registeredPosition;
         private bool hasReachedExit;
+        //The tutorial turns this off so the exit opens without a key.
+        private bool exitNeedsKey = true;
+        private bool CanUseExit => !exitNeedsKey || (inventory != null && inventory.HasKey());
+        public void SetExitNeedsKey(bool needsKey) { exitNeedsKey = needsKey; }
         private bool hasRolled;
         private int lastRoll;
         private int movesRemaining;
@@ -506,7 +510,7 @@ namespace Escape4Now.Player
             foreach (Vector2Int next in path)
             {
                 if (!mapTemplate.IsWalkable(next)) break;
-                if (mapTemplate.IsExit(next) && (inventory == null || !inventory.HasKey()))
+                if (mapTemplate.IsExit(next) && !CanUseExit)
                 {
                     Debug.Log("The exit is locked. Go find a key.");
                     break;
@@ -529,7 +533,7 @@ namespace Escape4Now.Player
 
                 if (mapTemplate.IsExit(next))
                 {
-                    if (inventory != null && inventory.HasKey())
+                    if (CanUseExit)
                     {
                         ReachExit();
                         yield break;
