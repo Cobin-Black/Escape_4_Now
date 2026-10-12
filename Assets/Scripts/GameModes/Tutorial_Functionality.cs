@@ -27,6 +27,13 @@ namespace Escape4Now.GameModes
 
         //Item placed in the inventory for the Items section.
         [SerializeField] private DoubleDiceItem doubleDicePrefab;
+        //Key that unlocks the exit door, like the one hidden in a locker in the real game.
+        [SerializeField] private KeyItem keyItemPrefab;
+        //Puts the key in the Obstacles section's locker, so the lesson teaches where keys come from.
+        [SerializeField] private bool lockerHoldsKey;
+        //Starts the Exit section with the key, since the exit door only opens for a player holding one.
+        [SerializeField] private bool startWithKey;
+
         //Puts the Double Dice on the floor for the player to pick up, instead of straight into the inventory.
         [SerializeField] private bool itemOnFloor;
         //Where the floor item goes, counted from the player's starting tile.
@@ -117,6 +124,7 @@ namespace Escape4Now.GameModes
         //Gives the section's starting item once the inventory is ready, then announces the section.
         private void Start()
         {
+            if (currentSection == TutorialSection.Exit && startWithKey) GiveTutorialKey();
             if (currentSection == TutorialSection.Items)
             {
                 if (itemOnFloor) PlaceTutorialItemOnFloor();
@@ -154,7 +162,12 @@ namespace Escape4Now.GameModes
                     if (tutorialItemUsed && finishedMoving) CompleteCurrentSection();
                     break;
                 case TutorialSection.Obstacles:
-                    if (tutorialObstacle == null) tutorialObstacle = FindFirstObjectByType<ObstacleStorage>();
+                    if (tutorialObstacle == null)
+                    {
+                        tutorialObstacle = FindFirstObjectByType<ObstacleStorage>();
+                        if (tutorialObstacle != null && lockerHoldsKey && keyItemPrefab != null)
+                            tutorialObstacle.SetStoredItem(keyItemPrefab);
+                    }
                     if (tutorialObstacle != null && !tutorialObstacle.HasItem) CompleteCurrentSection();
                     break;
                 case TutorialSection.Exit:
@@ -299,6 +312,20 @@ namespace Escape4Now.GameModes
             {
                 Destroy(item.gameObject);
             }
+        }
+
+        //Gives the player the key that unlocks the exit door.
+        private void GiveTutorialKey()
+        {
+            if (keyItemPrefab == null || player == null || player.Inventory == null)
+            {
+                Debug.LogWarning("[Tutorial] Assign the key prefab and a player with an inventory to start the Exit section with a key.");
+                return;
+            }
+
+            KeyItem key = Instantiate(keyItemPrefab, transform);
+            key.PickUp(player.Inventory);
+            if (!player.Inventory.HasKey()) Destroy(key.gameObject);
         }
 
         //Places a Double Dice on a tile near the player, so the lesson starts with picking it up.

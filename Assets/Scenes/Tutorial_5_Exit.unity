@@ -551,6 +551,9 @@ MonoBehaviour:
   itemSpawner: {fileID: 69550736}
   player: {fileID: 30058497}
   startingSection: 5
+  keyItemPrefab: {fileID: 8324686912643164936, guid: 48deafd2bac804dee8759ec5b673b47b, type: 3}
+  lockerHoldsKey: 0
+  startWithKey: 1
   doubleDicePrefab: {fileID: 1119616090794593453, guid: 798c830d404504ec993fb50111c722ba, type: 3}
   obstacleOffset: {x: 1, y: 0}
   warpOffset: {x: 0, y: 2}

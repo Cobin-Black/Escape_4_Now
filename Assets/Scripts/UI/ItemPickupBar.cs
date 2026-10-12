@@ -157,6 +157,17 @@ namespace Escape4Now.UI
             string hint = items.Count == 0 ? "No item" : "Press " + GetUseKey() + " to use";
             GUI.Label(new Rect(panel.x, panel.yMax - hintHeight - 4f, panel.width, hintHeight), hint, hintStyle);
 
+            //Gold KEY tag while the player holds the key that opens the exit.
+            if (player.Inventory.HasKey())
+            {
+                Rect tag = new Rect(panel.xMax - 44f, panel.y + 5f, 38f, 16f);
+                DrawBox(tag, new Color(1f, 0.8f, 0.2f, 1f));
+                Color oldTagColor = hintStyle.normal.textColor;
+                hintStyle.normal.textColor = new Color(0.15f, 0.1f, 0f, 1f);
+                GUI.Label(tag, "KEY", hintStyle);
+                hintStyle.normal.textColor = oldTagColor;
+            }
+
             //Pickup message above the bar that fades out.
             if (elapsed < popupSeconds && !string.IsNullOrEmpty(popupText))
             {

@@ -135,14 +135,14 @@ namespace Escape4Now.UI
                     if (locker == null) locker = FindFirstObjectByType<ObstacleStorage>();
                     if (locker != null && locker.IsMenuOpen)
                         return MakeStep("obstacles-take", "Take the item",
-                            "The locker is open. Press ENTER again to take what's inside.",
+                            "The locker is open. Press ENTER again to take what's inside. Keys go into your inventory too.",
                             new[] { "ENTER" }, null);
                     if (IsNextToLocker())
                         return MakeStep("obstacles-open", "Open the locker",
                             "You're next to the locker. Press ENTER to open it.",
                             new[] { "ENTER" }, LockerRect());
                     return MakeStep("obstacles-find", "Find the locker",
-                        "Red blocks are obstacles: you can't walk through them. Lockers can hold items. Roll, then stop on a tile right next to the locker.",
+                        "Red blocks are obstacles: you can't walk through them. Lockers can hold items, and one of them hides the KEY that unlocks the exit. Stand right next to the locker.",
                         player.HasRolled ? new[] { "W", "A", "S", "D" } : new[] { "SPACE" }, LockerRect());
 
                 case TutorialSection.EventTriggers:
@@ -156,7 +156,9 @@ namespace Escape4Now.UI
 
                 default:
                     return MakeStep("exit", "Escape!",
-                        "Last step: get out! Walk to the green EXIT tile on the edge of the map. Stepping on it is how you escape and win. It may take more than one turn.",
+                        (player.Inventory != null && player.Inventory.HasKey()
+                            ? "Last step: get out! The EXIT door is locked, but you're holding the key. Walk through the door on the school's outside wall to escape and win, just like in the real game."
+                            : "The EXIT door is locked. You need a key from a locker to open it."),
                         player.HasRolled ? new[] { "W", "A", "S", "D" } : new[] { "SPACE" }, ExitRect());
             }
         }
@@ -207,7 +209,10 @@ namespace Escape4Now.UI
             float innerWidth = cardWidth - padding * 2f;
             float bodyHeight = bodyStyle.CalcHeight(new GUIContent(step.body), innerWidth);
             float height = padding + 18f + 32f + bodyHeight + 12f + (step.keys.Length > 0 ? 40f : 0f) + 38f + padding;
-            Rect card = PlaceCard(step.target, height);
+            //When the step points at something on the map, the card sits on the left so it never covers the player.
+            bool onMap = step.key == "move-walk" || step.key.StartsWith("items-walk") || step.key.StartsWith("obstacles")
+                || step.key.StartsWith("events") || step.key == "exit";
+            Rect card = onMap ? DockLeft(height) : PlaceCard(step.target, height);
 
             //Slides up slightly when a new card appears.
             float slide = Mathf.Clamp01(sinceStep / 0.25f);
@@ -299,6 +304,15 @@ namespace Escape4Now.UI
         }
 
         //Puts the card to the right of the target, else to its left, else above or below it.
+        //Left side of the screen, under the turn panel and above the inventory.
+        private Rect DockLeft(float height)
+        {
+            float margin = 16f;
+            float inventoryTop = itemBar != null && itemBar.PanelRect.height > 0f ? itemBar.PanelRect.y : HudScale.Height - 150f;
+            float y = Mathf.Clamp(TurnPanelRect.yMax + 12f, margin, Mathf.Max(margin, inventoryTop - height - 12f));
+            return new Rect(margin, y, cardWidth, height);
+        }
+
         private Rect PlaceCard(Rect? target, float height)
         {
             float margin = 16f;
