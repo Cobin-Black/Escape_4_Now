@@ -31,10 +31,15 @@ namespace Escape4Now.Player
         private Texture2D markerTexture;
         private Vector2Int registeredPosition;
         private bool hasReachedExit;
+        //The tutorial turns this off so the exit opens without a key.
+        private bool exitNeedsKey = true;
+        private bool CanUseExit => !exitNeedsKey || (inventory != null && inventory.HasKey());
+        public void SetExitNeedsKey(bool needsKey) { exitNeedsKey = needsKey; }
         private bool hasRolled;
         private int lastRoll;
         private int movesRemaining;
         private GUIStyle rollDisplayStyle;
+        private Texture2D panelTexture;
         private MapEventController mapEvents;
         private Vector2Int lastDirection = Vector2Int.up;
         private bool resolvingStep;
@@ -103,11 +108,15 @@ namespace Escape4Now.Player
         private void OnGUI()
         {
             if (turnSystem != null && !turnSystem.IsPlayersTurn(this)) return;
-
+            //Scales the panel with the window size, like the rest of the HUD.
+            Matrix4x4 oldMatrix = Escape4Now.UI.HudScale.Apply();
+            
             // Main panel
             GUIStyle panelStyle = new GUIStyle(GUI.skin.box);
-            panelStyle.normal.background = MakeTransparentTexture(new Color(0.02f, 0.04f, 0.08f, 0.88f));
-
+            //Made once and reused, so a new texture is not created every frame.
+            if (panelTexture == null) panelTexture = MakeTransparentTexture(new Color(0.02f, 0.04f, 0.08f, 0.88f));
+            panelStyle.normal.background = panelTexture;
+            
             //header style
             GUIStyle headerStyle = new GUIStyle(GUI.skin.label);
             headerStyle.fontSize = 13;
@@ -192,6 +201,7 @@ namespace Escape4Now.Player
                 GUI.Label(new Rect(x, 176f, contentW, 30f), "YOUR TURN", playerStyle);
                 GUI.Label(new Rect(x, 222f, contentW, 24f), "Press Spacebar to Roll Dice", playerStyle);
             }
+            GUI.matrix = oldMatrix;
         }
         //
         private Texture2D MakeTransparentTexture(Color color)
@@ -500,7 +510,7 @@ namespace Escape4Now.Player
             foreach (Vector2Int next in path)
             {
                 if (!mapTemplate.IsWalkable(next)) break;
-                if (mapTemplate.IsExit(next) && (inventory == null || !inventory.HasKey()))
+                if (mapTemplate.IsExit(next) && !CanUseExit)
                 {
                     Debug.Log("The exit is locked. Go find a key.");
                     break;
@@ -523,7 +533,7 @@ namespace Escape4Now.Player
 
                 if (mapTemplate.IsExit(next))
                 {
-                    if (inventory != null && inventory.HasKey())
+                    if (CanUseExit)
                     {
                         ReachExit();
                         yield break;
@@ -677,6 +687,7 @@ namespace Escape4Now.Player
             }
 
             ReleaseMarker();
+            if (panelTexture != null) Destroy(panelTexture);
         }
 
         //Removes only the sprite and texture created by this script.
