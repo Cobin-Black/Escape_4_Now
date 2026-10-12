@@ -27,6 +27,17 @@ namespace Escape4Now.GameModes
 
         //Item placed in the inventory for the Items section.
         [SerializeField] private DoubleDiceItem doubleDicePrefab;
+        //Key that unlocks the exit door, like the one hidden in a locker in the real game.
+        [SerializeField] private KeyItem keyItemPrefab;
+        //Puts the key in the Obstacles section's locker, so the lesson teaches where keys come from.
+        [SerializeField] private bool lockerHoldsKey;
+        //Starts the Exit section with the key, since the exit door only opens for a player holding one.
+        [SerializeField] private bool startWithKey;
+
+        //Puts the Double Dice on the floor for the player to pick up, instead of straight into the inventory.
+        [SerializeField] private bool itemOnFloor;
+        //Where the floor item goes, counted from the player's starting tile.
+        [SerializeField] private Vector2Int itemOffset = new Vector2Int(2, 0);
 
         //Where the forced obstacle and Warp tile go, counted from the player's starting tile.
         [SerializeField] private Vector2Int obstacleOffset = new Vector2Int(1, 0);
@@ -42,6 +53,13 @@ namespace Escape4Now.GameModes
         //Scene loaded when the tutorial is finished. Empty stays on the tutorial.
         [SerializeField] private string sceneAfterTutorial = "";
 
+        //Multi-scene tutorial: the scene loaded when this scene's lesson is done. Empty moves to the next section in this scene.
+        [SerializeField] private string nextTutorialScene = "";
+        //Marks the last scene of a multi-scene tutorial, so finishing it ends the tutorial.
+        [SerializeField] private bool isLastTutorialScene;
+        //Places every event type in the Event Triggers section, and any of them ends the lesson, instead of only the Warp.
+        [SerializeField] private bool showAllEventTypes;
+
         //Section to load next. It survives the scene reload, and is cleared when Play mode starts.
         private static TutorialSection? pendingSection;
 
@@ -49,6 +67,8 @@ namespace Escape4Now.GameModes
         private bool sectionComplete;
         private bool playerHadRolled;
         private bool tutorialItemUsed;
+        private bool tutorialItemPickedUp;
+        private Vector2Int startCell;
         private Item tutorialItem;
         private ObstacleStorage tutorialObstacle;
         private int completedFrame;
@@ -64,7 +84,13 @@ namespace Escape4Now.GameModes
         //Read-only tutorial state for the UI.
         public TutorialSection CurrentSection => currentSection;
         public bool IsSectionComplete => sectionComplete;
-        public bool IsFinalSection => currentSection == TutorialSection.Exit;
+        public bool IsFinalSection => currentSection == TutorialSection.Exit || isLastTutorialScene;
+        public bool ShowsAllEventTypes => showAllEventTypes;
+        //The Items section's Double Dice, and whether the player has it yet, for the tutorial UI.
+        public Item TutorialItem => tutorialItem;
+        public bool TutorialItemPickedUp => tutorialItemPickedUp;
+        //True when each lesson is its own scene, false when every section plays in this one scene.
+        public bool UsesSceneParts => !string.IsNullOrEmpty(nextTutorialScene) || isLastTutorialScene;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetSharedState()
@@ -98,7 +124,12 @@ namespace Escape4Now.GameModes
         //Gives the section's starting item once the inventory is ready, then announces the section.
         private void Start()
         {
-            if (currentSection == TutorialSection.Items) GiveTutorialItem();
+            if (currentSection == TutorialSection.Exit && startWithKey) GiveTutorialKey();
+            if (currentSection == TutorialSection.Items)
+            {
+                if (itemOnFloor) PlaceTutorialItemOnFloor();
+                else GiveTutorialItem();
+            }
             Debug.Log($"[Tutorial] Section {(int)currentSection}: {currentSection}.");
             SectionStarted?.Invoke(currentSection);
         }
@@ -122,12 +153,21 @@ namespace Escape4Now.GameModes
                     if (finishedMoving) CompleteCurrentSection();
                     break;
                 case TutorialSection.Items:
-                    if (tutorialItem != null && player.Inventory != null && !player.Inventory.HasItem(tutorialItem))
-                        tutorialItemUsed = true;
+                    //The item counts as used once it has been in the inventory and is gone again.
+                    if (tutorialItem != null && player.Inventory != null)
+                    {
+                        if (player.Inventory.HasItem(tutorialItem)) tutorialItemPickedUp = true;
+                        else if (tutorialItemPickedUp) tutorialItemUsed = true;
+                    }
                     if (tutorialItemUsed && finishedMoving) CompleteCurrentSection();
                     break;
                 case TutorialSection.Obstacles:
-                    if (tutorialObstacle == null) tutorialObstacle = FindFirstObjectByType<ObstacleStorage>();
+                    if (tutorialObstacle == null)
+                    {
+                        tutorialObstacle = FindFirstObjectByType<ObstacleStorage>();
+                        if (tutorialObstacle != null && lockerHoldsKey && keyItemPrefab != null)
+                            tutorialObstacle.SetStoredItem(keyItemPrefab);
+                    }
                     if (tutorialObstacle != null && !tutorialObstacle.HasItem) CompleteCurrentSection();
                     break;
                 case TutorialSection.Exit:
@@ -169,7 +209,24 @@ namespace Escape4Now.GameModes
                 return;
             }
 
+            //Each lesson has its own scene, so go to the next scene instead of reloading this one.
+            if (!string.IsNullOrEmpty(nextTutorialScene))
+            {
+                pendingSection = null;
+                Time.timeScale = 1f;
+                SceneManager.LoadScene(nextTutorialScene);
+                return;
+            }
+
             GoToSection(currentSection + 1);
+        }
+
+        //Starts a tutorial scene from its own first lesson, such as going back to part 1 to play again.
+        public void LoadTutorialScene(string sceneName)
+        {
+            pendingSection = null;
+            Time.timeScale = 1f;
+            SceneManager.LoadScene(sceneName);
         }
 
         //Starts the current section over from the beginning.
@@ -201,6 +258,7 @@ namespace Escape4Now.GameModes
         {
             //The player has not moved yet, so this is their default tile.
             Vector2Int start = player != null ? player.GridPosition : Vector2Int.zero;
+            startCell = start;
 
             bool useEvents = currentSection == TutorialSection.EventTriggers;
             if (mapEvents != null)
@@ -208,7 +266,7 @@ namespace Escape4Now.GameModes
                 mapEvents.enabled = useEvents;
                 if (useEvents)
                 {
-                    mapEvents.OnlyPlaceEvents(MapEventType.Warp);
+                    if (!showAllEventTypes) mapEvents.OnlyPlaceEvents(MapEventType.Warp);
                     mapEvents.ForceEventTile(MapEventType.Warp, start + warpOffset);
                 }
             }
@@ -256,6 +314,36 @@ namespace Escape4Now.GameModes
             }
         }
 
+        //Gives the player the key that unlocks the exit door.
+        private void GiveTutorialKey()
+        {
+            if (keyItemPrefab == null || player == null || player.Inventory == null)
+            {
+                Debug.LogWarning("[Tutorial] Assign the key prefab and a player with an inventory to start the Exit section with a key.");
+                return;
+            }
+
+            KeyItem key = Instantiate(keyItemPrefab, transform);
+            key.PickUp(player.Inventory);
+            if (!player.Inventory.HasKey()) Destroy(key.gameObject);
+        }
+
+        //Places a Double Dice on a tile near the player, so the lesson starts with picking it up.
+        private void PlaceTutorialItemOnFloor()
+        {
+            if (doubleDicePrefab == null || map == null)
+            {
+                Debug.LogWarning("[Tutorial] Assign the Double Dice prefab and a map for the Items section.");
+                return;
+            }
+
+            Vector2Int cell = startCell + itemOffset;
+            if (!map.IsWalkable(cell)) cell = startCell + Vector2Int.right;
+            DoubleDiceItem item = Instantiate(doubleDicePrefab, map.GridToWorld(cell), Quaternion.identity, transform);
+            item.SetSpawnPosition(map, cell);
+            tutorialItem = item;
+        }
+
         //Takes the tutorial's Double Dice back out of the inventory if it was not used.
         private void RemoveTutorialItem()
         {
@@ -273,10 +361,10 @@ namespace Escape4Now.GameModes
             return finished;
         }
 
-        //Ends the Event Triggers section once the player lands on the Warp tile.
+        //Ends the Event Triggers section once the player lands on the Warp tile, or on any event tile when all types are shown.
         private void OnEventTriggered(PlayerCharacter triggeringPlayer, MapEventType type)
         {
-            if (currentSection == TutorialSection.EventTriggers && type == MapEventType.Warp && triggeringPlayer == player)
+            if (currentSection == TutorialSection.EventTriggers && (type == MapEventType.Warp || showAllEventTypes) && triggeringPlayer == player)
             {
                 CompleteCurrentSection();
             }

@@ -344,6 +344,7 @@ MonoBehaviour:
   rightSideColor: {r: 0.16, g: 0.16, b: 0.16, a: 1}
   leftSideColor: {r: 0.1, g: 0.1, b: 0.1, a: 1}
   generateOnStart: 1
+  useSchoolLayout: 0
   floorTilePrefab: {fileID: 1877436113, guid: 079ada1107f54d908eea5bcb6018c07c, type: 3}
   hasExit: 1
   exitGridPosition: {x: 9, y: 0}
@@ -534,8 +535,11 @@ MonoBehaviour:
   slotSize: 64
   slotSpacing: 8
   bottomMargin: 16
+  anchor: 1
+  sideMargin: 16
+  title: INVENTORY
   popupSeconds: 2.5
-  panelColor: {r: 0, g: 0, b: 0, a: 0.65}
+  panelColor: {r: 0.02, g: 0.04, b: 0.08, a: 0.88}
   slotColor: {r: 1, g: 1, b: 1, a: 0.12}
   highlightColor: {r: 1, g: 0.85, b: 0.2, a: 1}
 --- !u!4 &1490044825
@@ -609,7 +613,62 @@ MonoBehaviour:
   exitPosition: {x: 9, y: 0}
   exitOnlyInFinalSection: 1
   disableFloorItems: 1
-  sceneAfterTutorial: 
+  sceneAfterTutorial: SampleScene
+--- !u!1 &1700000020
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1700000021}
+  - component: {fileID: 1700000022}
+  m_Layer: 0
+  m_Name: Tutorial Overlay
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1700000021
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1700000020}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1700000022
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1700000020}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: a9759bcdefde41b780a3673c3bc53775, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  tutorial: {fileID: 1700000003}
+  partNumber: 1
+  partCount: 3
+  nextPartName: Lockers
+  firstTutorialScene: Tutorial_1_Movement
+  cardWidth: 400
+  dimSeconds: 1.6
+  cardColor: {r: 0.03, g: 0.06, b: 0.12, a: 0.96}
+  accentColor: {r: 0.4, g: 0.72, b: 1, a: 1}
+  doneColor: {r: 0.3, g: 0.82, b: 0.48, a: 1}
+  highlightColor: {r: 0.5, g: 0.77, b: 1, a: 1}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
@@ -619,3 +678,4 @@ SceneRoots:
   - {fileID: 902160246}
   - {fileID: 1700000002}
   - {fileID: 1490044825}
+  - {fileID: 1700000021}

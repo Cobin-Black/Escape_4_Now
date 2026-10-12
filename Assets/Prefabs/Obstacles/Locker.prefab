@@ -198,4 +198,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dd356d89c42f4df4a1d9643b8678d19b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Obstacles.ObstacleStorage
-  storedItemPrefab: {fileID: 0}
+  storedItemPrefab: {fileID: 8324686912643164936, guid: 48deafd2bac804dee8759ec5b673b47b, type: 3}

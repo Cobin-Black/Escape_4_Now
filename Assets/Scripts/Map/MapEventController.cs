@@ -143,12 +143,14 @@ namespace Escape4Now.Map
         //Shows the last event message and the number of Blackout turns left.
         private void OnGUI()
         {
+            if (visibilityTurnsRemaining > 0) DrawReducedVisibility();
+
+            //Text sits just under the turn panel, scaled like the rest of the HUD.
+            Matrix4x4 oldMatrix = Escape4Now.UI.HudScale.Apply();
             if (visibilityTurnsRemaining > 0)
-            {
-                DrawReducedVisibility();
-                GUI.Label(new Rect(16f, 210f, 350f, 30f), "Blackout: " + visibilityTurnsRemaining + " player turns remaining");
-            }
-            GUI.Label(new Rect(16f, 140f, Mathf.Max(0f, Screen.width - 32f), 65f), message);
+                GUI.Label(new Rect(16f, 376f, 360f, 24f), "Blackout: " + visibilityTurnsRemaining + " player turns remaining");
+            GUI.Label(new Rect(16f, 328f, 360f, 46f), message);
+            GUI.matrix = oldMatrix;
         }
 
         //Adds the player's name to the message explaining what happened.
