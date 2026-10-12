@@ -17,6 +17,8 @@ namespace Escape4Now.Map
         [SerializeField] private Color rightSideColor = new Color(0.16f, 0.16f, 0.16f, 1f);
         [SerializeField] private Color leftSideColor = new Color(0.1f, 0.1f, 0.1f, 1f);
         [SerializeField] private bool generateOnStart = true;
+        //Off draws the basic open checkerboard with only the outside wall, such as for the tutorial.
+        [SerializeField] private bool useSchoolLayout = true;
         //A prefab is a reusable template. The map makes a copy for each grid space.
         [SerializeField] private IsometricMapTile floorTilePrefab;
 
@@ -69,7 +71,9 @@ namespace Escape4Now.Map
         }
 
         //Shares read-only room bounds and themes with other systems.
-        public IReadOnlyList<SchoolRoom> Rooms { get { PrepareLayout(); return layout.Rooms; } }
+        public IReadOnlyList<SchoolRoom> Rooms { get { PrepareLayout(); return useSchoolLayout ? layout.Rooms : NoRooms; } }
+        private static readonly List<SchoolRoom> NoRooms = new List<SchoolRoom>();
+        public bool UsesSchoolLayout => useSchoolLayout;
         public int LayoutSeed { get { PrepareLayout(); return layout.Seed; } }
 
         //Creates grid data before player placement. Drawing later uses this same layout.
@@ -84,6 +88,8 @@ namespace Escape4Now.Map
         public SchoolTileType GetTileType(Vector2Int cell)
         {
             PrepareLayout();
+            if (!useSchoolLayout)
+                return IsInsideMap(cell) && !IsBorder(cell) ? SchoolTileType.Floor : SchoolTileType.Wall;
             return layout.GetTile(cell.x, cell.y);
         }
 
@@ -91,6 +97,7 @@ namespace Escape4Now.Map
         public SchoolRoomType GetRoomType(Vector2Int cell)
         {
             PrepareLayout();
+            if (!useSchoolLayout) return SchoolRoomType.None;
             return layout.GetRoomType(cell.x, cell.y);
         }
 
@@ -618,10 +625,11 @@ namespace Escape4Now.Map
                 }
                 // All borders use the same low height to keep the floor visible.
                 const float wallHeight = 0.22f;
+                //The basic map keeps its original light gray wall.
                 Renderer wall = CreateBlock(tile, "Wall", Vector2.zero, 0.98f, 0.98f, 0f, wallHeight,
-                    new Color(0.18f, 0.22f, 0.21f), order);
+                    useSchoolLayout ? new Color(0.18f, 0.22f, 0.21f) : new Color(0.33f, 0.36f, 0.37f), order);
                 Renderer wallCap = CreateBlock(tile, "Wall cap", Vector2.zero, 1f, 1f, wallHeight, 0.06f,
-                    new Color(0.28f, 0.32f, 0.3f), order + 1);
+                    useSchoolLayout ? new Color(0.28f, 0.32f, 0.3f) : new Color(0.48f, 0.5f, 0.49f), order + 1);
 
                 //Room walls can also stand in front of a player.
                 mapTile.SetWallRenderers(wall, wallCap);
@@ -708,10 +716,10 @@ namespace Escape4Now.Map
         private Mesh CreateTileMesh(Vector2Int gridPosition)
         {
             Color topColor = (gridPosition.x + gridPosition.y) % 2 == 0 ? floorColor : alternateFloorColor;
-            if (GetTileType(gridPosition) == SchoolTileType.Wall)
+            if (GetTileType(gridPosition) == SchoolTileType.Wall && useSchoolLayout)
                 topColor = new Color(0.045f, 0.05f, 0.055f);
             if (IsExit(gridPosition)) topColor = RoomColor(SchoolRoomType.None);
-            if (GetTileType(gridPosition) == SchoolTileType.Floor)
+            if (GetTileType(gridPosition) == SchoolTileType.Floor && useSchoolLayout)
             {
                 topColor = RoomColor(GetRoomType(gridPosition));
                 if ((gridPosition.x + gridPosition.y) % 2 == 0) topColor *= 0.86f;

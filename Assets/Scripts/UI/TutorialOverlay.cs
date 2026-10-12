@@ -210,8 +210,9 @@ namespace Escape4Now.UI
             float bodyHeight = bodyStyle.CalcHeight(new GUIContent(step.body), innerWidth);
             float height = padding + 18f + 32f + bodyHeight + 12f + (step.keys.Length > 0 ? 40f : 0f) + 38f + padding;
             //When the step points at something on the map, the card sits on the left so it never covers the player.
+            //"Part complete" cards go there too, since the player is still standing on the map.
             bool onMap = step.key == "move-walk" || step.key.StartsWith("items-walk") || step.key.StartsWith("obstacles")
-                || step.key.StartsWith("events") || step.key == "exit";
+                || step.key.StartsWith("events") || step.key == "exit" || (complete && !tutorial.IsFinalSection);
             Rect card = onMap ? DockLeft(height) : PlaceCard(step.target, height);
 
             //Slides up slightly when a new card appears.
@@ -310,7 +311,12 @@ namespace Escape4Now.UI
             float margin = 16f;
             float inventoryTop = itemBar != null && itemBar.PanelRect.height > 0f ? itemBar.PanelRect.y : HudScale.Height - 150f;
             float y = Mathf.Clamp(TurnPanelRect.yMax + 12f, margin, Mathf.Max(margin, inventoryTop - height - 12f));
-            return new Rect(margin, y, cardWidth, height);
+            Rect card = new Rect(margin, y, cardWidth, height);
+            //If the player is standing behind the left card (for example after a Warp), it moves to the right edge instead.
+            Rect? playerRect = PlayerRect();
+            if (playerRect.HasValue && card.Overlaps(playerRect.Value))
+                card.x = HudScale.Width - cardWidth - margin;
+            return card;
         }
 
         private Rect PlaceCard(Rect? target, float height)
