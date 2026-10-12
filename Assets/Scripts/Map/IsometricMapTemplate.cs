@@ -135,7 +135,7 @@ namespace Escape4Now.Map
                 var cell = new Vector2Int(item.Cell % Width, item.Cell / Width);
                 SchoolFurniture copy = Instantiate(furniturePrefabs[item.Kind], tileLookup[cell].transform);
                 copy.name = item.Kind.ToString();
-                copy.Build(this, cell);
+                copy.Build(this, cell, item.Facing);
             }
         }
 
@@ -180,6 +180,16 @@ namespace Escape4Now.Map
         public bool IsHallway(Vector2Int cell)
         { PrepareLayout(); return layout.IsHallway(cell.x, cell.y); }
 
+        //Uses the same wall-facing rule for lockers placed after the room obstacles.
+        public Escape4Now.Obstacles.ObstacleFacing GetObstacleFacing(Vector2Int cell)
+        {
+            PrepareLayout();
+            if (!IsInteriorFloor(cell)) throw new System.ArgumentOutOfRangeException(nameof(cell));
+            var blocked = new HashSet<int>();
+            foreach (Vector2Int position in blockedPositions) blocked.Add(position.y * Width + position.x);
+            return Escape4Now.Obstacles.ObstacleOrientation.Choose(layout, cell.y * Width + cell.x, blocked);
+        }
+
         //Lockers sit along hallway walls, leaving door approaches clear.
         public bool IsLockerPosition(Vector2Int cell)
         {
@@ -199,7 +209,7 @@ namespace Escape4Now.Map
             return true;
         }
 
-        //Secondary labels do not change the existing four room types.
+        //Small secondary spaces do not change the existing four main room types.
         public SchoolSpaceType GetSpaceType(Vector2Int cell)
         { PrepareLayout(); return layout.GetSpaceType(cell.x, cell.y); }
 
@@ -595,61 +605,9 @@ namespace Escape4Now.Map
                     CreateTile(new Vector2Int(x, y));
                 }
             }
-            AddSecondaryLabels();
             DrawFurniture();
             RefreshNearWallVisibility();
             FitCamera();
-        }
-
-        //Labels the four areas without adding furniture or gameplay rules.
-        private void AddRoomLabels()
-        {
-            foreach (SchoolRoom room in Rooms)
-            {
-                var center = new Vector2Int(room.CenterX, room.CenterY);
-                var labelObject = new GameObject("Room Label");
-                labelObject.transform.SetParent(tileLookup[center].transform, false);
-                labelObject.transform.localPosition = new Vector3(0f, -0.35f, -0.1f);
-                TextMesh label = labelObject.AddComponent<TextMesh>();
-                label.text = room.Type == SchoolRoomType.ComputerLab ? "COMPUTER LAB"
-                    : room.Type == SchoolRoomType.ScienceLab ? "SCIENCE LAB" : room.Type.ToString().ToUpperInvariant();
-                label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-                label.fontSize = 40;
-                label.characterSize = 0.09f;
-                label.anchor = TextAnchor.MiddleCenter;
-                label.alignment = TextAlignment.Center;
-                label.color = Color.Lerp(RoomColor(room.Type), Color.white, 0.65f);
-                MeshRenderer renderer = labelObject.GetComponent<MeshRenderer>();
-                if (label.font != null) renderer.sharedMaterial = label.font.material;
-                //Area names stay readable over the low wall blocks.
-                renderer.sortingOrder = 1000;
-            }
-        }
-
-        //Small signs identify optional spaces without adding furniture or rules.
-        private void AddSecondaryLabels()
-        {
-            foreach (SchoolSecondarySpace space in SecondarySpaces)
-            {
-                if (space.Type == SchoolSpaceType.Storage || space.Type == SchoolSpaceType.JanitorCloset) continue;
-                var center = new Vector2Int(space.X + space.Width / 2, space.Y + space.Height / 2);
-                var sign = new GameObject("School Space Label");
-                sign.transform.SetParent(tileLookup[center].transform, false);
-                sign.transform.localPosition = new Vector3(0f, 0f, -0.1f);
-                TextMesh label = sign.AddComponent<TextMesh>();
-                label.text = space.Type == SchoolSpaceType.JanitorCloset ? "JANITOR\nCLOSET"
-                    : space.Type == SchoolSpaceType.StudyArea ? "STUDY"
-                    : space.Type == SchoolSpaceType.LockerArea ? "LOCKERS" : space.Type.ToString().ToUpperInvariant();
-                label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-                label.fontSize = 32;
-                label.characterSize = 0.045f;
-                label.anchor = TextAnchor.MiddleCenter;
-                label.alignment = TextAlignment.Center;
-                label.color = Color.white;
-                MeshRenderer renderer = sign.GetComponent<MeshRenderer>();
-                if (label.font != null) renderer.sharedMaterial = label.font.material;
-                renderer.sortingOrder = 1000;
-            }
         }
 
         //Gives each school area a quiet identifying floor color.
@@ -689,6 +647,34 @@ namespace Escape4Now.Map
 
             AddBorderWall(tile.transform, gridPosition, mapTile);
             AddVisualDoor(tile.transform, gridPosition);
+        }
+
+        //Checks whether a floor tile is being used as a doorway into a room.
+        public bool IsDoorway(Vector2Int cell)
+        {
+            if (GetTileType(cell) != SchoolTileType.Floor
+                || GetRoomType(cell) != SchoolRoomType.None)
+            {
+                return false;
+            }
+
+            Vector2Int[] directions =
+            {
+        Vector2Int.right,
+        Vector2Int.up,
+        Vector2Int.left,
+        Vector2Int.down
+    };
+
+            foreach (Vector2Int direction in directions)
+            {
+                if (GetRoomType(cell + direction) != SchoolRoomType.None)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         //Adds an open door at a room entrance. It has no collider or opening rules.
@@ -771,6 +757,15 @@ namespace Escape4Now.Map
         internal Renderer CreateBlock(Transform parent, string label, Vector2 offset, float sizeX,
             float sizeY, float bottom, float blockHeight, Color color, int order)
         {
+            return CreateBlock(parent, label, offset, sizeX, sizeY, bottom, blockHeight, color,
+                order, tileWidth, tileHeight, CreateTileMaterial());
+        }
+
+        //Editor previews use the same shape without needing a live map or saved mesh.
+        internal static Renderer CreateBlock(Transform parent, string label, Vector2 offset, float sizeX,
+            float sizeY, float bottom, float blockHeight, Color color, int order,
+            float tileWidth, float tileHeight, Material material, HideFlags flags = HideFlags.None)
+        {
             Vector3 x = new Vector3(tileWidth * 0.5f, tileHeight * 0.5f, 0f);
             Vector3 y = new Vector3(-tileWidth * 0.5f, tileHeight * 0.5f, 0f);
             Vector3 center = x * offset.x + y * offset.y + Vector3.up * bottom;
@@ -784,17 +779,18 @@ namespace Escape4Now.Map
             right.a = left.a = 1f;
             Mesh mesh = new Mesh
             {
+                hideFlags = flags,
                 vertices = new[] { a + up, b + up, c + up, d + up,
                     b + up, b, c, c + up, c + up, c, d, d + up },
                 triangles = new[] { 0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11 },
                 colors = new[] { color, color, color, color, right, right, right, right, left, left, left, left }
             };
             mesh.RecalculateBounds();
-            GameObject block = new GameObject(label);
+            GameObject block = new GameObject(label) { hideFlags = flags };
             block.transform.SetParent(parent, false);
             block.AddComponent<MeshFilter>().sharedMesh = mesh;
             MeshRenderer renderer = block.AddComponent<MeshRenderer>();
-            renderer.sharedMaterial = CreateTileMaterial();
+            renderer.sharedMaterial = material;
             renderer.sortingOrder = order;
             return renderer;
         }

@@ -6,8 +6,8 @@ namespace Escape4Now.Multiplayer
     [Serializable]
     public sealed class LanMessage
     {
-        //Older builds use a different map generator and cannot share this layout.
-        public const int Version = 14;
+        //Older builds do not support shared tiles, keys, and battle results.
+        public const int Version = 15;
         public int version = Version;
         public string kind;
         public string code;
@@ -21,6 +21,8 @@ namespace Escape4Now.Multiplayer
     {
         public int seed, exitX, exitY, turn, round, blackout;
         public string message;
+        public string battleMessage = "";
+        public float secondsRemaining;
         public LanPlayerState[] players;
         public LanObjectState[] objects;
     }
@@ -30,7 +32,7 @@ namespace Escape4Now.Multiplayer
     {
         public int x, y, roll, moves, item;
         public float worldX, worldY;
-        public bool rolled, moving, won, protectedFromPlayers;
+        public bool rolled, moving, won, protectedFromPlayers, hasKey;
     }
 
     [Serializable]

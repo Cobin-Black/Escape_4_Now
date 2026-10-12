@@ -5,15 +5,6 @@ using UnityEngine.Serialization;
 
 namespace Escape4Now.Obstacles
 {
-    //Grid direction an obstacle's front face points toward. South and West face the camera.
-    public enum ObstacleFacing
-    {
-        South,
-        West,
-        North,
-        East
-    }
-
     //Draws a tall isometric box that sits on one map tile and rebuilds itself whenever a setting changes.
     [ExecuteAlways]
     [RequireComponent(typeof(MeshFilter), typeof(MeshRenderer))]
@@ -120,7 +111,9 @@ namespace Escape4Now.Obstacles
             obstacleMesh.triangles = new[] { 0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11 };
             obstacleMesh.colors = new[] { topColor, topColor, topColor, topColor,
                 right, right, right, right, left, left, left, left };
-            if (lockerDetails) AddLockerDetails(FacesAlongX ? d : c, FacesAlongX ? c : b);
+            //The door is visible only when the locker's front faces the camera.
+            if (lockerDetails && facing == ObstacleFacing.South) AddLockerDetails(c, b);
+            if (lockerDetails && facing == ObstacleFacing.West) AddLockerDetails(d, c);
             obstacleMesh.RecalculateBounds();
             meshFilter.sharedMesh = obstacleMesh;
 

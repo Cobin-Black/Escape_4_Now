@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using Escape4Now.Map;
+using Escape4Now.Obstacles;
 
 //Runs repeatable floor-plan tests without needing a Unity scene or license.
 internal static class Program
@@ -18,12 +19,15 @@ internal static class Program
         var assignments = new HashSet<string>();
         var spawnLocations = new HashSet<int>();
         var furnitureChoices = new HashSet<SchoolFurnitureKind>();
+        var facingChoices = new HashSet<ObstacleFacing>();
+        var furnishedSpaces = new HashSet<SchoolSpaceType>();
         for (int seed = 0; seed < 10000; seed++)
         {
             SchoolMapLayout layout = CheckLayout(seed);
             if (seed < 1000)
             {
                 SchoolFurniturePlan plan = CheckFurniture(layout);
+                foreach (SchoolSecondarySpace space in layout.SecondarySpaces) furnishedSpaces.Add(space.Type);
                 var assignment = new StringBuilder();
                 foreach (int cell in plan.Spawns)
                 {
@@ -31,7 +35,8 @@ internal static class Program
                     spawnLocations.Add(cell);
                 }
                 assignments.Add(assignment.ToString());
-                foreach (SchoolFurniturePlacement item in plan.Furniture) furnitureChoices.Add(item.Kind);
+                foreach (SchoolFurniturePlacement item in plan.Furniture)
+                { furnitureChoices.Add(item.Kind); facingChoices.Add(item.Facing); }
             }
             if (layout.SecondarySpaces.Count > 0) withSecondary++;
             foreach (SchoolSecondarySpace space in layout.SecondarySpaces) spaceTypes.Add(space.Type);
@@ -75,6 +80,10 @@ internal static class Program
         CheckLayout(int.MaxValue);
         Require(assignments.Count == 24 && spawnLocations.Count > 100 && furnitureChoices.Count == 22,
             "All player-room orders, varied spawn tiles, and all furniture kinds occur");
+        Require(facingChoices.Count == 4, "Obstacles use all four grid directions across different maps");
+        Require(furnishedSpaces.Count == 6, "All six small-room types were checked with matching obstacles");
+        Console.WriteLine("PASS: All six small-room types have 1-2 matching obstacles and exactly one reachable reward tile.");
+        Console.WriteLine("PASS: 1,000 obstacle orientations: clear fronts, wall alignment, desks facing the board, and repeatable directions.");
         Console.WriteLine("PASS: 1,000 furniture plans: safe spawns, allowed pools, spacing, connectivity, and repeatable placement.");
         Require(shapes.Count > 9900, "Layout variety");
         Require(libraryPositions.Count == 4, "Themes change positions");
@@ -266,9 +275,11 @@ internal static class Program
             Require(Array.IndexOf(pool, item.Kind) >= 0, "Obstacle belongs to its room pool");
             if (type == SchoolRoomType.None && space == SchoolSpaceType.None) Require(layout.IsHallway(x, y), "Hallway objects stay in hallways");
             if (space == SchoolSpaceType.None) { counts.TryGetValue(type, out int count); counts[type] = count + 1; }
-            Require(item.Cell == repeat.Furniture[i].Cell && item.Kind == repeat.Furniture[i].Kind,
+            Require(item.Cell == repeat.Furniture[i].Cell && item.Kind == repeat.Furniture[i].Kind
+                && item.Facing == repeat.Furniture[i].Facing,
                 "Host and guest get identical furniture");
         }
+        CheckFacing(layout, plan, blocked);
         foreach (SchoolRoomType theme in themes)
         {
             Require(counts.ContainsKey(theme) && counts[theme] >= (theme == SchoolRoomType.Classroom ? 4 : 2)
@@ -289,13 +300,16 @@ internal static class Program
         int specialCount = 0;
         foreach (SchoolSecondarySpace space in layout.SecondarySpaces)
         {
-            if (SchoolFurniturePlan.SpecialPool(space.Type).Length == 0) continue;
+            SchoolFurnitureKind[] pool = SchoolFurniturePlan.SpecialPool(space.Type);
+            Require(pool.Length > 0, "Every small-room type has an obstacle pool");
             specialCount++;
             int obstacles = 0, rewards = 0;
+            bool hasSignature = false;
             foreach (SchoolFurniturePlacement item in plan.Furniture)
                 if (layout.GetSpaceType(item.Cell % 25, item.Cell / 25) == space.Type)
                 {
                     obstacles++;
+                    hasSignature |= item.Kind == pool[0];
                     foreach (var step in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
                     {
                         int x = item.Cell % 25 + step.Item1, y = item.Cell / 25 + step.Item2;
@@ -306,7 +320,9 @@ internal static class Program
             foreach (int reward in plan.SpecialItems)
                 if (layout.GetSpaceType(reward % 25, reward / 25) == space.Type)
                 { rewards++; Require(!blocked.Contains(reward), "Special reward is not inside an obstacle"); }
-            Require(obstacles >= 1 && obstacles <= 2 && rewards == 1, "Special rooms have sparse matching obstacles and one reward");
+            Require(obstacles >= 1 && obstacles <= 2, "Small rooms have one or two matching obstacles");
+            Require(space.Type == SchoolSpaceType.Storage || hasSignature, "Small room has an object that identifies it");
+            Require(rewards == 1, "Every generated small room reserves exactly one reward");
         }
         Require(plan.SpecialItems.Count == specialCount && repeat.SpecialItems.Count == specialCount, "Only generated special rooms receive rewards");
         for (int i = 0; i < specialCount; i++) Require(plan.SpecialItems[i] == repeat.SpecialItems[i], "Repeatable reward positions");
@@ -338,6 +354,49 @@ internal static class Program
                 if (layout.GetTile(x, y) == SchoolTileType.Floor && !blocked.Contains(y * 25 + x))
                     Require(seen.Contains(y * 25 + x), "All remaining floor stays reachable after furniture");
         return plan;
+    }
+
+    //Checks the chosen front against every clear direction on the finished board.
+    private static void CheckFacing(SchoolMapLayout map, SchoolFurniturePlan plan, HashSet<int> blocked)
+    {
+        int board = -1;
+        foreach (SchoolFurniturePlacement item in plan.Furniture)
+            if (item.Kind == SchoolFurnitureKind.Whiteboard) board = item.Cell;
+        var steps = new[] { (0, -1), (-1, 0), (0, 1), (1, 0) };
+        foreach (SchoolFurniturePlacement item in plan.Furniture)
+        {
+            int x = item.Cell % 25, y = item.Cell / 25;
+            int direction = (int)item.Facing;
+            Require(direction >= 0 && direction < 4, "Only grid-aligned directions");
+            var front = steps[direction];
+            Require(Clear(front), "Every obstacle faces clear floor in its own area");
+            int targetScore = front.Item1 * (board % 25 - x) + front.Item2 * (board / 25 - y);
+            int wallDistance = WallDistance(front);
+            foreach (var step in steps)
+            {
+                if (!Clear(step)) continue;
+                if (item.Kind == SchoolFurnitureKind.StudentDesk)
+                    Require(targetScore >= step.Item1 * (board % 25 - x) + step.Item2 * (board / 25 - y),
+                        "Desk faces toward the whiteboard using a clear direction");
+                else Require(wallDistance <= WallDistance(step), "Nearest suitable wall stays behind the object");
+            }
+
+            bool SameArea(int otherX, int otherY) => map.GetTile(otherX, otherY) == SchoolTileType.Floor
+                && map.GetRoomType(otherX, otherY) == map.GetRoomType(x, y)
+                && map.GetSpaceType(otherX, otherY) == map.GetSpaceType(x, y);
+            bool Clear((int dx, int dy) step) => SameArea(x + step.dx, y + step.dy)
+                && !blocked.Contains((y + step.dy) * 25 + x + step.dx);
+            int WallDistance((int dx, int dy) step)
+            {
+                for (int i = 1; i < 25; i++)
+                {
+                    int otherX = x - step.dx * i, otherY = y - step.dy * i;
+                    if (map.GetTile(otherX, otherY) == SchoolTileType.Wall) return i;
+                    if (!SameArea(otherX, otherY)) break;
+                }
+                return 25;
+            }
+        }
     }
 
     //Independently groups unused cells after excluding the wall layer beside floor.

@@ -5,7 +5,7 @@ The rooms change size, position, and shape. Each map includes an L-shaped room, 
 Hallways connect them, and every floor tile can be reached.
 Furniture and floor colors show which area is which, without large room-name labels.
 Rooms are placed freely, not in four fixed sections. Unused space stays blocked.
-Hallways use lighter gray-green floor tiles. Small secondary spaces use a separate muted floor color and a label.
+Hallways use lighter gray-green floor tiles. Small secondary spaces use a separate muted floor color and matching obstacles, without labels.
 Sealed areas have low solid wall bases instead of looking like missing floor.
 Open doors mark room entrances. They are only visual and do not block movement or have opening rules.
 One green EXIT door appears on an outside wall beside clear floor, away from corners.
@@ -29,11 +29,20 @@ No keys are needed yet. The doors between rooms are still only visual.
 A map may have no secondary space, or one small 2 by 3, 3 by 2, or 3 by 3 space.
 It can be a bathroom, storage room, janitor closet, study area, office, or locker area.
 These spaces open onto hallways. The four main room types stay unchanged.
-Storage rooms and Janitor Closets get one or two matching obstacles and one random floor item.
+Every small room gets one or two matching obstacles, with entrances and walking paths kept clear.
+Every generated small room also gets exactly one random floor item, including offices, bathrooms, study areas, locker areas, storage rooms, and janitor closets.
 The item uses a reserved, reachable tile. Events cannot use that tile.
 Storage uses shelves, boxes, cabinets, carts, or crates. Janitor Closets include cleaning equipment.
-These two spaces have no large floor labels. Other secondary spaces keep their labels.
+Bathrooms start with a sink, study areas with a reading table, offices with a desk, and locker areas with lockers.
+An optional second object comes from that room's pool. These reuse the existing obstacle prefabs and item storage.
+No room has a large floor label.
 Positions and types come from the map seed, so all computers draw the same environment.
+
+Each item type appears only once per match, counting floor pickups and items inside obstacles together.
+Small-room rewards are chosen first. Remaining types can go into random containers or onto clear floor elsewhere.
+Small-room containers start empty so the room does not get a second item. They still use the same search system.
+The usable items are Double Dice, Custom Dice, and Key Stealer. One separate key starts in a locker.
+Taking or using an item does not create another copy. A new match starts a fresh item pool.
 
 `GetHallwayDecorationWalls()` returns blocked wall tiles beside hallways,
 away from doorways. Future decorations must fit within those tiles and must not cover walking paths.
@@ -63,7 +72,7 @@ The map seed controls both furniture and starts. A new random map changes the ch
 a fixed seed repeats them for testing and for players connected over Wi-Fi.
 The existing item, event, and obstacle systems start afterward and see furniture as blocked floor.
 Furniture uses the existing one-item storage. Stand beside an object and use Interact
-to search it. Full inventories leave its item in place. During network play, the host
+to search it. Full inventories leave normal items in place; the key has a separate slot. During network play, the host
 checks the player's turn and distance before giving the item.
 
 ## Space Usage
@@ -98,7 +107,7 @@ Other scripts can use these methods on `IsometricMapTemplate`:
 - `GetRoomType(cell)` gets the room theme.
 - `IsHallway(cell)` identifies hallway floor, including door approaches.
 - `GetSpaceType(cell)` identifies a small secondary space, or returns `None`.
-- `SecondarySpaces` lists their bounds and labels without adding major rooms.
+- `SecondarySpaces` lists their bounds and types without adding major rooms.
 - `IsWalkable(cell)` checks if a player can walk there.
 - `TryGetRandomFloor(out cell, reserved)` picks an empty floor tile.
 - `GetAvailableFloorTiles(reserved)` lists the empty floor tiles.

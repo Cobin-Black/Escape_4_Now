@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using Escape4Now.Map;
 using Escape4Now.Multiplayer;
+using Escape4Now.Obstacles;
 using Escape4Now.Player;
 using Escape4Now.TurnSystem;
 using UnityEditor;
@@ -83,6 +84,7 @@ public static class LocalMultiplayerChecks
         Require(session != null, "Scene has the multiplayer component");
         int count = 4;
         string[] arguments = Environment.GetCommandLineArgs();
+        ConfigureItemPlacementChecks(arguments);
         for (int i = 0; i < arguments.Length - 1; i++)
             if (arguments[i] == "-schoolPlayers" && int.TryParse(arguments[i + 1], out int chosen)) count = chosen;
         //Select a generated layout with the requested optional room for focused tests.
@@ -162,19 +164,23 @@ public static class LocalMultiplayerChecks
             snapshot.objects[snapshot.objects.Length - 1].x = firstEvent.x;
             Require(!LanWorldView.IsValid(snapshot), "Network rejects overlapping event tiles");
         }
-        Require(UnityEngine.Object.FindObjectsByType<Escape4Now.Items.Item>(FindObjectsSortMode.None).Length >= 2,
-            "Existing items are present");
+        CheckUniqueItems(map);
         var lockers = UnityEngine.Object.FindObjectsByType<Escape4Now.Obstacles.ObstacleGridControl>(FindObjectsSortMode.None);
         Require(lockers.Length <= 3, "Only a few lockers use safe hallway positions");
         foreach (var locker in lockers)
         {
             Require(map.IsLockerPosition(locker.GridPosition) && locker.GetComponent<Escape4Now.Obstacles.ObstacleStorage>() != null,
                 "Lockers stay beside hallway walls and support storage");
-            Require(locker.GetComponent<MeshFilter>().sharedMesh.vertexCount > 12,
-                "Locker mesh includes its door and handle details");
+            ObstacleOrientation.GetStep(locker.Facing, out int dx, out int dy);
+            Require(map.GetTileType(locker.GridPosition - new Vector2Int(dx, dy)) == SchoolTileType.Wall
+                && map.IsWalkable(locker.GridPosition + new Vector2Int(dx, dy)),
+                "Locker backs face a wall and doors face open hallway floor");
+            bool visibleFront = locker.Facing == ObstacleFacing.South || locker.Facing == ObstacleFacing.West;
+            Require((locker.GetComponent<MeshFilter>().sharedMesh.vertexCount > 12) == visibleFront,
+                "Locker details appear on the front, never the back");
         }
         foreach (Transform child in map.GetComponentsInChildren<Transform>())
-            Require(child.name != "Room Label", "Main room names are hidden");
+            Require(child.name != "Room Label" && child.name != "School Space Label", "Main and small room names are hidden");
         var cells = new HashSet<Vector2Int>();
         var startingRooms = new HashSet<SchoolRoomType>();
         for (int i = 0; i < players.Length; i++)
@@ -194,7 +200,23 @@ public static class LocalMultiplayerChecks
         foreach (SchoolFurniture template in templates)
             Require(PrefabUtility.IsPartOfPrefabAsset(template) && template.IsValidTemplate()
                 && template.GetComponent<Escape4Now.Obstacles.ObstacleStorage>() != null, "Valid obstacle prefab with shared storage");
+        CheckObstacleDrawing(map, templates);
         Require(furniture.Length >= 10 && furniture.Length <= 28, "Required and optional obstacles stay sparse");
+        foreach (SchoolSecondarySpace space in map.SecondarySpaces)
+        {
+            SchoolFurnitureKind[] pool = SchoolFurniturePlan.SpecialPool(space.Type);
+            int placed = 0;
+            bool hasSignature = false;
+            foreach (SchoolFurniture item in furniture)
+                if (map.GetSpaceType(item.Cell) == space.Type)
+                {
+                    placed++;
+                    Require(Array.IndexOf(pool, item.Kind) >= 0, "Small-room obstacle matches its theme");
+                    hasSignature |= item.Kind == pool[0];
+                }
+            Require(placed >= 1 && placed <= 2, "Small room draws one or two matching obstacles");
+            Require(space.Type == SchoolSpaceType.Storage || hasSignature, "An obstacle identifies the small room");
+        }
         foreach (int address in map.SpecialItemCells)
         {
             var cell = new Vector2Int(address % map.Width, address / map.Width);
@@ -205,11 +227,18 @@ public static class LocalMultiplayerChecks
                 && map.TryFindPath(players[0].GridPosition, cell, out _), "Special room guarantees a reachable floor item");
         }
         var furnitureCells = new HashSet<Vector2Int>();
+        var expectedFurniture = new SchoolFurniturePlan(new SchoolMapLayout(map.LayoutSeed));
         foreach (SchoolFurniture item in furniture)
         {
+            Require(item.transform.Find("Obstacle preview") == null, "Play Mode does not keep editor preview parts");
             Require(furnitureCells.Add(item.Cell) && !cells.Contains(item.Cell) && map.IsBlocked(item.Cell),
                 "Furniture reserves separate blocked tiles");
             Require(item.GetComponentsInChildren<MeshRenderer>().Length > 0, "Furniture prefab has visible parts");
+            bool matchingDirection = false;
+            foreach (SchoolFurniturePlacement expected in expectedFurniture.Furniture)
+                if (expected.Cell == item.Cell.y * map.Width + item.Cell.x)
+                    matchingDirection = expected.Kind == item.Kind && expected.Facing == item.Facing;
+            Require(matchingDirection, "Drawn obstacle uses the direction from its seeded plan");
             var storage = item.GetComponent<Escape4Now.Obstacles.ObstacleStorage>();
             Require(storage != null && storage.CanInteract && storage.GridPosition == item.Cell,
                 "Every furniture object supports storage at its own tile");
@@ -291,8 +320,8 @@ public static class LocalMultiplayerChecks
             turns.AdvanceTurn();
         }
         Require(turns.CurrentPlayerIndex == 0 && turns.TurnNumber == 2, "Round returns to Player 1");
-        IEnumerator passageChecks = CheckPlayerPassage(map, players);
-        while (passageChecks.MoveNext()) yield return passageChecks.Current;
+        IEnumerator movementChecks = CheckOccupiedMovement(map, players);
+        while (movementChecks.MoveNext()) yield return movementChecks.Current;
         IEnumerator switchChecks = CheckLocationSwitch(map, players, turns);
         while (switchChecks.MoveNext()) yield return switchChecks.Current;
         CheckNewEvents(map, players);
@@ -303,6 +332,12 @@ public static class LocalMultiplayerChecks
         Vector2Int approach = new Vector2Int(Mathf.Clamp(exitCell.x, 1, SchoolMapLayout.Size - 2), Mathf.Clamp(exitCell.y, 1, SchoolMapLayout.Size - 2));
         Require(players[0].SetGridPosition(approach), "Player can stand beside the exit");
         players[0].SetMovesFromItem(1);
+        Require(!players[0].MoveToGridPosition(exitCell) && !players[0].IsMoving,
+            "The exit stays locked without a key and does not leave movement stuck");
+        IEnumerator keyChecks = CheckKeys(map, players, turns);
+        while (keyChecks.MoveNext()) yield return keyChecks.Current;
+        Require(players[0].SetGridPosition(approach), "Key holder can approach the exit");
+        players[0].SetMovesFromItem(1);
         Require(players[0].MoveToGridPosition(exitCell), "Player can walk through the exit");
         while (players[0].IsMoving) yield return null;
         Require(players[0].GridPosition == exitCell && Time.timeScale == 0f, "Reaching the door pauses the match for the win");
@@ -310,8 +345,155 @@ public static class LocalMultiplayerChecks
         Debug.Log("SAME-DEVICE AND SCHOOL MAP CHECKS PASSED");
     }
 
-    //Checks transit through players and stopping before an occupied destination.
-    private static IEnumerator CheckPlayerPassage(IsometricMapTemplate map, PlayerCharacter[] players)
+    //Checks the new key rules together with storage, protection, and shared player tiles.
+    private static IEnumerator CheckKeys(IsometricMapTemplate map, PlayerCharacter[] players, TurnSystemController turns)
+    {
+        var spawner = map.GetComponent<Escape4Now.Items.ItemSpawner>();
+        ObstacleStorage locker = Array.Find(map.GetComponentsInChildren<ObstacleStorage>(),
+            storage => storage.StoredItemPrefab is Escape4Now.Items.KeyItem);
+        Require(locker != null, "A locker holds the one guaranteed key");
+        bool approached = false;
+        foreach (Vector2Int direction in new[] { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right })
+        {
+            Vector2Int cell = locker.GridPosition + direction;
+            if (map.IsWalkable(cell) && !map.IsExit(cell)) { approached = players[0].SetGridPosition(cell); break; }
+        }
+        Require(approached, "The key locker has an accessible side");
+        var held = UnityEngine.Object.Instantiate(spawner.GetNetworkPrefab(1));
+        held.PickUp(players[0].Inventory);
+        Require(players[0].Inventory.IsFull && locker.TakeNetworkItem(players[0]) && players[0].Inventory.HasKey(),
+            "A key uses its own slot even when the regular inventory is full");
+        Require(!locker.HasItem && !locker.TakeNetworkItem(players[0]), "The key can only be collected once");
+        var key = players[0].Inventory.KeyItems[0];
+        Require(!key.gameObject.activeSelf, "Collected keys do not appear as off-map network pickups");
+        players[0].Inventory.RemoveItem(held);
+        UnityEngine.Object.Destroy(held.gameObject);
+        players[0].Inventory.RemoveKey();
+        players[1].Inventory.GiveKey(key);
+        players[1].SetGridPosition(players[0].GridPosition);
+        players[1].EventState.BeginTurn();
+        var battle = UnityEngine.Object.FindFirstObjectByType<Escape4Now.Battle.KeyStealBattleController>();
+        Require(battle != null && battle.isActiveAndEnabled, "The merged scene contains the key battle controller");
+        UnityEngine.Random.State savedRandom = UnityEngine.Random.state;
+        for (int attempt = 0; attempt < 2; attempt++)
+        {
+            bool win = attempt == 0;
+            int seed;
+            for (seed = 0; seed < 10000; seed++)
+            {
+                UnityEngine.Random.InitState(seed);
+                int first = UnityEngine.Random.Range(1, 7), second = UnityEngine.Random.Range(1, 7);
+                if (first != second && (first > second) == win) break;
+            }
+            Require(seed < 10000, "A repeatable battle test roll exists");
+            UnityEngine.Random.InitState(seed);
+            Require(battle.TryNetworkBattle(players[0], players[1]), "Players sharing a tile may battle for the key");
+            Require(players[0].IsInMenu() && !string.IsNullOrEmpty(battle.NetworkMessage), "Battle result pauses the challenger");
+            Require(!battle.FinishNetworkBattle(players[1]), "Another player cannot close the battle");
+            Require(battle.FinishNetworkBattle(players[0]), "The challenger can close the result");
+            if (win)
+            {
+                Require(players[0].Inventory.HasKey() && !players[1].Inventory.HasKey()
+                    && players[1].EventState.IsProtectedFromPlayers && turns.CurrentPlayerIndex == 0,
+                    "A win transfers the key, protects the victim, and keeps the turn");
+                players[0].Inventory.RemoveKey();
+                players[1].Inventory.GiveKey(key);
+                Require(!battle.TryNetworkBattle(players[0], players[1]), "Repeated targeting is rejected");
+                players[1].EventState.BeginTurn();
+            }
+            else Require(turns.CurrentPlayerIndex == 1 && players[1].Inventory.HasKey(), "A battle loss ends the challenger's turn");
+        }
+        UnityEngine.Random.state = savedRandom;
+        for (int i = 1; i < players.Length; i++) { players[i].SetMovesFromItem(1); turns.AdvanceTurn(); }
+        yield return null;
+        Require(players[1].RecordSuccessfulTargetedAction(players[0]), "The steal test starts with a protected victim");
+        var stealer = UnityEngine.Object.Instantiate(spawner.GetNetworkPrefab(3));
+        stealer.PickUp(players[0].Inventory);
+        stealer.Use(players[0].Inventory);
+        Require(players[1].Inventory.HasKey() && players[0].Inventory.HasItem(stealer), "Key Stealer cannot bypass target protection");
+        players[1].EventState.BeginTurn();
+        stealer.Use(players[0].Inventory);
+        Require(players[0].Inventory.HasKey() && !players[1].Inventory.HasKey()
+            && !players[0].Inventory.HasItem(stealer) && players[1].EventState.IsProtectedFromPlayers,
+            "Key Stealer transfers the key once and protects the victim");
+        Require(LanWorldView.IsValid(new LanWorldView(UnityEngine.Object.FindFirstObjectByType<LocalMultiplayerSession>()).Capture()),
+            "Collected keys and shared tiles produce a valid network snapshot");
+        UnityEngine.Object.Destroy(stealer.gameObject);
+        Debug.Log("KEY AND SHARED-TILE BATTLE CHECKS PASSED");
+    }
+
+    //Test both floor-only and container placement without changing the saved scene.
+    private static void ConfigureItemPlacementChecks(string[] arguments)
+    {
+        var spawner = UnityEngine.Object.FindFirstObjectByType<ObstacleSpawner>();
+        var items = spawner.GetComponent<Escape4Now.Items.ItemSpawner>();
+        var settings = new SerializedObject(spawner);
+        if (Array.IndexOf(arguments, "-emptyStorage") >= 0) settings.FindProperty("interactableChance").floatValue = 0f;
+        if (Array.IndexOf(arguments, "-fullStorage") >= 0) settings.FindProperty("interactableChance").floatValue = 1f;
+        //Repeated and missing Inspector entries must never create extra copies.
+        SerializedProperty options = settings.FindProperty("possibleItems");
+        options.arraySize = 7;
+        for (int i = 0; i < 6; i++) options.GetArrayElementAtIndex(i).objectReferenceValue = items.GetNetworkPrefab(i % 3 + 1);
+        options.GetArrayElementAtIndex(6).objectReferenceValue = null;
+        settings.ApplyModifiedPropertiesWithoutUndo();
+    }
+
+    //Count floor pickups and container contents together, before interaction tests add test items.
+    private static void CheckUniqueItems(IsometricMapTemplate map)
+    {
+        var spawner = map.GetComponent<Escape4Now.Items.ItemSpawner>();
+        var obstacles = map.GetComponent<ObstacleSpawner>();
+        Require(spawner.HasPlacedFloorRewards && spawner.HasSpawnedItems && obstacles.HasSpawnedObstacles,
+            "Item and obstacle placement finishes without waiting on each other");
+        var types = new HashSet<Type>();
+        var floors = UnityEngine.Object.FindObjectsByType<Escape4Now.Items.Item>(FindObjectsSortMode.None);
+        var containers = map.GetComponentsInChildren<ObstacleStorage>();
+        var floorCells = new HashSet<Vector2Int>();
+        foreach (var item in floors)
+        {
+            Vector2Int cell = map.WorldToGrid(item.transform.position);
+            Require(types.Add(item.GetType()), "No repeated floor item type");
+            Require(floorCells.Add(cell) && map.IsWalkable(cell) && !map.IsOccupied(cell)
+                && !map.IsExit(cell) && !map.GetComponent<MapEventController>().HasEvent(cell), "Floor item uses its own safe tile");
+        }
+        foreach (ObstacleStorage storage in containers)
+            if (storage.HasItem)
+            {
+                Require(types.Add(storage.StoredItemPrefab.GetType()), "No repeated type across floor items and containers");
+                Require(map.GetSpaceType(storage.GridPosition) == SchoolSpaceType.None,
+                    "Small-room containers do not add a second item beside the guaranteed reward");
+            }
+        Require(types.Count == 4 && types.Contains(typeof(Escape4Now.Items.KeyItem)),
+            "One copy of each of the three usable items and the guaranteed key per match");
+        var snapshot = new LanWorldView(UnityEngine.Object.FindFirstObjectByType<LocalMultiplayerSession>()).Capture();
+        Require(Array.FindAll(snapshot.objects, item => item.kind == 2).Length == floors.Length,
+            "Every floor pickup is sent to guests, including prefabs with a child sprite");
+        Require(map.SpecialItemCells.Count == map.SecondarySpaces.Count, "Every generated small room reserves one reward");
+        foreach (SchoolSecondarySpace room in map.SecondarySpaces)
+        {
+            int rewards = 0;
+            foreach (var item in floors)
+                if (map.GetSpaceType(map.WorldToGrid(item.transform.position)) == room.Type) rewards++;
+            Require(rewards == 1, "Each small room contains exactly one item");
+        }
+        var allowed = new[] { spawner.GetNetworkPrefab(1), spawner.GetNetworkPrefab(2), spawner.GetNetworkPrefab(1), null };
+        Require(!spawner.TryTakeStorageItem(allowed, out _) && !spawner.TryTakeStorageItem(null, out _),
+            "Finished placement cannot produce another copy or refill used items");
+        foreach (ObstacleStorage storage in containers)
+        {
+            var saved = storage.StoredItemPrefab;
+            obstacles.FillStorage(storage);
+            Require(storage.StoredItemPrefab == saved, "Repeating a fill leaves finished contents unchanged");
+        }
+        string[] arguments = Environment.GetCommandLineArgs();
+        if (Array.IndexOf(arguments, "-emptyStorage") >= 0) Require(floors.Length == 3, "Unstored items fall back to clear floor");
+        if (Array.IndexOf(arguments, "-fullStorage") >= 0)
+            Require(floors.Length == map.SpecialItemCells.Count, "Rewards choose first and remaining unique items go into containers");
+        Debug.Log("UNIQUE ITEM AND SPECIAL ROOM CHECKS PASSED");
+    }
+
+    //Checks the shared-tile rule from main without bringing back the old two-step crossing rule.
+    private static IEnumerator CheckOccupiedMovement(IsometricMapTemplate map, PlayerCharacter[] players)
     {
         var events = map.GetComponent<MapEventController>();
         var saved = new Vector2Int[players.Length];
@@ -336,61 +518,42 @@ public static class LocalMultiplayerChecks
             if (found) break;
         }
         Require(found, "Clear test route exists");
-        for (int i = 0; i < players.Length; i++) Require(players[i].SetGridPosition(start + direction * i), "Place test players in a row");
-        players[0].SetMovesFromItem(6);
-        Require(players[0].MoveToGridPosition(start + direction * 4), "Route passes through other players");
-        bool clearStops = true;
-        while (players[0].IsMoving)
-        {
-            var occupied = new HashSet<Vector2Int>();
-            foreach (PlayerCharacter player in players)
-                clearStops &= occupied.Add(player.GridPosition) && map.IsOccupied(player.GridPosition);
-            yield return null;
-        }
-        Require(clearStops, "Transit keeps distinct safe stopping tiles");
-        Require(players[0].GridPosition == start + direction * 4 && players[0].MovesRemaining == 2,
-            "Passing players spends the normal number of moves");
-        for (int i = 0; i < players.Length; i++) players[i].SetGridPosition(saved[i]);
-        foreach (PlayerCharacter player in players) player.SetGridPosition(player.GridPosition);
         players[0].SetGridPosition(start);
-        players[1].SetGridPosition(start + direction * 3);
-        players[0].SetMovesFromItem(3);
-        Require(players[0].MoveToGridPosition(players[1].GridPosition), "Occupied destination uses the preceding clear tile");
+        players[1].SetGridPosition(start + direction);
+        players[0].SetMovesFromItem(6);
+        Require(players[0].MoveToGridPosition(start + direction), "Players may enter a shared tile");
+        while (players[0].IsMoving) yield return null;
+        Require(players[0].GridPosition == players[1].GridPosition && players[0].MovesRemaining == 5,
+            "Entering another player's tile costs one move, not two");
+        Require(Vector3.Distance(players[0].transform.position, players[1].transform.position) > 0.1f,
+            "Both players remain visible on a shared tile");
+        //Four players can swap even when two begin together. With fewer players it is impossible to move everyone.
+        var switchMethod = typeof(MapEventController).GetMethod("SwitchLocations",
+            System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.NonPublic);
+        var beforeSwitch = new Vector2Int[players.Length];
+        for (int i = 0; i < players.Length; i++) beforeSwitch[i] = players[i].GridPosition;
+        bool switched = (bool)switchMethod.Invoke(null, new object[] { players });
+        Require(switched == (players.Length == 4), "Location Switch handles shared starting positions safely");
+        for (int i = 0; i < players.Length; i++)
+        {
+            Require((players[i].GridPosition != beforeSwitch[i]) == switched, "Location Switch moves everyone or leaves everyone in place");
+            players[i].SetGridPosition(beforeSwitch[i]);
+        }
+        var sharedSnapshot = new LanWorldView(UnityEngine.Object.FindFirstObjectByType<LocalMultiplayerSession>()).Capture();
+        Require(LanWorldView.IsValid(sharedSnapshot), "Wi-Fi snapshots allow the new shared-tile rule");
+        Require(players[0].MoveToGridPosition(start + direction * 3), "A player can leave a shared tile");
+        while (players[0].IsMoving) yield return null;
+        Require(players[0].GridPosition == start + direction * 3 && players[0].MovesRemaining == 3 && players[0].IsCurrentTurn,
+            "Movement charges only the completed steps");
+        Require(map.IsOccupied(players[1].GridPosition), "Leaving a shared tile keeps the remaining player registered");
+        players[0].SetGridPosition(start);
+        Require(players[0].MoveToGridPosition(start + direction * 2), "A route can pass another player");
         while (players[0].IsMoving) yield return null;
         Require(players[0].GridPosition == start + direction * 2 && players[0].MovesRemaining == 1,
-            "Player stops before occupied endpoint without spending an unused step");
-        Require(!players[0].MoveToGridPosition(players[1].GridPosition), "One move cannot stop on the next player");
-        //Keyboard and network direction inputs request only the adjacent tile.
-        players[0].SetGridPosition(start);
-        players[1].SetGridPosition(start + direction);
-        players[0].SetMovesFromItem(2);
-        Require(players[0].MoveToGridPosition(start + direction), "Adjacent input passes through the player");
-        while (players[0].IsMoving) yield return null;
-        Require(players[0].GridPosition == start + direction * 2 && players[0].MovesRemaining == 0,
-            "Adjacent input spends two moves and stops on clear floor");
-        //Return to the active player after spending the last move.
-        var turns = UnityEngine.Object.FindFirstObjectByType<TurnSystemController>();
-        for (int i = 0; i < players.Length && turns.CurrentPlayerIndex != 0; i++)
-        {
-            players[turns.CurrentPlayerIndex].SetMovesFromItem(1);
-            turns.AdvanceTurn();
-        }
-        Require(turns.CurrentPlayerIndex == 0, "Passage check returns to the active player");
-        //Put a temporary Freeze event under the other player to check crossed events.
-        for (int i = 0; i < players.Length; i++) players[i].SetGridPosition(saved[i]);
-        foreach (PlayerCharacter player in players) player.SetGridPosition(player.GridPosition);
-        players[0].SetGridPosition(start);
-        players[1].SetGridPosition(start + direction);
+            "Passing another player spends one move per tile and does not skip a turn");
         var eventTiles = (Dictionary<Vector2Int, MapEventType>)typeof(MapEventController)
             .GetField("events", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(events);
-        eventTiles.Add(start + direction, MapEventType.Freeze);
-        players[0].SetMovesFromItem(3);
-        Require(players[0].MoveToGridPosition(start + direction * 2), "Pass through a player standing on an event");
-        while (players[0].IsMoving) yield return null;
-        Require(players[0].GridPosition == start + direction * 2 && !players[0].EventState.BeginTurn(),
-            "Freeze still activates when crossing an occupied tile");
-        eventTiles.Remove(start + direction);
-        //Forced movement also passes through players but never finishes on one.
+        //Forced movement also stops before another player.
         var moveExtra = typeof(MapEventController).GetMethod("MoveExtra",
             System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic);
         players[0].SetGridPosition(start);
@@ -401,7 +564,8 @@ public static class LocalMultiplayerChecks
         players[0].SetGridPosition(start);
         players[1].SetGridPosition(start + direction);
         moveExtra.Invoke(events, new object[] { players[0], direction, true, start });
-        Require(players[0].GridPosition == start + direction * 2, "Extra movement passes through another player");
+        Require(players[0].GridPosition == start, "Extra movement does not cross an adjacent player");
+        players[1].SetGridPosition(saved[1]);
         //Neither crossing nor stopping on an event during forced movement applies its effect.
         foreach (MapEventType type in Enum.GetValues(typeof(MapEventType)))
         {
@@ -419,7 +583,7 @@ public static class LocalMultiplayerChecks
         }
         for (int i = 0; i < players.Length; i++) players[i].SetGridPosition(saved[i]);
         foreach (PlayerCharacter player in players) player.SetGridPosition(player.GridPosition);
-        Debug.Log("PASS-THROUGH CHECKS PASSED: " + players.Length + " players");
+        Debug.Log("OCCUPIED MOVEMENT CHECKS PASSED: " + players.Length + " players");
     }
 
     //Walks onto the real switch tile and checks movement, inventory, and destination events.
@@ -579,6 +743,63 @@ public static class LocalMultiplayerChecks
         Require(MapEventController.SpawnChance(MapEventType.Freeze) < MapEventController.SpawnChance(MapEventType.ExtraStep),
             "Strong events appear less often");
         Debug.Log("ALL 13 EVENT CHECKS PASSED: " + players.Length + " players");
+    }
+
+    //Checks every prefab in all four directions without changing the running map.
+    private static void CheckObstacleDrawing(IsometricMapTemplate map, SchoolFurniture[] templates)
+    {
+        UnityEngine.Random.State savedRandom = UnityEngine.Random.state;
+        try
+        {
+            foreach (SchoolFurniture template in templates)
+                for (int direction = 0; direction < 4; direction++)
+                {
+                    SchoolFurniture copy = UnityEngine.Object.Instantiate(template);
+                    copy.transform.position = new Vector3(1000, 1000, 0);
+                    try
+                    {
+                        copy.Build(map, new Vector2Int(1, 1), (ObstacleFacing)direction);
+                        Require(copy.transform.rotation == Quaternion.identity
+                            && copy.GetComponent<SortingGroup>().sortingOrder == 480,
+                            "Rotated obstacle stays upright and on its tile's drawing layer");
+                        var meshes = new List<MeshFilter>(copy.GetComponentsInChildren<MeshFilter>());
+                        var data = new SerializedObject(template);
+                        SerializedProperty parts = data.FindProperty("parts");
+                        Require(meshes.Count == parts.arraySize, "Turning keeps every prefab part");
+                        for (int i = 0; i < parts.arraySize; i++)
+                        {
+                            SerializedProperty part = parts.GetArrayElementAtIndex(i);
+                            Vector2 offset = part.FindPropertyRelative("offset").vector2Value;
+                            float width = part.FindPropertyRelative("width").floatValue;
+                            float depth = part.FindPropertyRelative("depth").floatValue;
+                            float bottom = part.FindPropertyRelative("bottom").floatValue;
+                            float height = part.FindPropertyRelative("height").floatValue;
+                            //These expected coordinates are independent of the drawing method.
+                            Vector2 turned = direction == 0 ? offset : direction == 1 ? new Vector2(offset.y, -offset.x)
+                                : direction == 2 ? -offset : new Vector2(-offset.y, offset.x);
+                            if (direction % 2 == 1) { float saved = width; width = depth; depth = saved; }
+                            Require(Mathf.Abs(turned.x) + width / 2 <= 0.4501f
+                                && Mathf.Abs(turned.y) + depth / 2 <= 0.4501f, "Turned part stays inside its original tile");
+                            var center = new Vector3((turned.x - turned.y) * map.TileWidth / 2,
+                                (turned.x + turned.y) * map.TileHeight / 2 + bottom + height / 2, 0);
+                            var size = new Vector3((width + depth) * map.TileWidth / 2,
+                                (width + depth) * map.TileHeight / 2 + height, 0);
+                            int match = meshes.FindIndex(mesh => (mesh.sharedMesh.bounds.center - center).sqrMagnitude < 0.000001f
+                                && (mesh.sharedMesh.bounds.size - size).sqrMagnitude < 0.000001f);
+                            Require(match >= 0, "Drawn part matches the requested grid direction");
+                            meshes.RemoveAt(match);
+                        }
+                    }
+                    finally
+                    {
+                        foreach (MeshFilter mesh in copy.GetComponentsInChildren<MeshFilter>())
+                            UnityEngine.Object.DestroyImmediate(mesh.sharedMesh);
+                        UnityEngine.Object.DestroyImmediate(copy.gameObject);
+                    }
+                }
+        }
+        finally { UnityEngine.Random.state = savedRandom; }
+        Debug.Log("OBSTACLE DRAWING CHECKS PASSED: 22 prefabs in all four directions");
     }
 
     //Saves the real game camera at two desktop sizes when a graphics device is available.

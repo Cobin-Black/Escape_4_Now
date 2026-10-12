@@ -28,7 +28,7 @@ Event tiles are still visible; hidden events and setup counts are not added yet.
 Random Event has a 20% chance each for forward two spaces, backward two spaces,
 Lucky Roll, or Bad Roll. Freeze and Warp each have a 10% chance.
 Second Chance blocks backward movement, Bad Roll, or Freeze from this event.
-Forced movement stops at walls and cannot finish on another player.
+Forced movement stops before walls or other players.
 
 ## Global
 
@@ -36,6 +36,7 @@ Forced movement stops at walls and cannot finish on another player.
   turns with two players, three with three players, or two with four players.
   The starting partial turn does not count. Another Blackout cannot extend it.
 - Location Switch: give everyone another player's old position.
+  If shared positions make it impossible to move everyone, nobody moves.
 - Fire Drill: move everyone to different clear hallway tiles.
 - Good Luck Day: add one move to each player's next normal dice roll, once.
 

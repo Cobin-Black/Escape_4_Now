@@ -90,6 +90,42 @@ public static class LanAuthorityChecks
             guest.Send(JsonUtility.ToJson(new LanMessage { kind = "command", sequence = 4, action = "end", turn = 1, round = 1 }));
             for (int i = 0; i < 15; i++) { guest.Pump(_ => { }); yield return null; }
             Require(lan.LatestState.turn == 1, "Repeated sequence is rejected");
+            //The new key uses a separate slot, including when the request comes from a guest.
+            var keyLocker = Array.Find(map.GetComponentsInChildren<Escape4Now.Obstacles.ObstacleStorage>(),
+                container => container.StoredItemPrefab is KeyItem);
+            Require(keyLocker != null, "The host generated the key locker");
+            Item keyPrefab = keyLocker.StoredItemPrefab;
+            keyLocker.SetStoredItem(null);
+            storage.SetStoredItem(keyPrefab);
+            var regularItem = UnityEngine.Object.Instantiate(map.GetComponent<ItemSpawner>().GetNetworkPrefab(1));
+            regularItem.PickUp(second.Inventory);
+            guest.Send(JsonUtility.ToJson(new LanMessage { kind = "command", sequence = 9, action = "take", turn = 1, round = 1,
+                x = furniture.Cell.x, y = furniture.Cell.y }));
+            for (int i = 0; i < 15; i++) { guest.Pump(_ => { }); yield return null; }
+            Require(second.Inventory.HasKey() && second.Inventory.IsFull && !storage.HasItem
+                && lan.LatestState.players[1].hasKey && LanWorldView.IsValid(lan.LatestState),
+                "Remote key pickup works with a full item slot and valid snapshots");
+            var key = second.Inventory.KeyItems[0];
+            second.Inventory.RemoveKey();
+            first.Inventory.GiveKey(key);
+            first.SetGridPosition(second.GridPosition);
+            Require(first.RecordSuccessfulTargetedAction(second), "The host records protection for the battle test");
+            guest.Send(JsonUtility.ToJson(new LanMessage { kind = "command", sequence = 10, action = "battle", turn = 1, round = 1, value = 0 }));
+            for (int i = 0; i < 15; i++) { guest.Pump(_ => { }); yield return null; }
+            Require(!second.IsInMenu() && first.Inventory.HasKey(), "A guest cannot battle a protected player");
+            first.EventState.BeginTurn();
+            guest.Send(JsonUtility.ToJson(new LanMessage { kind = "command", sequence = 11, action = "battle", turn = 1, round = 1, value = 999 }));
+            for (int i = 0; i < 15; i++) { guest.Pump(_ => { }); yield return null; }
+            Require(!second.IsInMenu() && first.Inventory.HasKey(), "Invalid battle target is rejected");
+            guest.Send(JsonUtility.ToJson(new LanMessage { kind = "command", sequence = 12, action = "battle", turn = 1, round = 1, value = 0 }));
+            for (int i = 0; i < 15; i++) { guest.Pump(_ => { }); yield return null; }
+            Require(second.IsInMenu() && !string.IsNullOrEmpty(lan.LatestState.battleMessage), "Guest can start a valid shared-tile battle");
+            guest.Send(JsonUtility.ToJson(new LanMessage { kind = "command", sequence = 13, action = "battleClose", turn = 0, round = 1 }));
+            for (int i = 0; i < 15; i++) { guest.Pump(_ => { }); yield return null; }
+            Require(second.IsInMenu(), "Battle results reject a forged turn owner");
+            guest.Send(JsonUtility.ToJson(new LanMessage { kind = "command", sequence = 14, action = "battleClose", turn = 1, round = 1 }));
+            for (int i = 0; i < 15; i++) { guest.Pump(_ => { }); yield return null; }
+            Require(!second.IsInMenu() && string.IsNullOrEmpty(lan.LatestState.battleMessage), "Guest can close its confirmed battle result");
             guest.Dispose();
             for (int i = 0; i < 15; i++) yield return null;
             Require(lan.Status.Contains("disconnected") && Time.timeScale == 0f, "Disconnect stops the match clearly");

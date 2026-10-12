@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Escape4Now.Obstacles;
 
 namespace Escape4Now.Map
 {
@@ -16,7 +17,9 @@ namespace Escape4Now.Map
     {
         public int Cell { get; }
         public SchoolFurnitureKind Kind { get; }
-        public SchoolFurniturePlacement(int cell, SchoolFurnitureKind kind) { Cell = cell; Kind = kind; }
+        public ObstacleFacing Facing { get; }
+        public SchoolFurniturePlacement(int cell, SchoolFurnitureKind kind, ObstacleFacing facing = ObstacleFacing.South)
+        { Cell = cell; Kind = kind; Facing = facing; }
     }
 
     //Makes the same spawn and furniture choices on every computer using the map seed.
@@ -79,9 +82,25 @@ namespace Escape4Now.Map
                 if (cells.Count == 0) throw new InvalidOperationException("A school room has no safe player start.");
                 spawns.Add(cells[random.Next(cells.Count)]);
             }
+            FaceFurniture();
         }
 
-        //Small optional rooms get matching obstacles and one reserved floor reward.
+        //Turn obstacles after placement, without changing tiles, spawns, or random choices.
+        private void FaceFurniture()
+        {
+            int whiteboard = -1;
+            foreach (SchoolFurniturePlacement item in furniture)
+                if (item.Kind == SchoolFurnitureKind.Whiteboard) whiteboard = item.Cell;
+            for (int i = 0; i < furniture.Count; i++)
+            {
+                SchoolFurniturePlacement item = furniture[i];
+                int target = item.Kind == SchoolFurnitureKind.StudentDesk ? whiteboard : -1;
+                ObstacleFacing facing = ObstacleOrientation.Choose(map, item.Cell, blocked, target);
+                furniture[i] = new SchoolFurniturePlacement(item.Cell, item.Kind, facing);
+            }
+        }
+
+        //Small rooms get one or two matching obstacles, away from their entrance.
         private void PlaceSpecialRooms()
         {
             foreach (SchoolSecondarySpace space in map.SecondarySpaces)
@@ -101,22 +120,27 @@ namespace Escape4Now.Map
                                 && map.GetSpaceType(x + Dx[i], y + Dy[i]) != space.Type) entrance = true;
                         if (!entrance && ClearOfDoors(x, y)) corners.Add(cell);
                     }
-                //Cleaning equipment identifies the closet before any optional pieces are added.
-                Place(corners, space.Type == SchoolSpaceType.JanitorCloset ? new[] { SchoolFurnitureKind.MopBucket } : pool, 1);
+                //Start with an object that shows the room's purpose without a floor label.
+                Place(corners, space.Type == SchoolSpaceType.Storage ? pool : new[] { pool[0] }, 1);
                 Place(corners, pool, random.Next(2));
+                //Every generated small room reserves one clear tile for its guaranteed item.
                 cells.RemoveAll(cell => blocked.Contains(cell));
                 if (cells.Count == 0) throw new InvalidOperationException("A special room has no space for its item.");
                 specialItems.Add(cells[random.Next(cells.Count)]);
             }
         }
 
-        //Storage and cleaning objects stay in their own small rooms.
+        //Reuse the obstacle prefabs that fit each small room. The first kind identifies it.
         public static SchoolFurnitureKind[] SpecialPool(SchoolSpaceType type)
         {
+            if (type == SchoolSpaceType.Bathroom) return new[] { SchoolFurnitureKind.LabSink, SchoolFurnitureKind.TrashCan };
             if (type == SchoolSpaceType.Storage) return new[] { SchoolFurnitureKind.StorageShelf, SchoolFurnitureKind.StorageBoxes,
                 SchoolFurnitureKind.Cabinet, SchoolFurnitureKind.SupplyCart, SchoolFurnitureKind.Crate };
             if (type == SchoolSpaceType.JanitorCloset) return new[] { SchoolFurnitureKind.MopBucket, SchoolFurnitureKind.CleaningCart,
                 SchoolFurnitureKind.StorageShelf, SchoolFurnitureKind.TrashCan, SchoolFurnitureKind.CleaningCabinet };
+            if (type == SchoolSpaceType.StudyArea) return new[] { SchoolFurnitureKind.ReadingTable, SchoolFurnitureKind.Bookshelf, SchoolFurnitureKind.Bench };
+            if (type == SchoolSpaceType.Office) return new[] { SchoolFurnitureKind.TeacherDesk, SchoolFurnitureKind.Cabinet, SchoolFurnitureKind.Printer };
+            if (type == SchoolSpaceType.LockerArea) return new[] { SchoolFurnitureKind.Lockers, SchoolFurnitureKind.Bench };
             return new SchoolFurnitureKind[0];
         }
 

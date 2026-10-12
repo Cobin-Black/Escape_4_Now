@@ -57,7 +57,8 @@ namespace Escape4Now.Multiplayer
                 bool gameplay = script is IsometricMapTemplate || script is PlayerCharacter
                     || script is TurnSystemController || script is Escape4Now.Items.PlayerInventory
                     || script is MapEventController || script is Escape4Now.Items.ItemSpawner
-                    || script is Escape4Now.Obstacles.ObstacleSpawner || script is Escape4Now.UI.ItemPickupBar;
+                    || script is Escape4Now.Obstacles.ObstacleSpawner || script is Escape4Now.UI.ItemPickupBar
+                    || script is GameTimer || script is Escape4Now.Battle.KeyStealBattleController;
                 if (!gameplay || !script.enabled) continue;
                 heldScripts.Add(script);
                 script.enabled = false;

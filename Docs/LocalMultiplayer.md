@@ -51,22 +51,20 @@ The older `Join(ip, code)` method remains available for tests, but the menu does
 
 ## Test
 
-Players can walk through each other. Each crossed tile still costs one move.
-An occupied destination stops the route at the last clear tile before it.
-For an adjacent occupied tile, a direction input or click continues to the next
-clear tile in that direction. It needs enough moves for every crossed tile and
-cannot cross a wall. With too few moves, the player stays in place.
-Crossed events still work. While passing through someone, the last clear tile
-remains the moving player's safe position so players cannot finish on the same tile.
-Location Switch uses those separate safe positions if it triggers during transit.
+Players can pass through each other and share a tile. Each completed step costs
+one move. Shared players are drawn beside each other so both remain visible.
+The old automatic two-step crossing rule is not used.
 Forced movement does not activate events it crosses or lands on. This includes
 Random Event movement, Warp, and Location Switch. Teleporting keeps held items.
 
-Future stealing or direct negative actions must first call `victim.CanBeTargetedBy(attacker)`.
+Stealing and direct negative actions first call `victim.CanBeTargetedBy(attacker)`.
 After the action succeeds, call `victim.RecordSuccessfulTargetedAction(attacker)`.
 This protects the victim from further direct actions until their next turn begins.
 Failed actions should not call it. Environmental events and Location Switch ignore this protection.
-There are no stealing or direct attack actions yet; these methods prepare the shared rule.
+One locker holds the key. A player needs that key to leave through the exit.
+Key Stealer can take another player's key. Players sharing a tile can press Enter
+to battle for it. The higher roll wins; losing ends the challenger's turn.
+The key uses a separate inventory slot. These rules also run on the Wi-Fi host.
 
 Try 2, 3, and 4 players. Check rolling, movement, turn order, and leaving the match.
 The automated Play Mode checks are in `Assets/Editor/LocalMultiplayerChecks.cs`.

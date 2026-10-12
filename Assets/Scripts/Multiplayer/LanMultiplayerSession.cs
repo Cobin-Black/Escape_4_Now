@@ -316,7 +316,15 @@ namespace Escape4Now.Multiplayer
             TurnSystemController turns = FindFirstObjectByType<TurnSystemController>();
             PlayerCharacter player = local.Participants[slot];
             if (turns.CurrentPlayerIndex != slot || message.turn != slot || message.round != turns.TurnNumber
-                || player.HasReachedExit || player.IsMoving || player.IsInMenu() || player.IsUsingItem()) return;
+                || player.HasReachedExit || player.IsMoving) return;
+            var battle = FindFirstObjectByType<Escape4Now.Battle.KeyStealBattleController>();
+            if (message.action == "battleClose")
+            {
+                battle?.FinishNetworkBattle(player);
+                nextPublish = 0f;
+                return;
+            }
+            if (player.IsInMenu() || player.IsUsingItem()) return;
             switch (message.action)
             {
                 case "roll": player.RollDice(); break;
@@ -325,6 +333,10 @@ namespace Escape4Now.Multiplayer
                         player.MoveToGridPosition(new Vector2Int(message.x, message.y));
                     break;
                 case "end": turns.AdvanceTurn(); break;
+                case "battle":
+                    if (message.value >= 0 && message.value < local.Participants.Count)
+                        battle?.TryNetworkBattle(player, local.Participants[message.value]);
+                    break;
                 case "item":
                     if (!player.CanUseItem() || player.Inventory.Items.Count == 0) break;
                     Item item = player.Inventory.Items[0];
@@ -334,7 +346,7 @@ namespace Escape4Now.Multiplayer
                         player.SetMovesFromItem(message.value);
                         player.Inventory.RemoveItem(item);
                     }
-                    else if (item is DoubleDiceItem) item.Use(player.Inventory);
+                    else if (item is DoubleDiceItem || item is KeyStealerItem) item.Use(player.Inventory);
                     break;
                 case "take":
                     foreach (ObstacleStorage storage in FindObjectsByType<ObstacleStorage>(FindObjectsSortMode.None))
@@ -351,6 +363,23 @@ namespace Escape4Now.Multiplayer
         private void ReadInput()
         {
             if (!IsMyTurn || latest.players[localPlayer].moving) return;
+            bool confirm = Keyboard.current != null && Keyboard.current.enterKey.wasPressedThisFrame;
+            if (!string.IsNullOrEmpty(latest.battleMessage))
+            {
+                if (confirm) Submit("battleClose");
+                return;
+            }
+            if (confirm)
+            {
+                LanPlayerState challenger = latest.players[localPlayer];
+                for (int i = 0; i < latest.players.Length; i++)
+                {
+                    LanPlayerState target = latest.players[i];
+                    if (i != localPlayer && !challenger.hasKey && target.hasKey && !target.protectedFromPlayers
+                        && target.x == challenger.x && target.y == challenger.y)
+                    { Submit("battle", value: i); return; }
+                }
+            }
             InputActionAsset actions = InputSystem.actions;
             if (actions == null) return;
             if (Pressed(actions, "Player/Roll Dice")) Submit("roll");
@@ -439,10 +468,21 @@ namespace Escape4Now.Multiplayer
             GUI.Label(new Rect(Screen.width - 270, 65, 250, 30), "You are Player " + (localPlayer + 1));
             LanPlayerState player = latest.players[localPlayer];
             if (!IsMyTurn) choosingNumber = false;
+            if (!string.IsNullOrEmpty(latest.battleMessage))
+            {
+                Rect panel = new Rect((Screen.width - 360f) / 2f, (Screen.height - 200f) / 2f, 360f, 200f);
+                GUI.Box(panel, "KEY-STEALING BATTLE");
+                GUI.Label(new Rect(panel.x + 16f, panel.y + 40f, 328f, 90f), latest.battleMessage);
+                GUI.enabled = IsMyTurn;
+                if (GUI.Button(new Rect(panel.x + 16f, panel.y + 145f, 328f, 36f), "Continue")) Submit("battleClose");
+                GUI.enabled = true;
+                return;
+            }
             float width = Mathf.Min(440, Screen.width - 32);
             float left = (Screen.width - width) / 2f;
             float top = Screen.height - 170;
-            GUI.Box(new Rect(left, top, width, 154), "Your item: " + (player.item == 1 ? "Double Dice" : player.item == 2 ? "Custom Dice" : "None"));
+            GUI.Box(new Rect(left, top, width, 154), "Your item: " + (player.item == 1 ? "Double Dice" : player.item == 2 ? "Custom Dice" : player.item == 3 ? "Key Stealer" : "None")
+                + (player.hasKey ? " | Key collected" : ""));
             GUI.enabled = IsMyTurn && !player.moving;
             if (GUI.Button(new Rect(left + 12, top + 35, (width - 36) / 2, 32), "Roll Dice")) Submit("roll");
             if (GUI.Button(new Rect(left + width / 2 + 6, top + 35, (width - 36) / 2, 32), "Take Item")) TakeNearbyItem();

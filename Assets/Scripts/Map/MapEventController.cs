@@ -190,10 +190,10 @@ namespace Escape4Now.Map
         }
 
         //Checks for an event after each completed step, not just at the end of a turn.
-        public bool ResolveStep(PlayerCharacter player, Vector2Int direction, Vector2Int? crossedCell = null)
+        public bool ResolveStep(PlayerCharacter player, Vector2Int direction)
         {
             if (player == null || !player.IsResolvingEventStep) return false;
-            return ResolveEvent(player, direction, crossedCell ?? player.GridPosition);
+            return ResolveEvent(player, direction, player.GridPosition);
         }
 
         //Only the tile crossed by normal movement activates an event.
@@ -355,7 +355,17 @@ namespace Escape4Now.Map
                 : new[] { new[] { 1, 0, 3, 2 }, new[] { 1, 2, 3, 0 }, new[] { 1, 3, 0, 2 },
                     new[] { 2, 0, 3, 1 }, new[] { 2, 3, 0, 1 }, new[] { 2, 3, 1, 0 },
                     new[] { 3, 0, 1, 2 }, new[] { 3, 2, 0, 1 }, new[] { 3, 2, 1, 0 } };
-            return PlayerCharacter.SwitchLocations(participants, choices[Random.Range(0, choices.Length)]);
+            //Sharing a tile is allowed, but a switch must still move every player somewhere else.
+            var valid = new List<int[]>();
+            foreach (int[] choice in choices)
+            {
+                bool movesEveryone = true;
+                for (int i = 0; i < participants.Count; i++)
+                    if (participants[i] == null || participants[choice[i]] == null
+                        || participants[i].GridPosition == participants[choice[i]].GridPosition) movesEveryone = false;
+                if (movesEveryone) valid.Add(choice);
+            }
+            return valid.Count > 0 && PlayerCharacter.SwitchLocations(participants, valid[Random.Range(0, valid.Count)]);
         }
 
         //Lists safe destinations first, then picks one randomly for Warp.
@@ -400,14 +410,10 @@ namespace Escape4Now.Map
             for (int i = 0; i < 2; i++)
             {
                 Vector2Int next = cursor + direction;
-                if (!map.IsWalkable(next)) break;
+                if (!map.IsWalkable(next) || player.IsOccupiedByOtherPlayer(next)) break;
                 cursor = next;
-                bool occupied = player.IsOccupiedByOtherPlayer(next);
-                if (!occupied)
-                {
-                    if (!player.SetGridPosition(next)) break;
-                    moved = i + 1;
-                }
+                if (!player.SetGridPosition(next)) break;
+                moved = i + 1;
                 if (map.IsExit(next)) break;
             }
             ShowMessage(player, "Random Event: " + effect + ". Moved " + moved + " spaces.");

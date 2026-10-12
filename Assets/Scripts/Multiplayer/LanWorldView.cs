@@ -27,8 +27,9 @@ namespace Escape4Now.Multiplayer
             turns = UnityEngine.Object.FindFirstObjectByType<TurnSystemController>();
         }
 
-        //Uses small fixed IDs for the two supported items.
-        public static int ItemType(Item item) => item is DoubleDiceItem ? 1 : item is CustomDiceItem ? 2 : 0;
+        //Only known item types are sent over the network.
+        public static int ItemType(Item item) => item is DoubleDiceItem ? 1 : item is CustomDiceItem ? 2
+            : item is KeyStealerItem ? 3 : item is KeyItem ? 4 : 0;
 
         //The host sends results, never another player's requested dice value or position.
         public LanSnapshot Capture()
@@ -37,6 +38,8 @@ namespace Escape4Now.Multiplayer
                 exitY = map.ExitPosition.y, turn = turns.CurrentPlayerIndex, round = turns.TurnNumber,
                 blackout = events.BlackoutTurns, message = events.CurrentMessage,
                 players = new LanPlayerState[session.Participants.Count] };
+            state.secondsRemaining = UnityEngine.Object.FindFirstObjectByType<GameTimer>()?.TimeRemaining ?? 0f;
+            state.battleMessage = UnityEngine.Object.FindFirstObjectByType<Escape4Now.Battle.KeyStealBattleController>()?.NetworkMessage ?? "";
             for (int i = 0; i < state.players.Length; i++)
             {
                 PlayerCharacter player = session.Participants[i];
@@ -45,6 +48,7 @@ namespace Escape4Now.Multiplayer
                     roll = player.LastRoll, moves = player.MovesRemaining, rolled = player.HasRolled,
                     moving = player.IsMoving, won = player.HasReachedExit,
                     protectedFromPlayers = player.EventState.IsProtectedFromPlayers,
+                    hasKey = player.Inventory.HasKey(),
                     item = player.Inventory.Items.Count == 0 ? 0 : ItemType(player.Inventory.Items[0]) };
             }
             var objects = new List<LanObjectState>();
@@ -60,7 +64,8 @@ namespace Escape4Now.Multiplayer
             foreach (Item item in UnityEngine.Object.FindObjectsByType<Item>(FindObjectsSortMode.None))
             {
                 int type = ItemType(item);
-                Renderer renderer = item.GetComponent<Renderer>();
+                //Some item prefabs keep their sprite on a child object.
+                Renderer renderer = item.GetComponentInChildren<Renderer>();
                 if (type != 0 && renderer != null && renderer.enabled)
                     objects.Add(ObjectState(item, 2, type, map.WorldToGrid(item.transform.position)));
             }
@@ -86,15 +91,16 @@ namespace Escape4Now.Multiplayer
             if (state == null || state.players == null || state.players.Length < 2 || state.players.Length > 4
                 || state.objects == null || state.objects.Length > 128 || state.turn < 0
                 || state.turn >= state.players.Length || state.round < 1 || state.blackout < 0 || state.blackout > 4
-                || state.message == null || state.message.Length > 1024 || !Cell(state.exitX, state.exitY)) return false;
+                || state.message == null || state.message.Length > 1024 || !Cell(state.exitX, state.exitY)
+                || state.battleMessage == null || state.battleMessage.Length > 1024
+                || float.IsNaN(state.secondsRemaining) || float.IsInfinity(state.secondsRemaining)
+                || state.secondsRemaining < 0 || state.secondsRemaining > 86400f) return false;
             bool edgeX = state.exitX == 0 || state.exitX == SchoolMapLayout.Size - 1;
             bool edgeY = state.exitY == 0 || state.exitY == SchoolMapLayout.Size - 1;
             if (edgeX == edgeY) return false;
-            var playerCells = new HashSet<Vector2Int>();
             foreach (LanPlayerState player in state.players)
                 if (player == null || !Cell(player.x, player.y) || player.roll < 0 || player.roll > 12
-                    || !playerCells.Add(new Vector2Int(player.x, player.y))
-                    || player.moves < 0 || player.moves > SchoolMapLayout.Size * SchoolMapLayout.Size || player.item < 0 || player.item > 2
+                    || player.moves < 0 || player.moves > SchoolMapLayout.Size * SchoolMapLayout.Size || player.item < 0 || player.item > 3
                     || float.IsNaN(player.worldX) || float.IsNaN(player.worldY)
                     || Math.Abs(player.worldX) > 1000 || Math.Abs(player.worldY) > 1000) return false;
             var ids = new HashSet<int>();
@@ -104,7 +110,7 @@ namespace Escape4Now.Multiplayer
             foreach (LanObjectState item in state.objects)
                 if (item == null || !ids.Add(item.id) || !Cell(item.x, item.y) || item.kind < 0 || item.kind > 3
                     || item.type < 0 || item.type > (item.kind == 3 ? (int)SchoolFurnitureKind.CleaningCabinet : (int)MapEventType.GoodLuckDay) || item.facing < 0 || item.facing > 3
-                    || (item.kind == 2 && (item.type < 1 || item.type > 2))
+                    || (item.kind == 2 && (item.type < 1 || item.type > 3))
                     || (item.kind == 0 && (!eventTypes.Add(item.type) || !eventCells.Add(new Vector2Int(item.x, item.y))))) return false;
             return true;
         }
@@ -132,6 +138,7 @@ namespace Escape4Now.Multiplayer
             }
             map.ReplacePlayerOccupants(occupied);
             events.ApplyNetworkDisplay(state.message, state.blackout);
+            UnityEngine.Object.FindFirstObjectByType<GameTimer>()?.ApplyNetworkTime(state.secondsRemaining);
             var present = new HashSet<int>();
             foreach (LanObjectState data in state.objects)
             {
@@ -184,6 +191,7 @@ namespace Escape4Now.Multiplayer
             Item item = UnityEngine.Object.Instantiate(itemPrefab, map.GridToWorld(cell), Quaternion.identity, map.transform);
             if (item is DoubleDiceItem doubleDice) doubleDice.SetSpawnPosition(map, cell);
             if (item is CustomDiceItem customDice) customDice.SetSpawnPosition(map, cell);
+            if (item is KeyStealerItem keyStealer) keyStealer.SetSpawnPosition(map, cell);
             item.enabled = false;
             return item.gameObject;
         }

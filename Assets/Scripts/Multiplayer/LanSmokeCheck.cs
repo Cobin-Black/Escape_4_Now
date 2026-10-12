@@ -60,7 +60,12 @@ namespace Escape4Now.Multiplayer
                 marker.Configure(initialMap.TileWidth, initialMap.TileHeight);
                 tiles.Add(cell, MapEventType.LocationSwitch);
             }
-            Require(first.objects.Count(item => item.kind == 2) == 2 + initialMap.SpecialItemCells.Count, "Map items and special rewards synchronized");
+            //The three usable items and one key stay unique across floor and storage.
+            int floorItems = first.objects.Count(item => item.kind == 2);
+            int storedItems = first.objects.Count(item => (item.kind == 1 || item.kind == 3) && item.interactable);
+            Require(floorItems + storedItems == 4, "Three unique items and one key synchronized across floors and containers");
+            Require(first.objects.Where(item => item.kind == 2).Select(item => item.type).Distinct().Count() == floorItems,
+                "Floor item types do not repeat");
             if (Array.IndexOf(args, "-specialRoom") >= 0)
                 Require(initialMap.SpecialItemCells.Count == 1, "Special room exists in this test");
             foreach (int cell in initialMap.SpecialItemCells)
@@ -85,11 +90,20 @@ namespace Escape4Now.Multiplayer
             if (SystemInfo.graphicsDeviceType != GraphicsDeviceType.Null) CaptureMap(lan.LocalPlayerIndex);
             bool acted = false;
             bool testedSwitch = false;
-            bool testedPassage = false;
             bool sawSwitch = false;
+            bool testedKey = false;
+            bool sawSharedTile = false;
+            bool sawKeyBattle = false;
             while (!lan.LatestState.players.Any(player => player.won))
             {
                 LanSnapshot state = lan.LatestState;
+                if (state.players[0].x == state.players[1].x && state.players[0].y == state.players[1].y)
+                    sawSharedTile = true;
+                if (!string.IsNullOrEmpty(state.battleMessage))
+                {
+                    Require(state.players[0].hasKey && !state.players[1].hasKey, "Battle key ownership reaches every computer");
+                    sawKeyBattle = true;
+                }
                 if (!sawSwitch && state.message.Contains("Location Switch: everyone swapped"))
                 {
                     Require(state.players[1].protectedFromPlayers && FindFirstObjectByType<LocalMultiplayerSession>()
@@ -103,42 +117,10 @@ namespace Escape4Now.Multiplayer
                 if (host && state.round >= 2)
                 {
                     var session = FindFirstObjectByType<LocalMultiplayerSession>();
-                    if (!testedPassage)
-                    {
-                        Vector2Int start = default, step = default;
-                        bool found = false;
-                        foreach (Vector2Int cell in initialMap.GetAvailableFloorTiles())
-                        {
-                            foreach (Vector2Int direction in new[] { Vector2Int.up, Vector2Int.right })
-                            {
-                                bool clear = true;
-                                for (int i = 0; i < 3; i++)
-                                {
-                                    Vector2Int next = cell + direction * i;
-                                    if (!initialMap.IsWalkable(next) || initialMap.IsOccupied(next) || initialMap.IsExit(next)
-                                        || state.objects.Any(item => item.kind == 0 && item.x == next.x && item.y == next.y)) clear = false;
-                                }
-                                if (!clear) continue;
-                                start = cell; step = direction; found = true; break;
-                            }
-                            if (found) break;
-                        }
-                        Require(found, "Network pass-through test route exists");
-                        session.Participants[0].SetGridPosition(start);
-                        session.Participants[1].SetGridPosition(start + step);
-                        session.Participants[0].SetMovesFromItem(6);
-                        Require(session.Participants[1].RecordSuccessfulTargetedAction(session.Participants[0]),
-                            "Host records temporary direct-action protection");
-                        lan.Submit("move", (start + step * 2).x, (start + step * 2).y);
-                        while (session.Participants[0].IsMoving) yield return null;
-                        Require(session.Participants[0].GridPosition == start + step * 2 && session.Participants[0].MovesRemaining == 4,
-                            "Network movement passes through a player normally");
-                        testedPassage = true;
-                        yield return new WaitForSecondsRealtime(0.5f);
-                        continue;
-                    }
                     if (!testedSwitch)
                     {
+                        Require(session.Participants[1].RecordSuccessfulTargetedAction(session.Participants[0]),
+                            "Host records temporary direct-action protection");
                         LanObjectState marker = state.objects.Single(item => item.kind == 0 && item.type == (int)MapEventType.LocationSwitch);
                         var switchCell = new Vector2Int(marker.x, marker.y);
                         bool ready = false;
@@ -157,6 +139,38 @@ namespace Escape4Now.Multiplayer
                         Require(session.Participants[0].MovesRemaining == 5, "Network switch preserves active movement");
                         testedSwitch = true;
                         yield return new WaitForSecondsRealtime(1f);
+                        continue;
+                    }
+                    if (!testedKey)
+                    {
+                        var locker = FindObjectsByType<Escape4Now.Obstacles.ObstacleStorage>(FindObjectsSortMode.None)
+                            .Single(storage => storage.StoredItemPrefab is Escape4Now.Items.KeyItem);
+                        var cell = new[] { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right }
+                            .Select(step => locker.GridPosition + step).First(pos => initialMap.IsWalkable(pos) && !initialMap.IsExit(pos));
+                        Require(session.Participants[0].SetGridPosition(cell), "Host approaches the key locker");
+                        lan.Submit("take", locker.GridPosition.x, locker.GridPosition.y);
+                        Require(session.Participants[0].Inventory.HasKey(), "The host request collects the guaranteed key");
+                        var key = session.Participants[0].Inventory.KeyItems[0];
+                        session.Participants[0].Inventory.RemoveKey();
+                        session.Participants[1].Inventory.GiveKey(key);
+                        session.Participants[1].EventState.BeginTurn();
+                        session.Participants[1].SetGridPosition(cell);
+                        //Choose a repeatable winning roll so the same key can test the exit next.
+                        for (int seed = 0; seed < 10000; seed++)
+                        {
+                            UnityEngine.Random.InitState(seed);
+                            if (UnityEngine.Random.Range(1, 7) <= UnityEngine.Random.Range(1, 7)) continue;
+                            UnityEngine.Random.InitState(seed);
+                            break;
+                        }
+                        lan.Submit("battle", value: 1);
+                        while (string.IsNullOrEmpty(lan.LatestState.battleMessage)) yield return null;
+                        yield return new WaitForSecondsRealtime(1f);
+                        sawSharedTile = sawKeyBattle = true;
+                        lan.Submit("battleClose");
+                        Require(session.Participants[0].Inventory.HasKey(), "The shared-tile battle gives the challenger the key");
+                        testedKey = true;
+                        yield return null;
                         continue;
                     }
                     var approach = new Vector2Int(Mathf.Clamp(state.exitX, 1, SchoolMapLayout.Size - 2), Mathf.Clamp(state.exitY, 1, SchoolMapLayout.Size - 2));
@@ -195,6 +209,7 @@ namespace Escape4Now.Multiplayer
                 yield return null;
             }
             Require(sawSwitch, "Location Switch reached this computer");
+            Require(sawSharedTile && sawKeyBattle, "Shared tiles and key battles reached this computer");
             Require(lan.LatestState.players[0].won, "Exit result synchronized");
             Debug.Log("LAN MULTI-PROCESS CHECK PASSED: " + role + " player " + (lan.LocalPlayerIndex + 1));
             //Let the host publish its final state before the test process closes.

@@ -153,7 +153,8 @@ namespace Escape4Now.Obstacles
                 || !player.IsCurrentTurn || player.IsMoving || player.HasReachedExit
                 || player.IsUsingItem() || player.IsInMenu() || !CanInteract
                 || !IsNextTo(player.GridPosition)
-                || player.Inventory == null || player.Inventory.IsFull || !HasItem) return false;
+                || player.Inventory == null || !HasItem
+                || (storedItemPrefab is KeyItem ? player.Inventory.HasKey() : player.Inventory.IsFull)) return false;
             OpenMenu(player);
             TakeItemOrClose();
             return true;
@@ -197,14 +198,18 @@ namespace Escape4Now.Obstacles
         private void TakeItemOrClose()
         {
             PlayerInventory inventory = viewingPlayer.Inventory;
+            bool isKey = storedItemPrefab is KeyItem;
 
-            if (HasItem && inventory != null && !inventory.IsFull)
+            if (HasItem && inventory != null && (isKey ? !inventory.HasKey() : !inventory.IsFull))
             {
                 //The obstacle only stores the prefab, so a real copy is made at the moment it is taken.
                 Item item = Instantiate(storedItemPrefab, transform.position, Quaternion.identity, transform.parent);
                 item.PickUp(inventory);
 
-                if (inventory.HasItem(item))
+
+                bool wasTaken = isKey ? inventory.HasKey() && inventory.KeyItems[0] == item : inventory.HasItem(item);
+
+                if (wasTaken)
                 {
                     Debug.Log($"[Item System] {viewingPlayer.name} took {item.ItemName} from {name}.");
                     storedItemPrefab = null;
@@ -213,6 +218,7 @@ namespace Escape4Now.Obstacles
                 {
                     Destroy(item.gameObject);
                 }
+
             }
 
             CloseMenu();
@@ -253,7 +259,8 @@ namespace Escape4Now.Obstacles
             {
                 string description = string.IsNullOrEmpty(storedItemPrefab.Description) ? "" : $"\n{storedItemPrefab.Description}";
                 PlayerInventory inventory = viewingPlayer != null ? viewingPlayer.Inventory : null;
-                string action = inventory != null && !inventory.IsFull
+                bool isKey = storedItemPrefab is KeyItem;
+                string action = inventory != null && (isKey ? !inventory.HasKey() : !inventory.IsFull)
                     ? $"Press {key} to take it."
                     : $"You can only carry one item.\nPress {key} to close.";
                 body = $"Inside: {storedItemPrefab.ItemName}{description}\n\n{action}";
