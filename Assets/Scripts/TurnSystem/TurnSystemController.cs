@@ -18,11 +18,12 @@ namespace Escape4Now.TurnSystem
         [SerializeField] private bool includeEnemyTurn = false;
         [SerializeField] private string enemyTurnName = "Enemy";
         [SerializeField] private bool showTurnDisplay = true;
+          [SerializeField] private bool showEndTurnButton = false;
         [SerializeField] private TurnOwner currentTurnOwner = TurnOwner.Player;
         [SerializeField] private int currentPlayerIndex;
         [SerializeField] private int turnNumber = 1;
         [SerializeField] private string currentTurnName = "Player One";
-
+       
         private GUIStyle turnDisplayStyle;
         private int turnStartedFrame;
 
@@ -95,7 +96,7 @@ namespace Escape4Now.TurnSystem
 
             GUI.Label(new Rect(16f, 16f, 420f, 40f), $"Turn {turnNumber}: {currentTurnName}", turnDisplayStyle);
 
-            if (Escape4Now.Multiplayer.LocalMultiplayerSession.AllowTurnButtons
+            if (showEndTurnButton && Escape4Now.Multiplayer.LocalMultiplayerSession.AllowTurnButtons
                 && GUI.Button(new Rect(16f, 58f, 120f, 32f), "End Turn"))
             {
                 if (Escape4Now.Multiplayer.LanMultiplayerSession.Active)
