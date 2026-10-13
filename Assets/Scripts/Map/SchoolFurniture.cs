@@ -104,7 +104,7 @@ namespace Escape4Now.Map
             //Furniture uses the same one-item storage as the lockers.
             var storage = GetComponent<Escape4Now.Obstacles.ObstacleStorage>();
             if (storage == null) storage = gameObject.AddComponent<Escape4Now.Obstacles.ObstacleStorage>();
-            //Items are assigned after all obstacles exist, with special-room rewards first.
+            //Items are assigned after all obstacles exist.
             storage.SetStoredItem(null);
             int order = 500 - (cell.x + cell.y) * 10;
             //Keep all parts on this tile's drawing layer, even when a prefab has many parts.

@@ -69,6 +69,14 @@ namespace Escape4Now.Obstacles
             storedItemPrefab = itemPrefab;
         }
 
+        //Stores an item only when this obstacle is empty.
+        public bool TryStoreItem(Item itemPrefab)
+        {
+            if (itemPrefab == null || HasItem) return false;
+            storedItemPrefab = itemPrefab;
+            return true;
+        }
+
         //Guests see whether storage is empty; only the host gives out real items.
         public void ApplyNetworkContents(bool hasItem)
         {

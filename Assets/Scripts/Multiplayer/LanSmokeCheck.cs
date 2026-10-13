@@ -68,9 +68,15 @@ namespace Escape4Now.Multiplayer
                 "Floor item types do not repeat");
             if (Array.IndexOf(args, "-specialRoom") >= 0)
                 Require(initialMap.SpecialItemCells.Count == 1, "Special room exists in this test");
-            foreach (int cell in initialMap.SpecialItemCells)
-                Require(first.objects.Count(item => item.kind == 2 && item.x == cell % initialMap.Width
-                    && item.y == cell / initialMap.Width) == 1, "Special room reward position synchronized");
+            foreach (SchoolSecondarySpace room in initialMap.SecondarySpaces)
+            {
+                int storedRewards = first.objects.Count(item => item.kind == 3 && item.interactable
+                    && initialMap.GetSpaceType(new Vector2Int(item.x, item.y)) == room.Type);
+                int floorRewards = first.objects.Count(item => item.kind == 2
+                    && initialMap.GetSpaceType(new Vector2Int(item.x, item.y)) == room.Type);
+                Require(storedRewards == 1 && floorRewards == 0,
+                    "Special-room item is stored in its obstacle and synchronized");
+            }
             SchoolFurniture[] furniture = FindObjectsByType<SchoolFurniture>(FindObjectsSortMode.None);
             Require(furniture.Length >= 10 && furniture.Length <= 28, "Obstacle prefabs loaded on this computer");
             Require(first.objects.Count(item => item.kind == 3) == furniture.Length, "Furniture storage is synchronized");

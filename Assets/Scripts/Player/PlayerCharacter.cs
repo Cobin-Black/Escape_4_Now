@@ -24,6 +24,7 @@ namespace Escape4Now.Player
         [SerializeField, Min(0.1f)] private float moveSpeed = 4f;
         [SerializeField] private PlayerInventory inventory;
         [SerializeField] private int health = 5;
+        private bool exitNeedsKey = true;
 
         private SpriteRenderer spriteRenderer;
         private Coroutine moveRoutine;
@@ -38,6 +39,7 @@ namespace Escape4Now.Player
         private MapEventController mapEvents;
         private Vector2Int lastDirection = Vector2Int.up;
         private bool resolvingStep;
+        private bool networkHasKey;
         private readonly PlayerEventState eventState = new PlayerEventState();
         private InputAction moveAction;
         private InputAction rollDiceAction;
@@ -61,6 +63,9 @@ namespace Escape4Now.Player
         //Read-only movement state for the turn and map scripts.
         public Vector2Int GridPosition => gridPosition;
         public bool IsMoving => moveRoutine != null;
+
+        public void SetExitNeedsKey(bool value) { exitNeedsKey = value; }
+        private bool CanUseExit => !exitNeedsKey || (inventory != null && inventory.HasKey());
 
         //Checks settings and places the player on its starting tile.
         private void Awake()
@@ -103,6 +108,7 @@ namespace Escape4Now.Player
         //Draws the roll prompt or the current move budget.
         private void OnGUI()
         {
+            DrawKeyMarker();
             if (turnSystem != null && !turnSystem.IsPlayersTurn(this)) return;
 
             // Main panel
@@ -193,6 +199,32 @@ namespace Escape4Now.Player
                 GUI.Label(new Rect(x, 176f, contentW, 30f), "YOUR TURN", playerStyle);
                 GUI.Label(new Rect(x, 222f, contentW, 24f), "Press Spacebar to Roll Dice", playerStyle);
             }
+        }
+
+        //Shows the key's own image above a player who carries it.
+        private void DrawKeyMarker()
+        {
+            bool hasKey = networkHasKey || (inventory != null && inventory.HasKey());
+            Camera viewCamera = Camera.main;
+            if (!hasKey || !isActiveAndEnabled || viewCamera == null || mapTemplate == null) return;
+            ItemSpawner spawner = mapTemplate.GetComponent<ItemSpawner>();
+            SpriteRenderer keyVisual = spawner != null && spawner.KeyPrefab != null
+                ? spawner.KeyPrefab.GetComponentInChildren<SpriteRenderer>(true) : null;
+            Sprite sprite = keyVisual != null ? keyVisual.sprite : null;
+            if (sprite == null || sprite.texture == null) return;
+
+            Vector3 screenPosition = viewCamera.WorldToScreenPoint(transform.position + Vector3.up * 1.05f);
+            if (screenPosition.z <= 0f) return;
+            const float size = 32f;
+            float x = Mathf.Clamp(screenPosition.x - size * 0.5f, 0f, Mathf.Max(0f, Screen.width - size));
+            float y = Mathf.Clamp(Screen.height - screenPosition.y - size, 0f, Mathf.Max(0f, Screen.height - size));
+            Rect spriteRect = sprite.textureRect;
+            Rect uv = new Rect(spriteRect.x / sprite.texture.width, spriteRect.y / sprite.texture.height,
+                spriteRect.width / sprite.texture.width, spriteRect.height / sprite.texture.height);
+            Color oldColor = GUI.color;
+            GUI.color = keyVisual.color;
+            GUI.DrawTextureWithTexCoords(new Rect(x, y, size, size), sprite.texture, uv, true);
+            GUI.color = oldColor;
         }
         //
         private Texture2D MakeTransparentTexture(Color color)
@@ -312,14 +344,15 @@ namespace Escape4Now.Player
 
         //Sets a local player's starting space and identifying color before the match.
         public void ConfigureParticipant(IsometricMapTemplate map, TurnSystemController turns,
-            Vector2Int cell, int number, Color color)
+            Vector2Int cell, int number, Color color, string displayName = null)
         {
             if (spriteRenderer != null && mapTemplate != null)
                 mapTemplate.RemoveOccupant(registeredPosition);
             mapTemplate = map;
             turnSystem = turns;
             gridPosition = cell;
-            name = "Player " + number;
+            string safeName = string.IsNullOrWhiteSpace(displayName) ? "Player " + number : displayName.Trim();
+            name = safeName.Length > 16 ? safeName.Substring(0, 16) : safeName;
             playerColor = color;
             if (spriteRenderer != null)
             {
@@ -338,6 +371,7 @@ namespace Escape4Now.Player
             movesRemaining = state.moves;
             hasRolled = state.rolled;
             hasReachedExit = state.won;
+            networkHasKey = state.hasKey;
             eventState.SetPlayerProtection(state.protectedFromPlayers);
             if (updateOccupancy) UpdateMapOccupancy(gridPosition);
             else registeredPosition = gridPosition;
@@ -371,7 +405,7 @@ namespace Escape4Now.Player
             gridPosition = newGridPosition;
             SnapToGridPosition();
             UpdateMapOccupancy(newGridPosition);
-            if (mapTemplate.IsExit(newGridPosition) && inventory != null && inventory.HasKey()) ReachExit();
+            if (mapTemplate.IsExit(newGridPosition) && CanUseExit) ReachExit();
             return true;
         }
 
@@ -463,7 +497,7 @@ namespace Escape4Now.Player
 
             if (path.Count > movesRemaining) return false;
             //Players may share a tile; walls and the movement budget still limit the route.
-            if (path.Count == 0 || (mapTemplate.IsExit(path[0]) && (inventory == null || !inventory.HasKey()))) return false;
+            if (path.Count == 0 || (mapTemplate.IsExit(path[0]) && !CanUseExit)) return false;
             moveRoutine = StartCoroutine(MoveAlongPath(path));
             return true;
         }
@@ -600,7 +634,7 @@ namespace Escape4Now.Player
             foreach (Vector2Int next in path)
             {
                 if (!mapTemplate.IsWalkable(next) || movesRemaining <= 0) break;
-                if (mapTemplate.IsExit(next) && (inventory == null || !inventory.HasKey()))
+                if (mapTemplate.IsExit(next) && !CanUseExit)
                 {
                     Debug.Log("The exit is locked. Go find a key.");
                     break;
@@ -623,7 +657,7 @@ namespace Escape4Now.Player
 
                 if (mapTemplate.IsExit(next))
                 {
-                    if (inventory != null && inventory.HasKey())
+                    if (CanUseExit)
                     {
                         ReachExit();
                         yield break;

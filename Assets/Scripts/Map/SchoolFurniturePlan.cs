@@ -123,7 +123,7 @@ namespace Escape4Now.Map
                 //Start with an object that shows the room's purpose without a floor label.
                 Place(corners, space.Type == SchoolSpaceType.Storage ? pool : new[] { pool[0] }, 1);
                 Place(corners, pool, random.Next(2));
-                //Every generated small room reserves one clear tile for its guaranteed item.
+                //Keep one tile clear beside the obstacle that will hold the room's item.
                 cells.RemoveAll(cell => blocked.Contains(cell));
                 if (cells.Count == 0) throw new InvalidOperationException("A special room has no space for its item.");
                 specialItems.Add(cells[random.Next(cells.Count)]);

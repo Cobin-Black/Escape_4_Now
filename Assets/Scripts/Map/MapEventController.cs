@@ -27,11 +27,25 @@ namespace Escape4Now.Map
         private PlayerCharacter[] players;
         private GUIStyle noticeText;
         private GUIStyle noticeTitle;
+        private HashSet<MapEventType> allowedTypes;
+        private readonly Dictionary<MapEventType, Vector2Int> forcedTiles = new Dictionary<MapEventType, Vector2Int>();
+
+        public event System.Action<PlayerCharacter, MapEventType> EventTriggered;
 
         //Lets other spawners wait until every event has its tile.
         public bool EventsPlaced { get; private set; }
         public string CurrentMessage => message;
         public int BlackoutTurns => visibilityTurnsRemaining;
+
+        public void OnlyPlaceEvents(params MapEventType[] types)
+        {
+            allowedTypes = new HashSet<MapEventType>(types ?? System.Array.Empty<MapEventType>());
+        }
+
+        public void ForceEventTile(MapEventType type, Vector2Int cell)
+        {
+            if (System.Enum.IsDefined(typeof(MapEventType), type)) forcedTiles[type] = cell;
+        }
 
         //Finds a known event template without loading anything supplied over the network.
         public EventTileMarker GetNetworkPrefab(int type)
@@ -118,8 +132,12 @@ namespace Escape4Now.Map
                 //Skip templates that are missing, turned off, invalid, or already used.
                 if (prefab == null || !prefab.gameObject.activeSelf || !prefab.enabled
                     || !System.Enum.IsDefined(typeof(MapEventType), prefab.EventType)
-                    || !placedTypes.Add(prefab.EventType) || Random.value >= SpawnChance(prefab.EventType)) continue;
-                int index = Random.Range(0, emptyTiles.Count);
+                    || (allowedTypes != null && !allowedTypes.Contains(prefab.EventType))
+                    || !placedTypes.Add(prefab.EventType)
+                    || (!forcedTiles.ContainsKey(prefab.EventType) && Random.value >= SpawnChance(prefab.EventType))) continue;
+                int index = forcedTiles.TryGetValue(prefab.EventType, out Vector2Int forcedCell)
+                    ? emptyTiles.IndexOf(forcedCell) : -1;
+                if (index < 0) index = Random.Range(0, emptyTiles.Count);
                 Vector2Int cell = emptyTiles[index];
                 EventTileMarker marker = Instantiate(prefab, map.GridToWorld(cell), Quaternion.identity, transform);
                 marker.Configure(map.TileWidth, map.TileHeight);
@@ -204,6 +222,8 @@ namespace Escape4Now.Map
                 || !events.TryGetValue(eventCell, out MapEventType type)) return false;
 
             if (Category(type) == MapEventCategory.Negative && BlockNegative(player)) return false;
+
+            EventTriggered?.Invoke(player, type);
 
             switch (type)
             {

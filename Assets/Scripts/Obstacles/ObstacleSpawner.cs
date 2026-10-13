@@ -14,8 +14,6 @@ namespace Escape4Now.Obstacles
 
         //Obstacle prefabs to pick from, and how many to place.
         [SerializeField] private ObstacleGridControl[] obstaclePrefabs;
-        [SerializeField] private ObstacleGridControl lockerPrefab;
-        [SerializeField] private KeyItem keyItemPrefab;
         [SerializeField, Min(1)] private int obstacleCount = 6;
 
         //Chance that a searchable object holds an item, and the allowed item prefabs.
@@ -25,50 +23,19 @@ namespace Escape4Now.Obstacles
         //Spawners that must finish first so obstacles never cover an event or item. Found on the map when left empty.
         [SerializeField] private MapEventController mapEvents;
         [SerializeField] private ItemSpawner itemSpawner;
+        private int? forcedObstacleCount;
+        private float? forcedInteractableChance;
+        private Vector2Int? forcedObstacleCell;
         //Item placement waits until all searchable obstacles have been created.
         public bool HasSpawnedObstacles { get; private set; }
-        public KeyItem KeyPrefab => keyItemPrefab;
+
+        public void SetObstacleCount(int count) { forcedObstacleCount = Mathf.Max(0, count); }
+        public void SetInteractableChance(float chance) { forcedInteractableChance = Mathf.Clamp01(chance); }
+        public void ForceObstacleTile(Vector2Int cell) { forcedObstacleCell = cell; }
 
         private void Start()
         {
             StartCoroutine(SpawnObstacles());
-        }
-
-        //Places the one key inside a reachable locker.
-        private bool SpawnLocker(Vector2Int cell)
-        {
-            ObstacleGridControl locker = Instantiate(
-                lockerPrefab,
-                map.GridToWorld(cell),
-                Quaternion.identity,
-                transform
-            );
-
-            locker.name = lockerPrefab.name;
-
-            if (!locker.Place(map, cell))
-            {
-                Destroy(locker.gameObject);
-                return false;
-            }
-
-            locker.SetFacing(map.GetObstacleFacing(cell));
-            locker.IsInteractable = true;
-
-            ObstacleStorage storage = locker.GetComponent<ObstacleStorage>();
-
-            if (storage == null)
-            {
-                storage = locker.gameObject.AddComponent<ObstacleStorage>();
-            }
-
-            storage.SetStoredItem(keyItemPrefab);
-
-            Debug.Log(
-                $"[Obstacle System] Spawned guaranteed {locker.name} with key at {cell}."
-            );
-
-            return true;
         }
 
         //The current scene uses one obstacle template on every computer.
@@ -95,10 +62,10 @@ namespace Escape4Now.Obstacles
             if (mapEvents == null) mapEvents = map.GetComponent<MapEventController>();
             if (itemSpawner == null) itemSpawner = map.GetComponent<ItemSpawner>();
 
-            //Protect event tiles and guaranteed room rewards before placing more obstacles.
+            //Wait until events and special-room item spots are ready before placing obstacles.
             yield return new WaitUntil(() =>
                 (mapEvents == null || !mapEvents.isActiveAndEnabled || mapEvents.EventsPlaced)
-                && (itemSpawner == null || !itemSpawner.isActiveAndEnabled || itemSpawner.HasPlacedFloorRewards));
+                && (itemSpawner == null || !itemSpawner.isActiveAndEnabled || itemSpawner.HasReservedSpecialRoomItems));
 
             List<Vector2Int> emptyTiles = new List<Vector2Int>();
             for (int y = 0; y < map.Height; y++)
@@ -118,21 +85,20 @@ namespace Escape4Now.Obstacles
             var decorations = new List<Vector2Int>();
             foreach (SchoolFurniture furniture in FindObjectsByType<SchoolFurniture>(FindObjectsSortMode.None))
                 if (map.IsHallway(furniture.Cell)) decorations.Add(furniture.Cell);
-            while (lockerPrefab != null && keyItemPrefab != null && emptyTiles.Count > 0)
+            if (forcedObstacleCell.HasValue)
             {
-                int index = Random.Range(0, emptyTiles.Count);
-                Vector2Int lockerCell = emptyTiles[index];
-                emptyTiles.RemoveAt(index);
-
-                if (KeepsMapConnected(lockerCell) && SpawnLocker(lockerCell))
+                Vector2Int cell = forcedObstacleCell.Value;
+                bool canForce = emptyTiles.Remove(cell) || (map.IsWalkable(cell) && !map.IsOccupied(cell)
+                    && !map.IsExit(cell) && (mapEvents == null || !mapEvents.HasEvent(cell)) && !HasItemAt(cell));
+                if (canForce && SpawnObstacle(cell))
                 {
                     placed++;
-                    decorations.Add(lockerCell);
-                    break;
+                    decorations.Add(cell);
                 }
             }
 
-            int target = Mathf.Min(obstacleCount, Random.Range(2, 4));
+            int target = forcedObstacleCount.HasValue
+                ? forcedObstacleCount.Value : Mathf.Min(obstacleCount, Random.Range(2, 4));
             while (placed < target && emptyTiles.Count > 0)
             {
                 int index = Random.Range(0, emptyTiles.Count);
@@ -286,15 +252,15 @@ namespace Escape4Now.Obstacles
             return true;
         }
 
-        //Use the shared item pool; small rooms already have their one floor reward.
+        //Use the shared item pool in regular rooms and hallways.
         public void FillStorage(ObstacleStorage storage)
         {
             if (map == null || storage == null || storage.HasItem || !storage.CanInteract
                 || !storage.transform.IsChildOf(map.transform)
                 || map.GetSpaceType(storage.GridPosition) != SchoolSpaceType.None) return;
             if (itemSpawner == null) itemSpawner = map.GetComponent<ItemSpawner>();
-            if (itemSpawner != null && Random.value < interactableChance
-                && itemSpawner.TryTakeStorageItem(possibleItems, out Item item)) storage.SetStoredItem(item);
+            if (itemSpawner != null && Random.value < (forcedInteractableChance ?? interactableChance)
+                && itemSpawner.TryTakeStorageItem(possibleItems, out Item item)) storage.TryStoreItem(item);
         }
 
         //Picks one entry from a list, skipping empty slots.

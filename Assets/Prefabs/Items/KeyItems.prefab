@@ -45,8 +45,8 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ef588437697ed4b1cb1fd72824342350, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Items.KeyItem
-  itemName: Key Items
-  description: Important items that can be held multiple times
+  itemName: Key
+  description: Opens the exit door.
 --- !u!1 &8021180712412533640
 GameObject:
   m_ObjectHideFlags: 0

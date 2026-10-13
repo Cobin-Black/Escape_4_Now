@@ -1,7 +1,7 @@
 # Local Multiplayer
 
 2 to 4 people play on the same computer and take turns using one keyboard.
-Or 2 to 4 people can play on separate computers connected to the same Wi-Fi or router.
+Wi-Fi play is temporarily hidden in the setup screen.
 
 ## Start a Game
 
@@ -15,7 +15,7 @@ The colored markers match the players on the map. Only the current player can mo
 
 ## Play over Wi-Fi
 
-Use the same game build on every computer. In setup, select **Wi-Fi**.
+The Wi-Fi setup tab is hidden for now. When it is turned back on, use the same game build on every computer and select **Wi-Fi** in setup.
 
 1. On one computer, choose the total player count and press **Host Match**.
 2. Share the displayed six-digit room code with the other players.
@@ -61,7 +61,7 @@ Stealing and direct negative actions first call `victim.CanBeTargetedBy(attacker
 After the action succeeds, call `victim.RecordSuccessfulTargetedAction(attacker)`.
 This protects the victim from further direct actions until their next turn begins.
 Failed actions should not call it. Environmental events and Location Switch ignore this protection.
-One locker holds the key. A player needs that key to leave through the exit.
+One searchable obstacle in a main room or hallway holds the key. A player needs that key to leave through the exit.
 Key Stealer can take another player's key. Players sharing a tile can press Enter
 to battle for it. The higher roll wins; losing ends the challenger's turn.
 The key uses a separate inventory slot. These rules also run on the Wi-Fi host.

@@ -217,14 +217,15 @@ public static class LocalMultiplayerChecks
             Require(placed >= 1 && placed <= 2, "Small room draws one or two matching obstacles");
             Require(space.Type == SchoolSpaceType.Storage || hasSignature, "An obstacle identifies the small room");
         }
-        foreach (int address in map.SpecialItemCells)
+        foreach (SchoolSecondarySpace room in map.SecondarySpaces)
         {
-            var cell = new Vector2Int(address % map.Width, address / map.Width);
-            int rewardCount = 0;
-            foreach (var reward in UnityEngine.Object.FindObjectsByType<Escape4Now.Items.Item>(FindObjectsSortMode.None))
-                if (reward.IsAtPosition(cell)) rewardCount++;
-            Require(rewardCount == 1 && !events.HasEvent(cell) && map.IsWalkable(cell)
-                && map.TryFindPath(players[0].GridPosition, cell, out _), "Special room guarantees a reachable floor item");
+            int storedRewards = 0;
+            foreach (ObstacleStorage storage in map.GetComponentsInChildren<ObstacleStorage>())
+                if (storage.HasItem && map.GetSpaceType(storage.GridPosition) == room.Type) storedRewards++;
+            Require(storedRewards == 1, "Special room item is stored in one of its obstacles");
+            foreach (Escape4Now.Items.Item item in UnityEngine.Object.FindObjectsByType<Escape4Now.Items.Item>(FindObjectsSortMode.None))
+                Require(map.GetSpaceType(map.WorldToGrid(item.transform.position)) != room.Type,
+                    "Special-room items do not spawn on the floor");
         }
         var furnitureCells = new HashSet<Vector2Int>();
         var expectedFurniture = new SchoolFurniturePlan(new SchoolMapLayout(map.LayoutSeed));
@@ -351,7 +352,7 @@ public static class LocalMultiplayerChecks
         var spawner = map.GetComponent<Escape4Now.Items.ItemSpawner>();
         ObstacleStorage locker = Array.Find(map.GetComponentsInChildren<ObstacleStorage>(),
             storage => storage.StoredItemPrefab is Escape4Now.Items.KeyItem);
-        Require(locker != null, "A locker holds the one guaranteed key");
+        Require(locker != null, "One searchable obstacle holds the guaranteed key");
         bool approached = false;
         foreach (Vector2Int direction in new[] { Vector2Int.up, Vector2Int.down, Vector2Int.left, Vector2Int.right })
         {
@@ -443,7 +444,7 @@ public static class LocalMultiplayerChecks
     {
         var spawner = map.GetComponent<Escape4Now.Items.ItemSpawner>();
         var obstacles = map.GetComponent<ObstacleSpawner>();
-        Require(spawner.HasPlacedFloorRewards && spawner.HasSpawnedItems && obstacles.HasSpawnedObstacles,
+        Require(spawner.HasReservedSpecialRoomItems && spawner.HasSpawnedItems && obstacles.HasSpawnedObstacles,
             "Item and obstacle placement finishes without waiting on each other");
         var types = new HashSet<Type>();
         var floors = UnityEngine.Object.FindObjectsByType<Escape4Now.Items.Item>(FindObjectsSortMode.None);
@@ -456,25 +457,33 @@ public static class LocalMultiplayerChecks
             Require(floorCells.Add(cell) && map.IsWalkable(cell) && !map.IsOccupied(cell)
                 && !map.IsExit(cell) && !map.GetComponent<MapEventController>().HasEvent(cell), "Floor item uses its own safe tile");
         }
+        var specialStorageCounts = new Dictionary<SchoolSpaceType, int>();
         foreach (ObstacleStorage storage in containers)
             if (storage.HasItem)
             {
                 Require(types.Add(storage.StoredItemPrefab.GetType()), "No repeated type across floor items and containers");
-                Require(map.GetSpaceType(storage.GridPosition) == SchoolSpaceType.None,
-                    "Small-room containers do not add a second item beside the guaranteed reward");
+                SchoolSpaceType roomType = map.GetSpaceType(storage.GridPosition);
+                if (storage.StoredItemPrefab is Escape4Now.Items.KeyItem)
+                    Require(roomType == SchoolSpaceType.None, "The key stays out of every special room");
+                if (roomType != SchoolSpaceType.None)
+                {
+                    specialStorageCounts.TryGetValue(roomType, out int count);
+                    specialStorageCounts[roomType] = count + 1;
+                }
             }
         Require(types.Count == 4 && types.Contains(typeof(Escape4Now.Items.KeyItem)),
             "One copy of each of the three usable items and the guaranteed key per match");
         var snapshot = new LanWorldView(UnityEngine.Object.FindFirstObjectByType<LocalMultiplayerSession>()).Capture();
         Require(Array.FindAll(snapshot.objects, item => item.kind == 2).Length == floors.Length,
             "Every floor pickup is sent to guests, including prefabs with a child sprite");
-        Require(map.SpecialItemCells.Count == map.SecondarySpaces.Count, "Every generated small room reserves one reward");
+        Require(map.SpecialItemCells.Count == map.SecondarySpaces.Count, "Every small room reserves a clear tile beside its furniture");
         foreach (SchoolSecondarySpace room in map.SecondarySpaces)
         {
-            int rewards = 0;
+            specialStorageCounts.TryGetValue(room.Type, out int storedRewards);
+            Require(storedRewards == 1, "Each special room has one item inside an obstacle");
             foreach (var item in floors)
-                if (map.GetSpaceType(map.WorldToGrid(item.transform.position)) == room.Type) rewards++;
-            Require(rewards == 1, "Each small room contains exactly one item");
+                Require(map.GetSpaceType(map.WorldToGrid(item.transform.position)) != room.Type,
+                    "Special-room items are not on the floor");
         }
         var allowed = new[] { spawner.GetNetworkPrefab(1), spawner.GetNetworkPrefab(2), spawner.GetNetworkPrefab(1), null };
         Require(!spawner.TryTakeStorageItem(allowed, out _) && !spawner.TryTakeStorageItem(null, out _),
@@ -486,9 +495,10 @@ public static class LocalMultiplayerChecks
             Require(storage.StoredItemPrefab == saved, "Repeating a fill leaves finished contents unchanged");
         }
         string[] arguments = Environment.GetCommandLineArgs();
-        if (Array.IndexOf(arguments, "-emptyStorage") >= 0) Require(floors.Length == 3, "Unstored items fall back to clear floor");
+        if (Array.IndexOf(arguments, "-emptyStorage") >= 0)
+            Require(floors.Length == 3 - map.SecondarySpaces.Count, "Unstored items fall back to clear floor");
         if (Array.IndexOf(arguments, "-fullStorage") >= 0)
-            Require(floors.Length == map.SpecialItemCells.Count, "Rewards choose first and remaining unique items go into containers");
+            Require(floors.Length == 0, "All items fit into their guaranteed or random obstacles");
         Debug.Log("UNIQUE ITEM AND SPECIAL ROOM CHECKS PASSED");
     }
 

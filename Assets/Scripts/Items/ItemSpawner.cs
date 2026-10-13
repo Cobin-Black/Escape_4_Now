@@ -12,16 +12,18 @@ namespace Escape4Now.Items
         [SerializeField] private DoubleDiceItem doubleDicePrefab;
         [SerializeField] private CustomDiceItem customDicePrefab;
         [SerializeField] private KeyStealerItem keyStealerPrefab;
+        [SerializeField] private KeyItem keyItemPrefab;
         private readonly List<Item> remainingItems = new List<Item>();
 
-        //Lets other spawners wait until every item has its tile.
+        //Lets other spawners wait until item locations are reserved.
         public bool HasSpawnedItems { get; private set; }
-        //Obstacles can be placed once the guaranteed floor rewards are protected.
-        public bool HasPlacedFloorRewards { get; private set; }
+        //Obstacles can be placed after special-room item locations are chosen.
+        public bool HasReservedSpecialRoomItems { get; private set; }
+        public KeyItem KeyPrefab => keyItemPrefab;
 
         //Shares the existing templates with the network view.
         public Item GetNetworkPrefab(int type) => type == 1 ? doubleDicePrefab : type == 2 ? customDicePrefab
-            : type == 3 ? keyStealerPrefab : type == 4 ? map.GetComponent<ObstacleSpawner>()?.KeyPrefab : null;
+            : type == 3 ? keyStealerPrefab : type == 4 ? keyItemPrefab : null;
 
         //Each new match creates a new spawner and a fresh item pool.
         private void Start()
@@ -29,7 +31,7 @@ namespace Escape4Now.Items
             StartCoroutine(SpawnItems());
         }
 
-        //Special rooms choose first, then containers, then any remaining floor items.
+        //Special-room items go inside furniture, then other items go in obstacles or on the floor.
         private IEnumerator SpawnItems()
         {
             if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) yield break;
@@ -39,7 +41,7 @@ namespace Escape4Now.Items
             if (map == null)
             {
                 Debug.LogWarning("[Item System] ItemSpawner could not find the map.");
-                HasPlacedFloorRewards = true;
+                HasReservedSpecialRoomItems = true;
                 HasSpawnedItems = true;
                 yield break;
             }
@@ -50,23 +52,43 @@ namespace Escape4Now.Items
             AddItemType(doubleDicePrefab);
             AddItemType(customDicePrefab);
             AddItemType(keyStealerPrefab);
-            if (remainingItems.Count < map.SpecialItemCells.Count)
+            if (remainingItems.Count < map.SecondarySpaces.Count)
                 throw new System.InvalidOperationException("Each special room needs a different item type. Assign more item prefabs.");
-            foreach (int address in map.SpecialItemCells)
-            {
-                var cell = new Vector2Int(address % map.Width, address / map.Width);
-                if (!IsValidItemTile(cell)) throw new System.InvalidOperationException("A special room reward tile is blocked.");
-                int index = Random.Range(0, remainingItems.Count);
-                SpawnItem(remainingItems[index], new List<Vector2Int> { cell });
-                remainingItems.RemoveAt(index);
-            }
-            HasPlacedFloorRewards = true;
+            //Tell the obstacle spawner the special rooms are ready for item placement.
+            HasReservedSpecialRoomItems = true;
             ObstacleSpawner obstacles = map.GetComponent<ObstacleSpawner>();
             yield return new WaitUntil(() => obstacles == null || !obstacles.isActiveAndEnabled || obstacles.HasSpawnedObstacles);
+            if (map.SecondarySpaces.Count > 0 && (obstacles == null || !obstacles.isActiveAndEnabled))
+                throw new System.InvalidOperationException("Special rooms need the obstacle spawner to place their items.");
             if (obstacles != null && obstacles.isActiveAndEnabled)
             {
-                //Shuffle containers so the first room built does not always receive the items.
                 var containers = new List<ObstacleStorage>(map.GetComponentsInChildren<ObstacleStorage>());
+                foreach (SchoolSecondarySpace room in map.SecondarySpaces)
+                {
+                    var roomChoices = containers.FindAll(storage => IsAvailableStorage(storage, room.Type));
+                    if (roomChoices.Count == 0 || remainingItems.Count == 0)
+                        throw new System.InvalidOperationException("A special room needs an empty obstacle for its item.");
+                    ObstacleStorage roomStorage = roomChoices[Random.Range(0, roomChoices.Count)];
+                    int itemIndex = Random.Range(0, remainingItems.Count);
+                    if (!roomStorage.TryStoreItem(remainingItems[itemIndex]))
+                        throw new System.InvalidOperationException("A special-room item could not be stored.");
+                    remainingItems.RemoveAt(itemIndex);
+                }
+
+                //Choose one empty obstacle for the key before ordinary items are assigned.
+                var keyChoices = containers.FindAll(storage => IsAvailableStorage(storage, SchoolSpaceType.None));
+                if (keyItemPrefab != null && keyChoices.Count > 0)
+                {
+                    ObstacleStorage keyStorage = keyChoices[Random.Range(0, keyChoices.Count)];
+                    if (!keyStorage.TryStoreItem(keyItemPrefab))
+                        Debug.LogError("[Item System] The key could not be stored.");
+                }
+                else
+                {
+                    Debug.LogError("[Item System] No empty obstacle was available for the key.");
+                }
+
+                //Shuffle containers so items do not always go to the same obstacles.
                 while (containers.Count > 0)
                 {
                     int index = Random.Range(0, containers.Count);
@@ -96,6 +118,17 @@ namespace Escape4Now.Items
             HasSpawnedItems = true;
         }
 
+        private bool IsAvailableStorage(ObstacleStorage storage, SchoolSpaceType roomType)
+        {
+            return storage != null && storage.CanInteract && !storage.HasItem
+                && storage.transform.IsChildOf(map.transform)
+                && map.GetSpaceType(storage.GridPosition) == roomType
+                && (map.IsWalkable(storage.GridPosition + Vector2Int.up)
+                    || map.IsWalkable(storage.GridPosition + Vector2Int.down)
+                    || map.IsWalkable(storage.GridPosition + Vector2Int.left)
+                    || map.IsWalkable(storage.GridPosition + Vector2Int.right));
+        }
+
         //Duplicate references or variants of the same item type use just one slot.
         private void AddItemType(Item prefab)
         {
@@ -107,7 +140,7 @@ namespace Escape4Now.Items
         public bool TryTakeStorageItem(Item[] allowedItems, out Item prefab)
         {
             prefab = null;
-            if (!HasPlacedFloorRewards || HasSpawnedItems || allowedItems == null
+            if (!HasReservedSpecialRoomItems || HasSpawnedItems || allowedItems == null
                 || Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) return false;
             var choices = new List<int>();
             for (int i = 0; i < remainingItems.Count; i++)

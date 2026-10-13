@@ -20,7 +20,7 @@ namespace Escape4Now.Multiplayer
         private PlayerCharacter sourcePlayer;
         private PlayerCharacter[] participants;
         private int playerCount = 2;
-        private bool networkSetup;
+        private readonly string[] playerNames = { "Player 1", "Player 2", "Player 3", "Player 4" };
         private LanMultiplayerSession lan;
         public IReadOnlyList<PlayerCharacter> Participants => participants;
         private string status = "";
@@ -94,6 +94,10 @@ namespace Escape4Now.Multiplayer
             if (MatchStarted) return false;
             if (count < 2 || count > 4)
             { status = "Choose two to four players."; return false; }
+            var usedNames = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < count; i++)
+                if (!usedNames.Add(GetPlayerName(i)))
+                { status = "Each player needs a different name."; return false; }
             if (map == null || turns == null || sourcePlayer == null || InputSystem.actions == null)
             { status = "The scene needs a map, player, turn system, and input actions."; return false; }
             try { map.PrepareLayout(); }
@@ -115,7 +119,7 @@ namespace Escape4Now.Multiplayer
             for (int i = 0; i < count; i++)
             {
                 PlayerCharacter player = participants[i];
-                player.ConfigureParticipant(map, turns, cells[i], i + 1, PlayerColors[i]);
+                player.ConfigureParticipant(map, turns, cells[i], i + 1, PlayerColors[i], GetPlayerName(i));
                 player.enabled = true;
                 if (player.Inventory != null) player.Inventory.enabled = true;
                 foreach (Renderer renderer in player.GetComponentsInChildren<Renderer>(true)) renderer.enabled = true;
@@ -154,16 +158,9 @@ namespace Escape4Now.Multiplayer
             float contentWidth = width - 24;
             GUI.Label(new Rect(0, 0, contentWidth, 44), "Escape 4 Now", titleStyle);
             GUI.enabled = !LanMultiplayerSession.Active && !lan.Connecting;
-            networkSetup = GUI.Toolbar(new Rect(0, 50, contentWidth, 32), networkSetup ? 1 : 0,
-                new[] { "Same Device", "Wi-Fi" }) == 1;
+            GUI.Toolbar(new Rect(0, 50, contentWidth, 32), 0, new[] { "Same Device" });
             GUI.enabled = true;
             DrawSetupColor(new Rect(0, 90, contentWidth, 1), new Color(0.23f, 0.27f, 0.24f));
-            if (networkSetup)
-            {
-                lan.DrawSetup(contentWidth, labelStyle, smallStyle, buttonStyle, selectedStyle);
-                GUI.EndScrollView();
-                return;
-            }
             GUI.Label(new Rect(0, 108, contentWidth, 24), "Players", labelStyle);
             float segmentWidth = (contentWidth - 16) / 3;
             for (int count = 2; count <= 4; count++)
@@ -178,13 +175,27 @@ namespace Escape4Now.Multiplayer
                 bool playing = i < playerCount;
                 Color color = playing ? PlayerColors[i] : new Color(0.24f, 0.27f, 0.25f);
                 DrawSetupColor(new Rect(8, y + 4, 14, 26), color);
-                GUI.Label(new Rect(40, y, contentWidth - 170, 32), "Player " + (i + 1), playing ? labelStyle : smallStyle);
-                if (!playing) GUI.Label(new Rect(contentWidth - 110, y + 4, 110, 26), "Not playing", smallStyle);
+                if (playing)
+                {
+                    GUI.Label(new Rect(40, y, 48, 32), "Name", smallStyle);
+                    playerNames[i] = GUI.TextField(new Rect(92, y + 2, Mathf.Max(50, contentWidth - 100), 28),
+                        playerNames[i], 16, buttonStyle);
+                }
+                else GUI.Label(new Rect(40, y + 4, 110, 26), "Not playing", smallStyle);
                 DrawSetupColor(new Rect(0, y + 38, contentWidth, 1), new Color(0.16f, 0.19f, 0.17f));
             }
             if (GUI.Button(new Rect(0, 402, contentWidth, 48), "Start Match", selectedStyle)) StartLocalMatch();
             GUI.Label(new Rect(0, 464, contentWidth, 56), status, errorStyle);
             GUI.EndScrollView();
+        }
+
+        private string GetPlayerName(int index)
+        {
+            string value = index >= 0 && index < playerNames.Length ? playerNames[index] : null;
+            value = string.IsNullOrWhiteSpace(value) ? "Player " + (index + 1) : value.Trim();
+            value = value.Replace("<", "").Replace(">", "").Trim();
+            if (value.Length == 0) value = "Player " + (index + 1);
+            return value.Length > 16 ? value.Substring(0, 16) : value;
         }
 
         //Creates the temporary menu styles once, instead of allocating them every frame.
