@@ -466,18 +466,24 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6a78ef7b6a144d5a953d5396cf211c05, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  width: 18
-  height: 18
+  width: 25
+  height: 25
   tileWidth: 1.2
   tileHeight: 0.6
   tileDepth: 0.28
   floorColor: {r: 0.02, g: 0.02, b: 0.02, a: 1}
   alternateFloorColor: {r: 0.08, g: 0.08, b: 0.08, a: 1}
+  hallwayFloorColor: {r: 0.52, g: 0.59, b: 0.58, a: 1}
+  secondaryFloorColor: {r: 0.36, g: 0.43, b: 0.48, a: 1}
   rightSideColor: {r: 0.16, g: 0.16, b: 0.16, a: 1}
   leftSideColor: {r: 0.1, g: 0.1, b: 0.1, a: 1}
   generateOnStart: 1
+  useSchoolLayout: 1
+  useFixedSeed: 0
+  fixedSeed: 0
   floorTilePrefab: {fileID: 1877436113, guid: 079ada1107f54d908eea5bcb6018c07c, type: 3}
   hasExit: 0
+  exitDoorAllowed: 1
   exitGridPosition: {x: 9, y: 0}
   exitColor: {r: 0.2, g: 0.75, b: 0.35, a: 1}
   nearWallFadedAlpha: 0.15
@@ -718,6 +724,7 @@ MonoBehaviour:
   includeEnemyTurn: 0
   enemyTurnName: Enemy
   showTurnDisplay: 1
+  showEndTurnButton: 0
   currentTurnOwner: 0
   currentPlayerIndex: 0
   turnNumber: 1
@@ -760,6 +767,61 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 01cfff2c6f7624f0a93e95ade9b6b5dd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Battle.KeyStealBattleController
+--- !u!1 &1200000030
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1200000031}
+  - component: {fileID: 1200000032}
+  m_Layer: 0
+  m_Name: Item Bar
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1200000031
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1200000030}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1200000032
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1200000030}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 60386d4cff014c36987c51a67d698fba, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  slotCount: 1
+  slotSize: 64
+  slotSpacing: 8
+  bottomMargin: 16
+  anchor: 0
+  sideMargin: 16
+  title: 
+  popupSeconds: 2.5
+  panelColor: {r: 0, g: 0, b: 0, a: 0.65}
+  slotColor: {r: 1, g: 1, b: 1, a: 0.12}
+  highlightColor: {r: 1, g: 0.85, b: 0.2, a: 1}
 --- !u!1 &1751425146
 GameObject:
   m_ObjectHideFlags: 0
@@ -861,58 +923,6 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
---- !u!1 &1200000030
-GameObject:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  serializedVersion: 6
-  m_Component:
-  - component: {fileID: 1200000031}
-  - component: {fileID: 1200000032}
-  m_Layer: 0
-  m_Name: Item Bar
-  m_TagString: Untagged
-  m_Icon: {fileID: 0}
-  m_NavMeshLayer: 0
-  m_StaticEditorFlags: 0
-  m_IsActive: 1
---- !u!4 &1200000031
-Transform:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1200000030}
-  serializedVersion: 2
-  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 0, z: 0}
-  m_LocalScale: {x: 1, y: 1, z: 1}
-  m_ConstrainProportionsScale: 0
-  m_Children: []
-  m_Father: {fileID: 0}
-  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
---- !u!114 &1200000032
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1200000030}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 60386d4cff014c36987c51a67d698fba, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
-  slotCount: 1
-  slotSize: 64
-  slotSpacing: 8
-  bottomMargin: 16
-  popupSeconds: 2.5
-  panelColor: {r: 0, g: 0, b: 0, a: 0.65}
-  slotColor: {r: 1, g: 1, b: 1, a: 0.12}
-  highlightColor: {r: 1, g: 0.85, b: 0.2, a: 1}
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0

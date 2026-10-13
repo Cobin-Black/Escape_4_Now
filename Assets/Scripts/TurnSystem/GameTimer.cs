@@ -52,15 +52,15 @@ namespace Escape4Now.TurnSystem
         }
 
         //Displays the remaining game time on screen.
-        private void OnGUI()
-        {
-            int minutes = Mathf.FloorToInt(timeRemaining / 60f);
-            int seconds = Mathf.FloorToInt(timeRemaining % 60f);
+        //private void OnGUI()
+        //{
+            //int minutes = Mathf.FloorToInt(timeRemaining / 60f);
+            //int seconds = Mathf.FloorToInt(timeRemaining % 60f);
 
-            GUI.Label(
-                new Rect(Screen.width - 156f, 100f, 140f, 30f),
-                $"Time: {minutes:00}:{seconds:00}"
-            );
+            //GUI.Label(
+            //    new Rect(Screen.width - 156f, 100f, 140f, 30f),
+            //    $"Time: {minutes:00}:{seconds:00}"
+            //);
         }
     }
-}
+
