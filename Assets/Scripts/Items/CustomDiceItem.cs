@@ -146,6 +146,47 @@ namespace Escape4Now.Items
             Debug.Log($"Custom Dice selection: {selectedNumber}");
         }
 
+        // Displays the number-selection screen while using Custom Dice.
+        private void OnGUI()
+        {
+            if (!isSelecting)
+                return;
+
+            float width = 320f;
+            float height = 220f;
+
+            Rect panel = new Rect(
+                (Screen.width - width) / 2f,
+                (Screen.height - height) / 2f,
+                width,
+                height);
+
+            GUI.Box(panel, "");
+
+            GUILayout.BeginArea(new Rect(
+                panel.x + 20f,
+                panel.y + 20f,
+                panel.width - 40f,
+                panel.height - 40f));
+
+            GUILayout.Label("CUSTOM DICE");
+            GUILayout.Space(15f);
+            GUILayout.Label("Choose your number:");
+
+            GUIStyle numberStyle = new GUIStyle(GUI.skin.label);
+            numberStyle.fontSize = 48;
+            numberStyle.alignment = TextAnchor.MiddleCenter;
+            numberStyle.fontStyle = FontStyle.Bold;
+
+            GUILayout.Label(selectedNumber.ToString(), numberStyle);
+
+            GUILayout.Space(10f);
+            GUILayout.Label("Use Left/Right to change the number.");
+            GUILayout.Label("Press E to confirm.");
+
+            GUILayout.EndArea();
+        }
+
         //Handles Item Option Select (left/right) and Use Item input while the player is choosing a number.
         private void Update()
         {
