@@ -7,7 +7,7 @@ namespace Escape4Now.Items
         // Adds the key to the player's inventory.
         public override bool Collect(PlayerInventory inventory)
         {
-            return inventory.AddKey(this);
+            return inventory != null && inventory.AddKey(this);
         }
 
         // Does nothing when the key is used.
@@ -21,12 +21,12 @@ namespace Escape4Now.Items
             return false;
         }
 
-        // Collects the key and moves it off-screen.
+        //Hides the collected key so it is not sent as a floor pickup.
         public override void PickUp(PlayerInventory inventory)
         {
             if (Collect(inventory))
             {
-                transform.position = new Vector3(0f, -100f, 0f);
+                gameObject.SetActive(false);
             }
         }
     }

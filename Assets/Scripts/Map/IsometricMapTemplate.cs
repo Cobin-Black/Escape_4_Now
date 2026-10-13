@@ -14,19 +14,21 @@ namespace Escape4Now.Map
         [SerializeField, Min(0f)] private float tileDepth = 0.28f;
         [SerializeField] private Color floorColor = new Color(0.02f, 0.02f, 0.02f, 1f);
         [SerializeField] private Color alternateFloorColor = new Color(0.08f, 0.08f, 0.08f, 1f);
+        [SerializeField] private Color hallwayFloorColor = new Color(0.52f, 0.59f, 0.58f);
+        [SerializeField] private Color secondaryFloorColor = new Color(0.36f, 0.43f, 0.48f);
         [SerializeField] private Color rightSideColor = new Color(0.16f, 0.16f, 0.16f, 1f);
         [SerializeField] private Color leftSideColor = new Color(0.1f, 0.1f, 0.1f, 1f);
         [SerializeField] private bool generateOnStart = true;
-        //Off draws the basic open checkerboard with only the outside wall, such as for the tutorial.
         [SerializeField] private bool useSchoolLayout = true;
+        //Leave this off for normal games. A fixed seed repeats a map when testing.
+        [SerializeField] private bool useFixedSeed;
+        [SerializeField] private int fixedSeed;
         //A prefab is a reusable template. The map makes a copy for each grid space.
         [SerializeField] private IsometricMapTile floorTilePrefab;
 
         //Exit placement and how much the front walls fade when a player stands behind them.
         [SerializeField] private bool hasExit = false;
-        //False when a tutorial section has turned the exit off, so no door is added.
-        private bool exitDoorAllowed = true;
-        //Border tile the tutorial asked for the door to use, if any.
+        [SerializeField] private bool exitDoorAllowed = true;
         private Vector2Int? requestedExitCell;
         [SerializeField] private Vector2Int exitGridPosition = new Vector2Int(9, 0);
         [SerializeField] private Color exitColor = new Color(0.2f, 0.75f, 0.35f);
@@ -37,6 +39,8 @@ namespace Escape4Now.Map
         private int screenWidth;
         private int screenHeight;
         private SchoolMapLayout layout;
+        private SchoolFurniturePlan furniturePlan;
+        private readonly Dictionary<SchoolFurnitureKind, SchoolFurniture> furniturePrefabs = new Dictionary<SchoolFurnitureKind, SchoolFurniture>();
 
         //Generated tiles by grid address and which addresses currently hold a player.
         private readonly Dictionary<Vector2Int, IsometricMapTile> tileLookup = new Dictionary<Vector2Int, IsometricMapTile>();
@@ -54,42 +58,104 @@ namespace Escape4Now.Map
         public float TileWidth => tileWidth;
         public float TileHeight => tileHeight;
 
-        //Turns the exit on or off, such as for a tutorial section. Call before the map is built.
-        //Turning it off also stops the exit door from being added once the map is ready.
-        public void SetHasExit(bool exitEnabled)
-        {
-            hasExit = exitEnabled;
-            exitDoorAllowed = exitEnabled;
-        }
-
-        //Asks for the exit door on this border tile instead of a random one. Call before the map is built.
-        public void SetExitPosition(Vector2Int cell)
-        {
-            exitGridPosition = cell;
-            requestedExitCell = cell;
-            ValidateSettings();
-        }
-
         //Shares read-only room bounds and themes with other systems.
-        public IReadOnlyList<SchoolRoom> Rooms { get { PrepareLayout(); return useSchoolLayout ? layout.Rooms : NoRooms; } }
-        private static readonly List<SchoolRoom> NoRooms = new List<SchoolRoom>();
         public bool UsesSchoolLayout => useSchoolLayout;
+        public IReadOnlyList<SchoolRoom> Rooms { get { if (!useSchoolLayout) return System.Array.Empty<SchoolRoom>(); PrepareLayout(); return layout.Rooms; } }
         public int LayoutSeed { get { PrepareLayout(); return layout.Seed; } }
+        public IReadOnlyList<SchoolSecondarySpace> SecondarySpaces { get { if (!useSchoolLayout) return System.Array.Empty<SchoolSecondarySpace>(); PrepareLayout(); return layout.SecondarySpaces; } }
+        public bool ExitReady => hasExit;
+        public Vector2Int ExitPosition => exitGridPosition;
+
+        public void SetHasExit(bool value) { exitDoorAllowed = value; hasExit = false; }
+        public void SetExitPosition(Vector2Int cell) { requestedExitCell = cell; }
+
+        //Clients draw the host's layout instead of choosing another random map.
+        public void UseNetworkLayout(int seed)
+        {
+            ValidateSettings();
+            useSchoolLayout = true;
+            hasExit = false;
+            layout = new SchoolMapLayout(seed);
+            PrepareFurniture();
+        }
 
         //Creates grid data before player placement. Drawing later uses this same layout.
         public void PrepareLayout()
         {
-            if (layout != null) return;
+            if (layout != null)
+            {
+                if (furniturePlan == null) PrepareFurniture();
+                return;
+            }
             ValidateSettings();
-            layout = new SchoolMapLayout(System.Guid.NewGuid().GetHashCode());
+            layout = new SchoolMapLayout(useFixedSeed ? fixedSeed : System.Guid.NewGuid().GetHashCode());
+            if (!useSchoolLayout) return;
+            PrepareFurniture();
+        }
+
+        //Loads local prefab assets and reserves furniture before players, items, and events start.
+        private void PrepareFurniture()
+        {
+            if (furniturePlan != null)
+                foreach (SchoolFurniturePlacement item in furniturePlan.Furniture)
+                    blockedPositions.Remove(new Vector2Int(item.Cell % Width, item.Cell / Width));
+            furniturePlan = null;
+            furniturePrefabs.Clear();
+            if (!useSchoolLayout) return;
+            foreach (SchoolFurniture prefab in Resources.LoadAll<SchoolFurniture>("SchoolObstacles"))
+            {
+                if (prefab == null || !prefab.IsValidTemplate() || furniturePrefabs.ContainsKey(prefab.Kind))
+                    throw new System.InvalidOperationException("A school furniture prefab is invalid or duplicated.");
+                furniturePrefabs.Add(prefab.Kind, prefab);
+            }
+            foreach (SchoolFurnitureKind kind in System.Enum.GetValues(typeof(SchoolFurnitureKind)))
+                if (!furniturePrefabs.ContainsKey(kind))
+                    throw new System.InvalidOperationException("Missing school furniture prefab: " + kind);
+            furniturePlan = new SchoolFurniturePlan(layout);
+            foreach (SchoolFurniturePlacement item in furniturePlan.Furniture)
+                blockedPositions.Add(new Vector2Int(item.Cell % Width, item.Cell / Width));
+        }
+
+        //Other spawners leave these floor tiles clear for the special-room rewards.
+        public IReadOnlyList<int> SpecialItemCells { get { if (!useSchoolLayout) return System.Array.Empty<int>(); PrepareLayout(); return furniturePlan.SpecialItems; } }
+
+        public bool IsSpecialItemTile(Vector2Int cell)
+        {
+            foreach (int address in SpecialItemCells)
+                if (address % Width == cell.x && address / Width == cell.y) return true;
+            return false;
+        }
+
+        //The shuffled room order assigns each player a different room and reserved start.
+        public bool TryGetPlayerSpawn(int playerIndex, out Vector2Int cell)
+        {
+            PrepareLayout();
+            cell = default;
+            if (!useSchoolLayout || furniturePlan == null) return false;
+            if (playerIndex < 0 || playerIndex >= furniturePlan.Spawns.Count) return false;
+            int address = furniturePlan.Spawns[playerIndex];
+            cell = new Vector2Int(address % Width, address / Width);
+            return IsWalkable(cell) && !IsOccupied(cell);
+        }
+
+        //Rebuilding the tile view also recreates its prefab copies without changing placement.
+        private void DrawFurniture()
+        {
+            if (!useSchoolLayout || furniturePlan == null) return;
+            foreach (SchoolFurniturePlacement item in furniturePlan.Furniture)
+            {
+                var cell = new Vector2Int(item.Cell % Width, item.Cell / Width);
+                SchoolFurniture copy = Instantiate(furniturePrefabs[item.Kind], tileLookup[cell].transform);
+                copy.name = item.Kind.ToString();
+                copy.Build(this, cell, item.Facing);
+            }
         }
 
         //Reports the base floor or wall without adding any gameplay objects.
         public SchoolTileType GetTileType(Vector2Int cell)
         {
             PrepareLayout();
-            if (!useSchoolLayout)
-                return IsInsideMap(cell) && !IsBorder(cell) ? SchoolTileType.Floor : SchoolTileType.Wall;
+            if (!useSchoolLayout) return IsInsideMap(cell) && !IsBorder(cell) ? SchoolTileType.Floor : SchoolTileType.Wall;
             return layout.GetTile(cell.x, cell.y);
         }
 
@@ -116,6 +182,64 @@ namespace Escape4Now.Map
             return cells;
         }
 
+        //Lists free tiles inside one school room without changing the map.
+        public List<Vector2Int> GetAvailableRoomTiles(SchoolRoomType room, ISet<Vector2Int> reserved = null)
+        {
+            var cells = GetAvailableFloorTiles(reserved);
+            cells.RemoveAll(cell => room == SchoolRoomType.None || GetRoomType(cell) != room);
+            return cells;
+        }
+
+        //Lets future decorations distinguish hallway floor and small school spaces.
+        public bool IsHallway(Vector2Int cell)
+        { PrepareLayout(); return useSchoolLayout && layout.IsHallway(cell.x, cell.y); }
+
+        //Uses the same wall-facing rule for lockers placed after the room obstacles.
+        public Escape4Now.Obstacles.ObstacleFacing GetObstacleFacing(Vector2Int cell)
+        {
+            PrepareLayout();
+            if (!IsInteriorFloor(cell)) throw new System.ArgumentOutOfRangeException(nameof(cell));
+            var blocked = new HashSet<int>();
+            foreach (Vector2Int position in blockedPositions) blocked.Add(position.y * Width + position.x);
+            if (!useSchoolLayout) return Escape4Now.Obstacles.ObstacleFacing.North;
+            return Escape4Now.Obstacles.ObstacleOrientation.Choose(layout, cell.y * Width + cell.x, blocked);
+        }
+
+        //Lockers sit along hallway walls, leaving door approaches clear.
+        public bool IsLockerPosition(Vector2Int cell)
+        {
+            if (!IsHallway(cell)) return false;
+            Vector2Int[] steps = { Vector2Int.right, Vector2Int.up, Vector2Int.left, Vector2Int.down };
+            bool besideWall = false;
+            foreach (Vector2Int step in steps)
+                if (layout.GetTile(cell.x + step.x, cell.y + step.y) == SchoolTileType.Wall) besideWall = true;
+            if (!besideWall) return false;
+            for (int y = cell.y - 2; y <= cell.y + 2; y++)
+                for (int x = cell.x - 2; x <= cell.x + 2; x++)
+                {
+                    if (Mathf.Abs(x - cell.x) + Mathf.Abs(y - cell.y) > 2) continue;
+                    foreach (Vector2Int step in steps)
+                        if (layout.IsDoorFacing(x, y, step.x, step.y)) return false;
+                }
+            return true;
+        }
+
+        //Small secondary spaces do not change the existing four main room types.
+        public SchoolSpaceType GetSpaceType(Vector2Int cell)
+        { PrepareLayout(); return useSchoolLayout ? layout.GetSpaceType(cell.x, cell.y) : SchoolSpaceType.None; }
+
+        //Returns non-walkable wall anchors; future models must stay within those tiles.
+        public List<Vector2Int> GetHallwayDecorationWalls()
+        {
+            PrepareLayout();
+            var cells = new List<Vector2Int>();
+            for (int y = 1; y < Height - 1; y++)
+                for (int x = 1; x < Width - 1; x++)
+                    if (!IsExit(new Vector2Int(x, y)) && layout.IsHallwayDecorationWall(x, y))
+                        cells.Add(new Vector2Int(x, y));
+            return cells;
+        }
+
         //Fails cleanly when every valid floor tile has already been taken.
         public bool TryGetRandomFloor(out Vector2Int cell, ISet<Vector2Int> reserved = null)
         {
@@ -129,6 +253,7 @@ namespace Escape4Now.Map
         //Creates the tiles when Play mode starts, not while editing the scene.
         private System.Collections.IEnumerator Start()
         {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) yield break;
             if (generateOnStart)
             {
                 GenerateBlankMap();
@@ -163,10 +288,15 @@ namespace Escape4Now.Map
                     if (!hasItem && tileLookup.ContainsKey(cell)) candidates.Add(cell);
                 }
             if (candidates.Count == 0) return;
-            //Use the requested tile when it is a valid door spot, otherwise pick one at random.
             Vector2Int chosen = requestedExitCell.HasValue && candidates.Contains(requestedExitCell.Value)
-                ? requestedExitCell.Value
-                : candidates[Random.Range(0, candidates.Count)];
+                ? requestedExitCell.Value : candidates[Random.Range(0, candidates.Count)];
+            PlaceNetworkExit(chosen);
+        }
+
+        //Uses the same door drawing for the host and its connected players.
+        public void PlaceNetworkExit(Vector2Int chosen)
+        {
+            if (!IsInsideMap(chosen) || !IsBorder(chosen) || !tileLookup.ContainsKey(chosen)) return;
             exitGridPosition = chosen;
             hasExit = true;
             Transform tile = tileLookup[chosen].transform;
@@ -373,6 +503,15 @@ namespace Escape4Now.Map
             OccupantsChanged?.Invoke();
         }
 
+        //Network snapshots replace all player positions together, including position swaps.
+        internal void ReplacePlayerOccupants(IReadOnlyList<Vector2Int> cells)
+        {
+            occupiedPositions.Clear();
+            foreach (Vector2Int cell in cells) occupiedPositions.Add(cell);
+            RefreshNearWallVisibility();
+            OccupantsChanged?.Invoke();
+        }
+
         //Stops tracking a player, such as when it is destroyed.
         public void RemoveOccupant(Vector2Int position)
         {
@@ -482,34 +621,9 @@ namespace Escape4Now.Map
                     CreateTile(new Vector2Int(x, y));
                 }
             }
-            AddRoomLabels();
+            DrawFurniture();
             RefreshNearWallVisibility();
             FitCamera();
-        }
-
-        //Labels the four areas without adding furniture or gameplay rules.
-        private void AddRoomLabels()
-        {
-            foreach (SchoolRoom room in Rooms)
-            {
-                var center = new Vector2Int(room.CenterX, room.CenterY);
-                var labelObject = new GameObject("Room Label");
-                labelObject.transform.SetParent(tileLookup[center].transform, false);
-                labelObject.transform.localPosition = new Vector3(0f, -0.35f, -0.1f);
-                TextMesh label = labelObject.AddComponent<TextMesh>();
-                label.text = room.Type == SchoolRoomType.ComputerLab ? "COMPUTER LAB"
-                    : room.Type == SchoolRoomType.ScienceLab ? "SCIENCE LAB" : room.Type.ToString().ToUpperInvariant();
-                label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-                label.fontSize = 40;
-                label.characterSize = 0.09f;
-                label.anchor = TextAnchor.MiddleCenter;
-                label.alignment = TextAlignment.Center;
-                label.color = Color.Lerp(RoomColor(room.Type), Color.white, 0.65f);
-                MeshRenderer renderer = labelObject.GetComponent<MeshRenderer>();
-                if (label.font != null) renderer.sharedMaterial = label.font.material;
-                //Area names stay readable over the low wall blocks.
-                renderer.sortingOrder = 1000;
-            }
         }
 
         //Gives each school area a quiet identifying floor color.
@@ -582,9 +696,11 @@ namespace Escape4Now.Map
         //Adds an open door at a room entrance. It has no collider or opening rules.
         private void AddVisualDoor(Transform tile, Vector2Int cell)
         {
+            if (!useSchoolLayout) return;
             if (GetTileType(cell) != SchoolTileType.Floor || GetRoomType(cell) != SchoolRoomType.None) return;
             foreach (Vector2Int direction in new[] { Vector2Int.right, Vector2Int.up, Vector2Int.left, Vector2Int.down })
             {
+                if (!layout.IsDoorFacing(cell.x, cell.y, direction.x, direction.y)) continue;
                 if (GetRoomType(cell + direction) == SchoolRoomType.None) continue;
                 Vector2 across = new Vector2(-direction.y, direction.x);
                 bool alongX = direction.x != 0;
@@ -620,23 +736,25 @@ namespace Escape4Now.Map
             {
                 if (!IsBorder(cell))
                 {
+                    //A low solid infill makes sealed areas look intentional, not like missing floor.
+                    CreateBlock(tile, "Sealed wall base", Vector2.zero, 1f, 1f, 0f, 0.06f,
+                        new Color(0.15f, 0.17f, 0.18f), order - 1);
                     AddRoomWallEdges(tile, cell, order);
                     return;
                 }
                 // All borders use the same low height to keep the floor visible.
                 const float wallHeight = 0.22f;
-                //The basic map keeps its original light gray wall.
                 Renderer wall = CreateBlock(tile, "Wall", Vector2.zero, 0.98f, 0.98f, 0f, wallHeight,
-                    useSchoolLayout ? new Color(0.18f, 0.22f, 0.21f) : new Color(0.33f, 0.36f, 0.37f), order);
+                    new Color(0.18f, 0.22f, 0.21f), order);
                 Renderer wallCap = CreateBlock(tile, "Wall cap", Vector2.zero, 1f, 1f, wallHeight, 0.06f,
-                    useSchoolLayout ? new Color(0.28f, 0.32f, 0.3f) : new Color(0.48f, 0.5f, 0.49f), order + 1);
+                    new Color(0.28f, 0.32f, 0.3f), order + 1);
 
                 //Room walls can also stand in front of a player.
                 mapTile.SetWallRenderers(wall, wallCap);
             }
         }
 
-        //Only raises the edges next to a floor, leaving unused areas flat and dark.
+        //Raises the edges around walkable areas and leaves sealed wall bases behind them.
         private void AddRoomWallEdges(Transform tile, Vector2Int cell, int order)
         {
             foreach (Vector2Int direction in new[] { Vector2Int.right, Vector2Int.up, Vector2Int.left, Vector2Int.down })
@@ -653,8 +771,17 @@ namespace Escape4Now.Map
         }
 
         //Makes a raised block from triangles, with darker sides to show its depth.
-        private Renderer CreateBlock(Transform parent, string label, Vector2 offset, float sizeX,
+        internal Renderer CreateBlock(Transform parent, string label, Vector2 offset, float sizeX,
             float sizeY, float bottom, float blockHeight, Color color, int order)
+        {
+            return CreateBlock(parent, label, offset, sizeX, sizeY, bottom, blockHeight, color,
+                order, tileWidth, tileHeight, CreateTileMaterial());
+        }
+
+        //Editor previews use the same shape without needing a live map or saved mesh.
+        internal static Renderer CreateBlock(Transform parent, string label, Vector2 offset, float sizeX,
+            float sizeY, float bottom, float blockHeight, Color color, int order,
+            float tileWidth, float tileHeight, Material material, HideFlags flags = HideFlags.None)
         {
             Vector3 x = new Vector3(tileWidth * 0.5f, tileHeight * 0.5f, 0f);
             Vector3 y = new Vector3(-tileWidth * 0.5f, tileHeight * 0.5f, 0f);
@@ -669,17 +796,18 @@ namespace Escape4Now.Map
             right.a = left.a = 1f;
             Mesh mesh = new Mesh
             {
+                hideFlags = flags,
                 vertices = new[] { a + up, b + up, c + up, d + up,
                     b + up, b, c, c + up, c + up, c, d, d + up },
                 triangles = new[] { 0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11 },
                 colors = new[] { color, color, color, color, right, right, right, right, left, left, left, left }
             };
             mesh.RecalculateBounds();
-            GameObject block = new GameObject(label);
+            GameObject block = new GameObject(label) { hideFlags = flags };
             block.transform.SetParent(parent, false);
             block.AddComponent<MeshFilter>().sharedMesh = mesh;
             MeshRenderer renderer = block.AddComponent<MeshRenderer>();
-            renderer.sharedMaterial = CreateTileMaterial();
+            renderer.sharedMaterial = material;
             renderer.sortingOrder = order;
             return renderer;
         }
@@ -716,13 +844,16 @@ namespace Escape4Now.Map
         private Mesh CreateTileMesh(Vector2Int gridPosition)
         {
             Color topColor = (gridPosition.x + gridPosition.y) % 2 == 0 ? floorColor : alternateFloorColor;
-            if (GetTileType(gridPosition) == SchoolTileType.Wall && useSchoolLayout)
+                if (GetTileType(gridPosition) == SchoolTileType.Wall)
                 topColor = new Color(0.045f, 0.05f, 0.055f);
             if (IsExit(gridPosition)) topColor = RoomColor(SchoolRoomType.None);
-            if (GetTileType(gridPosition) == SchoolTileType.Floor && useSchoolLayout)
+            if (GetTileType(gridPosition) == SchoolTileType.Floor)
             {
-                topColor = RoomColor(GetRoomType(gridPosition));
-                if ((gridPosition.x + gridPosition.y) % 2 == 0) topColor *= 0.86f;
+                topColor = useSchoolLayout ? RoomColor(GetRoomType(gridPosition)) : ((gridPosition.x + gridPosition.y) % 2 == 0 ? floorColor : alternateFloorColor);
+                if (useSchoolLayout && layout.IsHallway(gridPosition.x, gridPosition.y)) topColor = hallwayFloorColor;
+                else if (useSchoolLayout && layout.GetSpaceType(gridPosition.x, gridPosition.y) != SchoolSpaceType.None) topColor = secondaryFloorColor;
+                if ((gridPosition.x + gridPosition.y) % 2 == 0)
+                    topColor *= GetRoomType(gridPosition) == SchoolRoomType.None ? 0.94f : 0.86f;
                 topColor.a = 1f;
             }
             List<int> faces = new List<int> { 0, 1, 2, 0, 2, 3 };

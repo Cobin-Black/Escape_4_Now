@@ -112,10 +112,11 @@ MonoBehaviour:
   footprintWidth: 0.493
   footprintDepth: 0.563
   obstacleHeight: 0.7
-  topColor: {r: 1, g: 0, b: 0.036886215, a: 1}
-  frontFaceColor: {r: 0.55, g: 0.45, b: 0.32, a: 1}
+  topColor: {r: 0.25, g: 0.48, b: 0.7, a: 1}
+  frontFaceColor: {r: 0.25, g: 0.48, b: 0.7, a: 1}
   rightSideShade: 0.7
   leftSideShade: 0.48
+  lockerDetails: 1
   facing: 3
   sortingOrder: 380
 --- !u!114 &8008263496219192108
@@ -198,4 +199,4 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: dd356d89c42f4df4a1d9643b8678d19b, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Obstacles.ObstacleStorage
-  storedItemPrefab: {fileID: 8324686912643164936, guid: 48deafd2bac804dee8759ec5b673b47b, type: 3}
+  storedItemPrefab: {fileID: 0}

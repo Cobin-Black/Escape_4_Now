@@ -6,7 +6,6 @@ using UnityEngine.InputSystem;
 namespace Escape4Now.Obstacles
 {
     //Holds one item inside an interactable obstacle and shows a simple menu when a player next to it presses Interact.
-    [RequireComponent(typeof(ObstacleGridControl))]
     public sealed class ObstacleStorage : MonoBehaviour
     {
         //Item prefab stored inside. Empty means nothing is left in the obstacle.
@@ -17,16 +16,19 @@ namespace Escape4Now.Obstacles
         private static int lastMenuChangeFrame = -1;
 
         private ObstacleGridControl gridControl;
+        private Escape4Now.Map.SchoolFurniture furniture;
         private PlayerCharacter[] players;
         private PlayerCharacter viewingPlayer;
         private InputAction interactAction;
         private GUIStyle menuTextStyle;
-        private GUIStyle menuTitleStyle;
+        private bool networkHasItem;
 
         //Read-only contents for other scripts.
         public Item StoredItemPrefab => storedItemPrefab;
-        public bool HasItem => storedItemPrefab != null;
+        public bool HasItem => Escape4Now.Multiplayer.LanMultiplayerSession.IsClient ? networkHasItem : storedItemPrefab != null;
         public bool IsMenuOpen => openStorage == this;
+        public Vector2Int GridPosition => gridControl != null ? gridControl.GridPosition : furniture != null ? furniture.Cell : new Vector2Int(-1, -1);
+        public bool CanInteract => gridControl != null ? gridControl.IsInteractable : furniture != null;
 
         //Clears the shared menu state when Play mode starts, even if the editor skips reloading scripts.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -40,6 +42,7 @@ namespace Escape4Now.Obstacles
         private void Awake()
         {
             gridControl = GetComponent<ObstacleGridControl>();
+            furniture = GetComponent<Escape4Now.Map.SchoolFurniture>();
             interactAction = InputSystem.actions != null ? InputSystem.actions.FindAction("Player/Interact") : null;
 
             if (interactAction == null)
@@ -66,9 +69,24 @@ namespace Escape4Now.Obstacles
             storedItemPrefab = itemPrefab;
         }
 
+        //Stores an item only when this obstacle is empty.
+        public bool TryStoreItem(Item itemPrefab)
+        {
+            if (itemPrefab == null || HasItem) return false;
+            storedItemPrefab = itemPrefab;
+            return true;
+        }
+
+        //Guests see whether storage is empty; only the host gives out real items.
+        public void ApplyNetworkContents(bool hasItem)
+        {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) networkHasItem = hasItem;
+        }
+
         //Opens, takes from, or closes the menu on the Interact action.
         private void Update()
         {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.Active) return;
             if (IsMenuOpen && !CanKeepMenuOpen())
             {
                 CloseMenu();
@@ -92,7 +110,7 @@ namespace Escape4Now.Obstacles
                 return;
             }
 
-            if (openStorage != null || gridControl == null || !gridControl.IsInteractable)
+            if (openStorage != null || !CanInteract)
             {
                 return;
             }
@@ -132,15 +150,29 @@ namespace Escape4Now.Obstacles
         //Checks the four tiles that share a side with this obstacle.
         private bool IsNextTo(Vector2Int cell)
         {
-            Vector2Int offset = cell - gridControl.GridPosition;
+            Vector2Int offset = cell - GridPosition;
             return Mathf.Abs(offset.x) + Mathf.Abs(offset.y) == 1;
+        }
+
+        //The host checks adjacency before giving a remote player the stored item.
+        public bool TakeNetworkItem(PlayerCharacter player)
+        {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient || player == null || !player.isActiveAndEnabled
+                || !player.IsCurrentTurn || player.IsMoving || player.HasReachedExit
+                || player.IsUsingItem() || player.IsInMenu() || !CanInteract
+                || !IsNextTo(player.GridPosition)
+                || player.Inventory == null || !HasItem
+                || (storedItemPrefab is KeyItem ? player.Inventory.HasKey() : player.Inventory.IsFull)) return false;
+            OpenMenu(player);
+            TakeItemOrClose();
+            return true;
         }
 
         //Keeps the menu open only while its player is still next to the obstacle on their own turn.
         private bool CanKeepMenuOpen()
         {
             return viewingPlayer != null && viewingPlayer.isActiveAndEnabled && viewingPlayer.IsCurrentTurn
-                && gridControl != null && gridControl.IsInteractable && IsNextTo(viewingPlayer.GridPosition);
+                && CanInteract && IsNextTo(viewingPlayer.GridPosition);
         }
 
         //Shows the contents and pauses the player's other controls.
@@ -176,14 +208,14 @@ namespace Escape4Now.Obstacles
             PlayerInventory inventory = viewingPlayer.Inventory;
             bool isKey = storedItemPrefab is KeyItem;
 
-            if (HasItem && inventory != null && (isKey || !inventory.IsFull))
+            if (HasItem && inventory != null && (isKey ? !inventory.HasKey() : !inventory.IsFull))
             {
                 //The obstacle only stores the prefab, so a real copy is made at the moment it is taken.
                 Item item = Instantiate(storedItemPrefab, transform.position, Quaternion.identity, transform.parent);
                 item.PickUp(inventory);
 
 
-                bool wasTaken = isKey ? inventory.HasKey() : inventory.HasItem(item);
+                bool wasTaken = isKey ? inventory.HasKey() && inventory.KeyItems[0] == item : inventory.HasItem(item);
 
                 if (wasTaken)
                 {
@@ -219,25 +251,10 @@ namespace Escape4Now.Obstacles
                 menuTextStyle.normal.textColor = Color.white;
             }
 
-            //Scales the menu with the window size, like the rest of the HUD.
-            Matrix4x4 oldMatrix = Escape4Now.UI.HudScale.Apply();
             const float menuWidth = 360f;
             const float menuHeight = 180f;
-            Rect menuRect = new Rect((Escape4Now.UI.HudScale.Width - menuWidth) * 0.5f, (Escape4Now.UI.HudScale.Height - menuHeight) * 0.5f, menuWidth, menuHeight);
-
-            //Dark panel with a light border and the obstacle's name as a header.
-            Color oldColor = GUI.color;
-            GUI.color = new Color(0.5f, 0.77f, 1f, 1f);
-            GUI.DrawTexture(new Rect(menuRect.x - 2f, menuRect.y - 2f, menuRect.width + 4f, menuRect.height + 4f), Texture2D.whiteTexture);
-            GUI.color = new Color(0.02f, 0.04f, 0.08f, 0.96f);
-            GUI.DrawTexture(menuRect, Texture2D.whiteTexture);
-            GUI.color = oldColor;
-            if (menuTitleStyle == null)
-            {
-                menuTitleStyle = new GUIStyle(GUI.skin.label) { fontSize = 14, fontStyle = FontStyle.Bold, alignment = TextAnchor.MiddleCenter };
-                menuTitleStyle.normal.textColor = new Color(0.65f, 0.85f, 1f);
-            }
-            GUI.Label(new Rect(menuRect.x, menuRect.y + 6f, menuRect.width, 22f), name.ToUpper(), menuTitleStyle);
+            Rect menuRect = new Rect((Screen.width - menuWidth) * 0.5f, (Screen.height - menuHeight) * 0.5f, menuWidth, menuHeight);
+            GUI.Box(menuRect, name);
 
             string key = interactAction != null ? interactAction.GetBindingDisplayString() : "Interact";
             string body;
@@ -251,14 +268,13 @@ namespace Escape4Now.Obstacles
                 string description = string.IsNullOrEmpty(storedItemPrefab.Description) ? "" : $"\n{storedItemPrefab.Description}";
                 PlayerInventory inventory = viewingPlayer != null ? viewingPlayer.Inventory : null;
                 bool isKey = storedItemPrefab is KeyItem;
-                string action = inventory != null && (isKey || !inventory.IsFull)
+                string action = inventory != null && (isKey ? !inventory.HasKey() : !inventory.IsFull)
                     ? $"Press {key} to take it."
                     : $"You can only carry one item.\nPress {key} to close.";
                 body = $"Inside: {storedItemPrefab.ItemName}{description}\n\n{action}";
             }
 
-            GUI.Label(new Rect(menuRect.x + 16f, menuRect.y + 36f, menuWidth - 32f, menuHeight - 44f), body, menuTextStyle);
-            GUI.matrix = oldMatrix;
+            GUI.Label(new Rect(menuRect.x + 16f, menuRect.y + 32f, menuWidth - 32f, menuHeight - 40f), body, menuTextStyle);
         }
     }
 }

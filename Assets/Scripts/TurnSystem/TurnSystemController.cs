@@ -56,7 +56,17 @@ namespace Escape4Now.TurnSystem
         //Starts the scene on Player One's turn.
         private void Start()
         {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) return;
             RestartAtPlayerOne();
+        }
+
+        //Copies the host's turn label without starting another turn locally.
+        public void ApplyNetworkTurn(int index, int round)
+        {
+            currentPlayerIndex = index;
+            turnNumber = round;
+            currentTurnOwner = TurnOwner.Player;
+            RefreshCurrentTurnName();
         }
 
         //Keeps the selected player and turn count within valid limits.
@@ -88,7 +98,9 @@ namespace Escape4Now.TurnSystem
             if (Escape4Now.Multiplayer.LocalMultiplayerSession.AllowTurnButtons
                 && GUI.Button(new Rect(16f, 58f, 120f, 32f), "End Turn"))
             {
-                AdvanceTurn();
+                if (Escape4Now.Multiplayer.LanMultiplayerSession.Active)
+                    Escape4Now.Multiplayer.LanMultiplayerSession.Instance.Submit("end");
+                else AdvanceTurn();
             }
         }
 

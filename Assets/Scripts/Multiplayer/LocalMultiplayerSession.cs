@@ -20,12 +20,16 @@ namespace Escape4Now.Multiplayer
         private PlayerCharacter sourcePlayer;
         private PlayerCharacter[] participants;
         private int playerCount = 2;
+        private readonly string[] playerNames = { "Player 1", "Player 2", "Player 3", "Player 4" };
+        private LanMultiplayerSession lan;
+        public IReadOnlyList<PlayerCharacter> Participants => participants;
         private string status = "";
         private Vector2 setupScroll;
         private GUIStyle titleStyle, labelStyle, smallStyle, buttonStyle, selectedStyle, errorStyle;
         private Texture2D buttonTexture, hoverTexture, selectedTexture;
         public bool MatchStarted { get; private set; }
         public string Status => status;
+        public bool ShowTemporaryUI => showTemporaryUI;
 
         private static readonly Color[] PlayerColors =
         {
@@ -34,7 +38,8 @@ namespace Escape4Now.Multiplayer
         };
 
         //Turn controls are available once the shared-device match has started.
-        public static bool AllowTurnButtons => instance == null || instance.MatchStarted;
+        public static bool AllowTurnButtons => (instance == null || instance.MatchStarted)
+            && (!LanMultiplayerSession.Active || LanMultiplayerSession.Instance.IsMyTurn);
 
         //Clears the scene reference when another Play Mode run begins.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -52,13 +57,16 @@ namespace Escape4Now.Multiplayer
                 bool gameplay = script is IsometricMapTemplate || script is PlayerCharacter
                     || script is TurnSystemController || script is Escape4Now.Items.PlayerInventory
                     || script is MapEventController || script is Escape4Now.Items.ItemSpawner
-                    || script is Escape4Now.Obstacles.ObstacleSpawner || script is Escape4Now.UI.ItemPickupBar;
+                    || script is Escape4Now.Obstacles.ObstacleSpawner || script is Escape4Now.UI.ItemPickupBar
+                    || script is GameTimer || script is Escape4Now.Battle.KeyStealBattleController;
                 if (!gameplay || !script.enabled) continue;
                 heldScripts.Add(script);
                 script.enabled = false;
             }
             if (sourcePlayer != null)
                 foreach (Renderer renderer in sourcePlayer.GetComponentsInChildren<Renderer>()) renderer.enabled = false;
+            lan = gameObject.AddComponent<LanMultiplayerSession>();
+            lan.Initialize(this);
         }
 
         //A replacement UI can connect its player-count selector to this method.
@@ -73,22 +81,34 @@ namespace Escape4Now.Multiplayer
         //Places separate players on valid room floors before any other spawners start.
         public bool TryStartLocalMatch(int count)
         {
+            if (LanMultiplayerSession.Active) return false;
+            return CreateParticipants(count);
+        }
+
+        //The network session calls this after the lobby is ready.
+        internal bool StartNetworkMatch(int count) => CreateParticipants(count);
+
+        //Both play options share the same player setup.
+        private bool CreateParticipants(int count)
+        {
             if (MatchStarted) return false;
             if (count < 2 || count > 4)
             { status = "Choose two to four players."; return false; }
+            var usedNames = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            for (int i = 0; i < count; i++)
+                if (!usedNames.Add(GetPlayerName(i)))
+                { status = "Each player needs a different name."; return false; }
             if (map == null || turns == null || sourcePlayer == null || InputSystem.actions == null)
             { status = "The scene needs a map, player, turn system, and input actions."; return false; }
-            map.PrepareLayout();
+            try { map.PrepareLayout(); }
+            catch (System.InvalidOperationException error) { status = error.Message; return false; }
+            //The hidden scene template has not joined yet, so its old tile is not reserved.
+            map.RemoveOccupant(sourcePlayer.GridPosition);
             var cells = new List<Vector2Int>();
-            var reserved = new HashSet<Vector2Int>();
-            foreach (SchoolRoom room in map.Rooms)
+            for (int i = 0; i < count; i++)
             {
-                var center = new Vector2Int(room.CenterX, room.CenterY);
-                if (map.IsWalkable(center) && !map.IsOccupied(center) && reserved.Add(center)) cells.Add(center);
-                if (cells.Count == count) break;
+                if (map.TryGetPlayerSpawn(i, out Vector2Int cell)) cells.Add(cell);
             }
-            while (cells.Count < count && map.TryGetRandomFloor(out Vector2Int cell, reserved))
-            { cells.Add(cell); reserved.Add(cell); }
             if (cells.Count < count)
             { status = "There are not enough open spaces for the players."; return false; }
 
@@ -99,14 +119,21 @@ namespace Escape4Now.Multiplayer
             for (int i = 0; i < count; i++)
             {
                 PlayerCharacter player = participants[i];
-                player.ConfigureParticipant(map, turns, cells[i], i + 1, PlayerColors[i]);
+                player.ConfigureParticipant(map, turns, cells[i], i + 1, PlayerColors[i], GetPlayerName(i));
                 player.enabled = true;
                 if (player.Inventory != null) player.Inventory.enabled = true;
                 foreach (Renderer renderer in player.GetComponentsInChildren<Renderer>(true)) renderer.enabled = true;
             }
             turns.SetPlayers(participants);
             foreach (PlayerCharacter player in participants) player.gameObject.SetActive(true);
-            foreach (MonoBehaviour script in heldScripts) if (script != null) script.enabled = true;
+            foreach (MonoBehaviour script in heldScripts)
+            {
+                if (script == null) continue;
+                if (LanMultiplayerSession.IsClient && (script is Escape4Now.Items.ItemSpawner
+                    || script is Escape4Now.Obstacles.ObstacleSpawner)) continue;
+                script.enabled = true;
+            }
+            if (LanMultiplayerSession.IsClient) map.GenerateBlankMap();
             MatchStarted = true;
             status = "";
             Time.timeScale = 1f;
@@ -130,6 +157,9 @@ namespace Escape4Now.Multiplayer
             setupScroll = GUI.BeginScrollView(area, setupScroll, new Rect(0, 0, width - 20, 520));
             float contentWidth = width - 24;
             GUI.Label(new Rect(0, 0, contentWidth, 44), "Escape 4 Now", titleStyle);
+            GUI.enabled = !LanMultiplayerSession.Active && !lan.Connecting;
+            GUI.Toolbar(new Rect(0, 50, contentWidth, 32), 0, new[] { "Same Device" });
+            GUI.enabled = true;
             DrawSetupColor(new Rect(0, 90, contentWidth, 1), new Color(0.23f, 0.27f, 0.24f));
             GUI.Label(new Rect(0, 108, contentWidth, 24), "Players", labelStyle);
             float segmentWidth = (contentWidth - 16) / 3;
@@ -145,13 +175,27 @@ namespace Escape4Now.Multiplayer
                 bool playing = i < playerCount;
                 Color color = playing ? PlayerColors[i] : new Color(0.24f, 0.27f, 0.25f);
                 DrawSetupColor(new Rect(8, y + 4, 14, 26), color);
-                GUI.Label(new Rect(40, y, contentWidth - 170, 32), "Player " + (i + 1), playing ? labelStyle : smallStyle);
-                if (!playing) GUI.Label(new Rect(contentWidth - 110, y + 4, 110, 26), "Not playing", smallStyle);
+                if (playing)
+                {
+                    GUI.Label(new Rect(40, y, 48, 32), "Name", smallStyle);
+                    playerNames[i] = GUI.TextField(new Rect(92, y + 2, Mathf.Max(50, contentWidth - 100), 28),
+                        playerNames[i], 16, buttonStyle);
+                }
+                else GUI.Label(new Rect(40, y + 4, 110, 26), "Not playing", smallStyle);
                 DrawSetupColor(new Rect(0, y + 38, contentWidth, 1), new Color(0.16f, 0.19f, 0.17f));
             }
             if (GUI.Button(new Rect(0, 402, contentWidth, 48), "Start Match", selectedStyle)) StartLocalMatch();
             GUI.Label(new Rect(0, 464, contentWidth, 56), status, errorStyle);
             GUI.EndScrollView();
+        }
+
+        private string GetPlayerName(int index)
+        {
+            string value = index >= 0 && index < playerNames.Length ? playerNames[index] : null;
+            value = string.IsNullOrWhiteSpace(value) ? "Player " + (index + 1) : value.Trim();
+            value = value.Replace("<", "").Replace(">", "").Trim();
+            if (value.Length == 0) value = "Player " + (index + 1);
+            return value.Length > 16 ? value.Substring(0, 16) : value;
         }
 
         //Creates the temporary menu styles once, instead of allocating them every frame.
@@ -204,6 +248,7 @@ namespace Escape4Now.Multiplayer
         //A new match reloads the scene and gets a new school floor plan.
         public void ReturnToSetup()
         {
+            if (lan != null) lan.Disconnect();
             Time.timeScale = 1f;
             SceneManager.LoadScene(gameObject.scene.name);
         }

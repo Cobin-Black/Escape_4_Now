@@ -23,7 +23,8 @@ namespace Escape4Now.Items
         {
             Debug.Log("Key Stealer Use() was called.");
 
-            if (inventory == null)
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient || inventory == null
+                || inventory.Player == null || !inventory.Player.CanUseItem() || !inventory.HasItem(this))
             {
                 return;
             }
@@ -42,6 +43,9 @@ namespace Escape4Now.Items
                 {
                     continue;
                 }
+
+                //A successful direct action protects the victim until their next turn.
+                if (otherInventory.Player == null || !otherInventory.Player.CanBeTargetedBy(inventory.Player)) continue;
 
                 if (otherInventory.KeyItems.Count == 0)
                 {
@@ -77,6 +81,7 @@ namespace Escape4Now.Items
                 }
 
                 // Removes the Key Stealer item after successful use.
+                otherInventory.Player.RecordSuccessfulTargetedAction(inventory.Player);
                 inventory.RemoveItem(this);
 
                 string otherPlayerName = otherInventory.Player != null

@@ -27,10 +27,12 @@ namespace Escape4Now.Battle
         private int challengerRoll;
         private int opponentRoll;
         private bool challengerLost;
+        public string NetworkMessage => state == BattleState.Result ? battleMessage : "";
 
         // Checks for input to start a battle or close the results.
         private void Update()
         {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.Active) return;
             if (Keyboard.current == null)
                 return;
 
@@ -84,14 +86,13 @@ namespace Escape4Now.Battle
                 return;
             }
 
-            challenger.SetInMenu(true);
-
             if (eligibleOpponents.Count == 1)
             {
                 StartBattle(eligibleOpponents[0]);
             }
             else
             {
+                challenger.SetInMenu(true);
                 state = BattleState.ChooseOpponent;
             }
         }
@@ -115,7 +116,7 @@ namespace Escape4Now.Battle
                     || !player.Inventory.HasKey())
                     continue;
 
-                if (player.GridPosition == challenger.GridPosition)
+                if (player.GridPosition == challenger.GridPosition && player.CanBeTargetedBy(challenger))
                     eligibleOpponents.Add(player);
             }
         }
@@ -123,6 +124,15 @@ namespace Escape4Now.Battle
         // Rolls for both players and gives the key to the winner.
         private void StartBattle(PlayerCharacter target)
         {
+            //Only this controller's selection menu may be released before checking the action.
+            if (state == BattleState.ChooseOpponent && challenger != null) challenger.SetInMenu(false);
+            if (challenger == null || challenger.Inventory == null || challenger.Inventory.HasKey()
+                || target == null || target.Inventory == null || !target.Inventory.HasKey()
+                || target.GridPosition != challenger.GridPosition || !target.CanBeTargetedBy(challenger))
+            {
+                CloseBattle();
+                return;
+            }
             challengerLost = false;
             opponent = target;
 
@@ -145,6 +155,7 @@ namespace Escape4Now.Battle
 
                 if (stolenKey != null && opponent.Inventory.RemoveKey() && challenger.Inventory.GiveKey(stolenKey))
                 {
+                    opponent.RecordSuccessfulTargetedAction(challenger);
                     battleMessage =
                         $"{challenger.name} wins!\n" +
                         $"Rolls: {challengerRoll} - {opponentRoll}\n" +
@@ -169,10 +180,30 @@ namespace Escape4Now.Battle
                     "The challenger loses!";
             }
 
+            challenger.SetInMenu(true);
             state = BattleState.Result;
         }
 
-        // Rolls for both players and gives the key to the winner.
+        //The host checks the same rules for a connected player's battle request.
+        public bool TryNetworkBattle(PlayerCharacter player, PlayerCharacter target)
+        {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient || state != BattleState.None
+                || player == null || target == null || !target.CanBeTargetedBy(player)) return false;
+            challenger = player;
+            StartBattle(target);
+            return state == BattleState.Result;
+        }
+
+        //Only the challenger may dismiss a network battle result.
+        public bool FinishNetworkBattle(PlayerCharacter player)
+        {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient || state != BattleState.Result
+                || player == null || player != challenger) return false;
+            CloseBattle();
+            return true;
+        }
+
+        //Closes the result and ends the challenger's turn after a loss.
         private void CloseBattle()
         {
             PlayerCharacter playerToEndTurn = challenger;
@@ -200,6 +231,7 @@ namespace Escape4Now.Battle
         // Displays the opponent choices and battle results.
         private void OnGUI()
         {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.Active) return;
             if (state == BattleState.None)
                 return;
 

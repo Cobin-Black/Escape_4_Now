@@ -13,6 +13,8 @@
   <ItemGroup>
     <Compile Include="Program.cs" />
     <Compile Include="../../Assets/Scripts/Map/SchoolMapLayout.cs" Link="SchoolMapLayout.cs" />
+    <Compile Include="../../Assets/Scripts/Map/SchoolFurniturePlan.cs" Link="SchoolFurniturePlan.cs" />
+    <Compile Include="../../Assets/Scripts/Obstacles/ObstacleFacing.cs" Link="ObstacleFacing.cs" />
   </ItemGroup>
   <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
 </Project>

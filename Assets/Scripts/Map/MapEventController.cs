@@ -5,8 +5,10 @@ using UnityEngine;
 
 namespace Escape4Now.Map
 {
-    //Lists the five kinds of event tiles.
-    public enum MapEventType { Warp, RandomEvent, Freeze, Blackout, LuckyRoll }
+    //Append new events so existing prefab numbers keep their meaning.
+    public enum MapEventType { Warp, RandomEvent, Freeze, Blackout, LuckyRoll, LocationSwitch,
+        ExtraStep, SecondChance, BadRoll, Stumble, WrongRoom, FireDrill, GoodLuckDay }
+    public enum MapEventCategory { Positive, Negative, Neutral, Global }
 
     //Places special tiles around the map and applies their effects when crossed.
     [RequireComponent(typeof(IsometricMapTemplate))]
@@ -14,35 +16,52 @@ namespace Escape4Now.Map
     {
         private IsometricMapTemplate map;
         private readonly Dictionary<Vector2Int, MapEventType> events = new Dictionary<Vector2Int, MapEventType>();
-        //Reusable templates for the five colored event tiles.
+        //Reusable templates for the colored event tiles.
         [SerializeField] private EventTileMarker[] eventPrefabs;
+        private EventTileMarker[] availablePrefabs;
         private string message = "";
         private int visibilityTurnsRemaining;
         private bool blackoutStartedThisTurn;
         private TurnSystemController turnSystem;
         private Texture2D visibilityMask;
         private PlayerCharacter[] players;
-
-        //Optional limits set before the events are placed, such as by the tutorial. Null places every event type.
+        private GUIStyle noticeText;
+        private GUIStyle noticeTitle;
         private HashSet<MapEventType> allowedTypes;
         private readonly Dictionary<MapEventType, Vector2Int> forcedTiles = new Dictionary<MapEventType, Vector2Int>();
 
-        //Lets other spawners wait until every event has its tile.
-        public bool EventsPlaced { get; private set; }
-
-        //Tells listeners, such as the tutorial, when a player sets off an event tile.
         public event System.Action<PlayerCharacter, MapEventType> EventTriggered;
 
-        //Places only the listed event types. Call before the events are placed.
+        //Lets other spawners wait until every event has its tile.
+        public bool EventsPlaced { get; private set; }
+        public string CurrentMessage => message;
+        public int BlackoutTurns => visibilityTurnsRemaining;
+
         public void OnlyPlaceEvents(params MapEventType[] types)
         {
-            allowedTypes = new HashSet<MapEventType>(types);
+            allowedTypes = new HashSet<MapEventType>(types ?? System.Array.Empty<MapEventType>());
         }
 
-        //Puts an event type on a set tile instead of a random one, if that tile is free. Call before the events are placed.
         public void ForceEventTile(MapEventType type, Vector2Int cell)
         {
-            forcedTiles[type] = cell;
+            if (System.Enum.IsDefined(typeof(MapEventType), type)) forcedTiles[type] = cell;
+        }
+
+        //Finds a known event template without loading anything supplied over the network.
+        public EventTileMarker GetNetworkPrefab(int type)
+        {
+            if (availablePrefabs == null) return null;
+            foreach (EventTileMarker prefab in availablePrefabs)
+                if (prefab != null && (int)prefab.EventType == type) return prefab;
+            return null;
+        }
+
+        //Copies the host's event message and visibility timer for display only.
+        public void ApplyNetworkDisplay(string text, int blackout)
+        {
+            message = text;
+            visibilityTurnsRemaining = blackout;
+            if (players == null) players = FindObjectsByType<PlayerCharacter>(FindObjectsSortMode.None);
         }
 
         //Checks whether an event marker sits on a tile.
@@ -55,6 +74,13 @@ namespace Escape4Now.Map
         private void Awake()
         {
             map = GetComponent<IsometricMapTemplate>();
+            var templates = new Dictionary<MapEventType, EventTileMarker>();
+            foreach (EventTileMarker prefab in Resources.LoadAll<EventTileMarker>("EventTiles"))
+                if (System.Enum.IsDefined(typeof(MapEventType), prefab.EventType)) templates[prefab.EventType] = prefab;
+            foreach (EventTileMarker prefab in eventPrefabs ?? new EventTileMarker[0])
+                if (prefab != null && System.Enum.IsDefined(typeof(MapEventType), prefab.EventType)) templates[prefab.EventType] = prefab;
+            availablePrefabs = new List<EventTileMarker>(templates.Values).ToArray();
+            System.Array.Sort(availablePrefabs, (a, b) => a.EventType.CompareTo(b.EventType));
         }
 
         //Starts receiving turn updates so Blackout can count finished player turns.
@@ -70,7 +96,7 @@ namespace Escape4Now.Map
             if (turnSystem != null) turnSystem.PlayerTurnEnded -= CountBlackoutTurn;
         }
 
-        //Blackout lasts four player turns after the turn that triggered it.
+        //Counts full player turns after the turn that started Blackout.
         private void CountBlackoutTurn()
         {
             if (visibilityTurnsRemaining <= 0) return;
@@ -83,9 +109,10 @@ namespace Escape4Now.Map
             if (visibilityTurnsRemaining == 0) message = "Blackout ended. Visibility restored.";
         }
 
-        //Waits one frame for setup, then randomly places one of each event where space allows.
+        //Small events appear regularly. Stronger events may be absent from a match.
         private System.Collections.IEnumerator Start()
         {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) yield break;
             yield return null;
             players = FindObjectsByType<PlayerCharacter>(FindObjectsSortMode.None);
             List<Vector2Int> emptyTiles = new List<Vector2Int>();
@@ -97,21 +124,20 @@ namespace Escape4Now.Map
                     if (IsEmptyEventTile(cell)) emptyTiles.Add(cell);
                 }
             }
-            if (eventPrefabs == null)
-            {
-                EventsPlaced = true;
-                yield break;
-            }
+            var templates = new List<EventTileMarker>(availablePrefabs);
             HashSet<MapEventType> placedTypes = new HashSet<MapEventType>();
-            foreach (EventTileMarker prefab in eventPrefabs)
+            foreach (EventTileMarker prefab in templates)
             {
                 if (emptyTiles.Count == 0) break;
                 //Skip templates that are missing, turned off, invalid, or already used.
                 if (prefab == null || !prefab.gameObject.activeSelf || !prefab.enabled
                     || !System.Enum.IsDefined(typeof(MapEventType), prefab.EventType)
                     || (allowedTypes != null && !allowedTypes.Contains(prefab.EventType))
-                    || !placedTypes.Add(prefab.EventType)) continue;
-                int index = PickEventTileIndex(prefab.EventType, emptyTiles);
+                    || !placedTypes.Add(prefab.EventType)
+                    || (!forcedTiles.ContainsKey(prefab.EventType) && Random.value >= SpawnChance(prefab.EventType))) continue;
+                int index = forcedTiles.TryGetValue(prefab.EventType, out Vector2Int forcedCell)
+                    ? emptyTiles.IndexOf(forcedCell) : -1;
+                if (index < 0) index = Random.Range(0, emptyTiles.Count);
                 Vector2Int cell = emptyTiles[index];
                 EventTileMarker marker = Instantiate(prefab, map.GridToWorld(cell), Quaternion.identity, transform);
                 marker.Configure(map.TileWidth, map.TileHeight);
@@ -121,36 +147,58 @@ namespace Escape4Now.Map
             EventsPlaced = true;
         }
 
-        //Uses the forced tile for this event type when it is free, otherwise a random empty tile.
-        private int PickEventTileIndex(MapEventType type, List<Vector2Int> emptyTiles)
+        //Controls how often each event type appears in a match.
+        public static float SpawnChance(MapEventType type)
         {
-            if (forcedTiles.TryGetValue(type, out Vector2Int cell))
-            {
-                int forced = emptyTiles.IndexOf(cell);
-                if (forced >= 0) return forced;
-                Debug.LogWarning($"{type} could not use tile {cell}, so it was placed randomly.");
-            }
-            return Random.Range(0, emptyTiles.Count);
+            if (type == MapEventType.Freeze || type == MapEventType.Blackout
+                || type == MapEventType.LocationSwitch || type == MapEventType.FireDrill) return 0.35f;
+            if (type == MapEventType.Warp || type == MapEventType.WrongRoom) return 0.6f;
+            return 1f;
+        }
+
+        //Categories describe who the effect helps or affects.
+        public static MapEventCategory Category(MapEventType type)
+        {
+            if (type == MapEventType.LuckyRoll || type == MapEventType.ExtraStep || type == MapEventType.SecondChance) return MapEventCategory.Positive;
+            if (type == MapEventType.Freeze || type == MapEventType.BadRoll || type == MapEventType.Stumble) return MapEventCategory.Negative;
+            if (type == MapEventType.Blackout || type == MapEventType.LocationSwitch || type == MapEventType.FireDrill
+                || type == MapEventType.GoodLuckDay) return MapEventCategory.Global;
+            return MapEventCategory.Neutral;
         }
 
         //Keeps events off players, obstacles, exits, and other events.
         private bool IsEmptyEventTile(Vector2Int cell)
         {
             return map.IsWalkable(cell) && !map.IsExit(cell) && !map.IsOccupied(cell)
+                && !map.IsSpecialItemTile(cell)
                 && !events.ContainsKey(cell);
         }
 
-        //Shows the last event message and the number of Blackout turns left.
+        //Keeps the latest result readable beside the turn panel, including during Blackout.
         private void OnGUI()
         {
             if (visibilityTurnsRemaining > 0) DrawReducedVisibility();
-
-            //Text sits just under the turn panel, scaled like the rest of the HUD.
-            Matrix4x4 oldMatrix = Escape4Now.UI.HudScale.Apply();
-            if (visibilityTurnsRemaining > 0)
-                GUI.Label(new Rect(16f, 376f, 360f, 24f), "Blackout: " + visibilityTurnsRemaining + " player turns remaining");
-            GUI.Label(new Rect(16f, 328f, 360f, 46f), message);
-            GUI.matrix = oldMatrix;
+            if (string.IsNullOrEmpty(message)) return;
+            noticeText ??= new GUIStyle(GUI.skin.label) { fontSize = 18, wordWrap = true, richText = false };
+            noticeTitle ??= new GUIStyle(GUI.skin.label) { fontSize = 14, fontStyle = FontStyle.Bold, richText = false };
+            noticeText.normal.textColor = Color.white;
+            noticeTitle.normal.textColor = new Color(1f, 0.87f, 0.45f);
+            float width = Mathf.Min(360f, Mathf.Max(100f, Screen.width - 32f));
+            string text = message;
+            if (visibilityTurnsRemaining > 0) text += "\nLights return in " + visibilityTurnsRemaining + " player turns.";
+            float height = noticeText.CalcHeight(new GUIContent(text), width - 24f) + 48f;
+            float top = Screen.width >= 800 ? 110f : 330f;
+            Rect panel = new Rect(Screen.width - width - 16f, top, width, height);
+            int oldDepth = GUI.depth;
+            Color oldColor = GUI.color;
+            GUI.depth = -100;
+            GUI.color = new Color(0.04f, 0.04f, 0.04f, 0.95f);
+            GUI.DrawTexture(panel, Texture2D.whiteTexture);
+            GUI.color = Color.white;
+            GUI.Label(new Rect(panel.x + 12f, panel.y + 8f, width - 24f, 22f), "LATEST RESULT", noticeTitle);
+            GUI.Label(new Rect(panel.x + 12f, panel.y + 34f, width - 24f, height - 40f), text, noticeText);
+            GUI.color = oldColor;
+            GUI.depth = oldDepth;
         }
 
         //Adds the player's name to the message explaining what happened.
@@ -163,47 +211,95 @@ namespace Escape4Now.Map
         public bool ResolveStep(PlayerCharacter player, Vector2Int direction)
         {
             if (player == null || !player.IsResolvingEventStep) return false;
-            return ResolveEvent(player, direction, new HashSet<Vector2Int>());
+            return ResolveEvent(player, direction, player.GridPosition);
         }
 
-        //Applies the effect. Each event tile can activate only once during this step's effects.
-        private bool ResolveEvent(PlayerCharacter player, Vector2Int direction, HashSet<Vector2Int> visited)
+        //Only the tile crossed by normal movement activates an event.
+        private bool ResolveEvent(PlayerCharacter player, Vector2Int direction, Vector2Int eventCell)
         {
             if (player == null || player.HasReachedExit || map == null
-                || !map.IsWalkable(player.GridPosition) || map.IsExit(player.GridPosition)
-                || !events.TryGetValue(player.GridPosition, out MapEventType type)
-                || !visited.Add(player.GridPosition)) return false;
+                || !map.IsWalkable(eventCell) || map.IsExit(eventCell)
+                || !events.TryGetValue(eventCell, out MapEventType type)) return false;
+
+            if (Category(type) == MapEventCategory.Negative && BlockNegative(player)) return false;
 
             EventTriggered?.Invoke(player, type);
+
             switch (type)
             {
+                case MapEventType.LocationSwitch:
+                    var session = FindFirstObjectByType<Escape4Now.Multiplayer.LocalMultiplayerSession>();
+                    bool switched = session != null && SwitchLocations(session.Participants);
+                    ShowMessage(player, switched ? "Location Switch: everyone swapped places. Unused moves are kept."
+                        : "Location Switch: players cannot switch right now.");
+                    return false;
                 case MapEventType.Warp:
                     Warp(player);
                     //Keep unused moves after teleporting.
                     return false;
                 case MapEventType.RandomEvent:
-                    int result = Random.Range(0, 4);
-                    if (result == 0 || result == 1)
+                    //Four small effects have 20% each. Freeze and Warp have 10% each.
+                    int result = Random.Range(0, 10);
+                    if (result < 4)
                     {
-                        return MoveExtra(player, result == 0 ? direction : -direction, result == 0, visited);
+                        bool forward = result < 2;
+                        if (!forward && BlockNegative(player)) return false;
+                        return MoveExtra(player, forward ? direction : -direction, forward, eventCell);
                     }
-                    else if (result == 2)
+                    else if (result < 6)
                     {
                         player.EventState.GiveLuckyRoll();
-                        ShowMessage(player, "Random Event: Lucky Roll next turn.");
+                        ShowMessage(player, "Random Event: next turn, roll twice and keep the higher number.");
                     }
-                    else
+                    else if (result < 9)
                     {
-                        player.EventState.GiveFreeze();
-                        ShowMessage(player, "Random Event: Freeze. The next turn will be skipped.");
+                        if (BlockNegative(player)) return false;
+                        if (result < 8) player.EventState.GiveBadRoll();
+                        else player.EventState.GiveFreeze();
+                        ShowMessage(player, result < 8 ? "Random Event: next turn, roll twice and keep the lower number." : "Random Event: Freeze. You will miss your next turn.");
                     }
+                    else Warp(player);
+                    break;
+                case MapEventType.ExtraStep:
+                    int beforeExtra = player.MovesRemaining;
+                    player.ChangeEventMovement(2);
+                    ShowMessage(player, "Extra Step: you gained " + (player.MovesRemaining - beforeExtra) + " moves. You have " + player.MovesRemaining + " left.");
+                    break;
+                case MapEventType.Stumble:
+                    int beforeStumble = player.MovesRemaining;
+                    player.ChangeEventMovement(-2);
+                    ShowMessage(player, "Stumble: you lost " + (beforeStumble - player.MovesRemaining) + " moves. You have " + player.MovesRemaining + " left.");
+                    break;
+                case MapEventType.SecondChance:
+                    player.EventState.GiveSecondChance();
+                    ShowMessage(player, "Second Chance: your next harmful event will be blocked. Events that affect everyone still work.");
+                    break;
+                case MapEventType.BadRoll:
+                    player.EventState.GiveBadRoll();
+                    ShowMessage(player, "Bad Roll: use the lower of two dice next turn.");
+                    break;
+                case MapEventType.WrongRoom:
+                    WrongRoom(player, eventCell);
+                    break;
+                case MapEventType.FireDrill:
+                    FireDrill(player);
+                    break;
+                case MapEventType.GoodLuckDay:
+                    foreach (PlayerCharacter participant in FindObjectsByType<PlayerCharacter>(FindObjectsSortMode.None))
+                        participant.EventState.GiveRollBonus();
+                    ShowMessage(player, "Good Luck Day: everyone gets +1 on their next normal roll.");
                     break;
                 case MapEventType.Freeze:
                     player.EventState.GiveFreeze();
-                    ShowMessage(player, "Freeze. The next turn will be skipped.");
+                    ShowMessage(player, "Freeze: you will miss your next turn, then play normally.");
                     break;
                 case MapEventType.Blackout:
-                    visibilityTurnsRemaining = 4;
+                    if (visibilityTurnsRemaining > 0)
+                    {
+                        ShowMessage(player, "Blackout is already active; its duration is unchanged.");
+                        break;
+                    }
+                    visibilityTurnsRemaining = Mathf.Clamp(6 - FindObjectsByType<PlayerCharacter>(FindObjectsSortMode.None).Length, 2, 4);
                     blackoutStartedThisTurn = true;
                     ShowMessage(player, "Blackout: everyone's visibility is reduced for the next " + visibilityTurnsRemaining + " player turns.");
                     break;
@@ -213,6 +309,83 @@ namespace Escape4Now.Map
                     break;
             }
             return false;
+        }
+
+        //Second Chance is separate from protection against other players.
+        private bool BlockNegative(PlayerCharacter player)
+        {
+            if (!player.EventState.BlockNegativeEvent()) return false;
+            ShowMessage(player, "Second Chance saved you from a harmful event. That protection is now used up.");
+            return true;
+        }
+
+        //Chooses another room first, then a safe tile within that room.
+        private void WrongRoom(PlayerCharacter player, Vector2Int from)
+        {
+            var rooms = new List<List<Vector2Int>>();
+            foreach (SchoolRoomType room in System.Enum.GetValues(typeof(SchoolRoomType)))
+            {
+                if (room == SchoolRoomType.None || room == map.GetRoomType(from)) continue;
+                var cells = new List<Vector2Int>();
+                for (int y = 0; y < map.Height; y++)
+                    for (int x = 0; x < map.Width; x++)
+                    {
+                        var cell = new Vector2Int(x, y);
+                        if (map.GetRoomType(cell) == room && IsWarpDestination(cell)) cells.Add(cell);
+                    }
+                if (cells.Count > 0) rooms.Add(cells);
+            }
+            if (rooms.Count == 0) { ShowMessage(player, "Wrong Room: no safe destination."); return; }
+            List<Vector2Int> chosen = rooms[Random.Range(0, rooms.Count)];
+            player.SetGridPosition(chosen[Random.Range(0, chosen.Count)]);
+            ShowMessage(player, "Wrong Room: moved to another room. Unused moves are kept.");
+        }
+
+        //Reserves different hallway tiles before moving anyone. No events or items are activated.
+        private void FireDrill(PlayerCharacter player)
+        {
+            var session = FindFirstObjectByType<Escape4Now.Multiplayer.LocalMultiplayerSession>();
+            if (session == null) return;
+            var cells = new List<Vector2Int>();
+            for (int y = 0; y < map.Height; y++)
+                for (int x = 0; x < map.Width; x++)
+                {
+                    var cell = new Vector2Int(x, y);
+                    if (map.IsHallway(cell) && IsWarpDestination(cell)) cells.Add(cell);
+                }
+            if (cells.Count < session.Participants.Count)
+            { ShowMessage(player, "Fire Drill: not enough safe hallway tiles."); return; }
+            var targets = new Vector2Int[session.Participants.Count];
+            for (int i = 0; i < targets.Length; i++)
+            {
+                int index = Random.Range(0, cells.Count);
+                targets[i] = cells[index];
+                cells.RemoveAt(index);
+            }
+            bool moved = PlayerCharacter.RelocatePlayers(session.Participants, targets);
+            ShowMessage(player, moved ? "Fire Drill: everyone moved to the hallway. Unused moves are kept." : "Fire Drill: players cannot move right now.");
+        }
+
+        //These are all possible swaps where nobody stays put, including two separate pairs.
+        private static bool SwitchLocations(IReadOnlyList<PlayerCharacter> participants)
+        {
+            if (participants == null || participants.Count < 2 || participants.Count > 4) return false;
+            int[][] choices = participants.Count == 2 ? new[] { new[] { 1, 0 } }
+                : participants.Count == 3 ? new[] { new[] { 1, 2, 0 }, new[] { 2, 0, 1 } }
+                : new[] { new[] { 1, 0, 3, 2 }, new[] { 1, 2, 3, 0 }, new[] { 1, 3, 0, 2 },
+                    new[] { 2, 0, 3, 1 }, new[] { 2, 3, 0, 1 }, new[] { 2, 3, 1, 0 },
+                    new[] { 3, 0, 1, 2 }, new[] { 3, 2, 0, 1 }, new[] { 3, 2, 1, 0 } };
+            //Sharing a tile is allowed, but a switch must still move every player somewhere else.
+            var valid = new List<int[]>();
+            foreach (int[] choice in choices)
+            {
+                bool movesEveryone = true;
+                for (int i = 0; i < participants.Count; i++)
+                    if (participants[i] == null || participants[choice[i]] == null
+                        || participants[i].GridPosition == participants[choice[i]].GridPosition) movesEveryone = false;
+                if (movesEveryone) valid.Add(choice);
+            }
+            return valid.Count > 0 && PlayerCharacter.SwitchLocations(participants, valid[Random.Range(0, valid.Count)]);
         }
 
         //Lists safe destinations first, then picks one randomly for Warp.
@@ -245,28 +418,25 @@ namespace Escape4Now.Map
             return IsEmptyEventTile(cell);
         }
 
-        //Moves up to two extra spaces, checking each tile and any event along the way.
-        private bool MoveExtra(PlayerCharacter player, Vector2Int direction, bool forward, HashSet<Vector2Int> visited)
+        //Moves up to two extra spaces without activating any crossed or destination events.
+        private bool MoveExtra(PlayerCharacter player, Vector2Int direction, bool forward, Vector2Int cursor)
         {
             if (direction != Vector2Int.up && direction != Vector2Int.down
                 && direction != Vector2Int.left && direction != Vector2Int.right) return false;
 
             string effect = forward ? "Move Forward" : "Move Backward";
             ShowMessage(player, "Random Event: " + effect + " 2 spaces.");
-            int previousEvents = visited.Count;
             int moved = 0;
             for (int i = 0; i < 2; i++)
             {
-                Vector2Int next = player.GridPosition + direction;
-                if (!map.IsWalkable(next) || player.IsOccupiedByOtherPlayer(next)
-                    || !player.SetGridPosition(next)) break;
-                moved++;
+                Vector2Int next = cursor + direction;
+                if (!map.IsWalkable(next) || player.IsOccupiedByOtherPlayer(next)) break;
+                cursor = next;
+                if (!player.SetGridPosition(next)) break;
+                moved = i + 1;
                 if (map.IsExit(next)) break;
-                if (ResolveEvent(player, direction, visited)) return true;
-                if (player.HasReachedExit || player.GridPosition != next) break;
             }
-            if (visited.Count == previousEvents)
-                ShowMessage(player, "Random Event: " + effect + ". Moved " + moved + " spaces.");
+            ShowMessage(player, "Random Event: " + effect + ". Moved " + moved + " spaces.");
             return false;
         }
 

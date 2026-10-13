@@ -114,6 +114,7 @@ namespace Escape4Now.UI
 
         private void OnGUI()
         {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.Active) return;
             PlayerCharacter player = GetShownPlayer();
             if (player == null || player.Inventory == null) return;
             CreateStyles();

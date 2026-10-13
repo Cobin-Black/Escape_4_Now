@@ -17,6 +17,7 @@ namespace Escape4Now.TurnSystem
         //Starts the timer at the selected time limit.
         private void Start()
         {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) return;
             timeRemaining = timeLimit;
             timerRunning = true;
         }
@@ -24,6 +25,7 @@ namespace Escape4Now.TurnSystem
         //Counts down the remaining game time.
         private void Update()
         {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) return;
             if (!timerRunning)
             {
                 return;
@@ -41,6 +43,14 @@ namespace Escape4Now.TurnSystem
             }
         }
 
+        //Guests display the host's clock instead of starting their own countdown.
+        public void ApplyNetworkTime(float seconds)
+        {
+            if (!Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) return;
+            timeRemaining = seconds;
+            if (seconds <= 0f) Time.timeScale = 0f;
+        }
+
         //Displays the remaining game time on screen.
         private void OnGUI()
         {
@@ -48,7 +58,7 @@ namespace Escape4Now.TurnSystem
             int seconds = Mathf.FloorToInt(timeRemaining % 60f);
 
             GUI.Label(
-                new Rect(16f, 95f, 200f, 40f),
+                new Rect(Screen.width - 156f, 100f, 140f, 30f),
                 $"Time: {minutes:00}:{seconds:00}"
             );
         }

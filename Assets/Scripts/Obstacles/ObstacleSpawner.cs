@@ -14,97 +14,58 @@ namespace Escape4Now.Obstacles
 
         //Obstacle prefabs to pick from, and how many to place.
         [SerializeField] private ObstacleGridControl[] obstaclePrefabs;
-        [SerializeField] private ObstacleGridControl lockerPrefab;
-        [SerializeField] private KeyItem keyItemPrefab;
         [SerializeField, Min(1)] private int obstacleCount = 6;
 
-        //Chance that each placed obstacle can be opened, and the item prefabs one of them may hold.
+        //Chance that a searchable object holds an item, and the allowed item prefabs.
         [SerializeField, Range(0f, 1f)] private float interactableChance = 0.5f;
         [SerializeField] private Item[] possibleItems;
 
         //Spawners that must finish first so obstacles never cover an event or item. Found on the map when left empty.
         [SerializeField] private MapEventController mapEvents;
         [SerializeField] private ItemSpawner itemSpawner;
+        private int? forcedObstacleCount;
+        private float? forcedInteractableChance;
+        private Vector2Int? forcedObstacleCell;
+        //Item placement waits until all searchable obstacles have been created.
+        public bool HasSpawnedObstacles { get; private set; }
 
-        //Tile the first obstacle must use, such as the tutorial placing one beside the player. Null keeps every obstacle random.
-        private Vector2Int? forcedTile;
-
-        //Changes how many obstacles are placed. Call before the obstacles are placed.
-        public void SetObstacleCount(int count)
-        {
-            obstacleCount = Mathf.Max(0, count);
-        }
-
-        //Changes the chance that each obstacle holds an item. Call before the obstacles are placed.
-        public void SetInteractableChance(float chance)
-        {
-            interactableChance = Mathf.Clamp01(chance);
-        }
-
-        //Places the first obstacle on a set tile instead of a random one. Call before the obstacles are placed.
-        public void ForceObstacleTile(Vector2Int cell)
-        {
-            forcedTile = cell;
-        }
+        public void SetObstacleCount(int count) { forcedObstacleCount = Mathf.Max(0, count); }
+        public void SetInteractableChance(float chance) { forcedInteractableChance = Mathf.Clamp01(chance); }
+        public void ForceObstacleTile(Vector2Int cell) { forcedObstacleCell = cell; }
 
         private void Start()
         {
             StartCoroutine(SpawnObstacles());
         }
 
-        private bool SpawnLocker(Vector2Int cell)
+        //The current scene uses one obstacle template on every computer.
+        public ObstacleGridControl GetNetworkPrefab()
         {
-            ObstacleGridControl locker = Instantiate(
-                lockerPrefab,
-                map.GridToWorld(cell),
-                Quaternion.identity,
-                transform
-            );
-
-            locker.name = lockerPrefab.name;
-
-            if (!locker.Place(map, cell))
-            {
-                Destroy(locker.gameObject);
-                return false;
-            }
-
-            locker.IsInteractable = true;
-
-            ObstacleStorage storage = locker.GetComponent<ObstacleStorage>();
-
-            if (storage == null)
-            {
-                storage = locker.gameObject.AddComponent<ObstacleStorage>();
-            }
-
-            storage.SetStoredItem(keyItemPrefab);
-
-            Debug.Log(
-                $"[Obstacle System] Spawned guaranteed {locker.name} with key at {cell}."
-            );
-
-            return true;
+            if (obstaclePrefabs == null) return null;
+            foreach (ObstacleGridControl prefab in obstaclePrefabs) if (prefab != null) return prefab;
+            return null;
         }
 
         private IEnumerator SpawnObstacles()
         {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) yield break;
             // Wait for the runtime map to finish generating.
             yield return null;
 
             if (map == null)
             {
                 Debug.LogWarning("[Obstacle System] ObstacleSpawner could not find the map.");
+                HasSpawnedObstacles = true;
                 yield break;
             }
 
             if (mapEvents == null) mapEvents = map.GetComponent<MapEventController>();
             if (itemSpawner == null) itemSpawner = map.GetComponent<ItemSpawner>();
 
-            //Events and items pick their tiles on the same frame as this, so wait until both are done.
+            //Wait until events and special-room item spots are ready before placing obstacles.
             yield return new WaitUntil(() =>
                 (mapEvents == null || !mapEvents.isActiveAndEnabled || mapEvents.EventsPlaced)
-                && (itemSpawner == null || !itemSpawner.isActiveAndEnabled || itemSpawner.HasSpawnedItems));
+                && (itemSpawner == null || !itemSpawner.isActiveAndEnabled || itemSpawner.HasReservedSpecialRoomItems));
 
             List<Vector2Int> emptyTiles = new List<Vector2Int>();
             for (int y = 0; y < map.Height; y++)
@@ -121,47 +82,38 @@ namespace Escape4Now.Obstacles
             }
 
             int placed = 0;
-            if (forcedTile.HasValue && obstacleCount > 0)
+            var decorations = new List<Vector2Int>();
+            foreach (SchoolFurniture furniture in FindObjectsByType<SchoolFurniture>(FindObjectsSortMode.None))
+                if (map.IsHallway(furniture.Cell)) decorations.Add(furniture.Cell);
+            if (forcedObstacleCell.HasValue)
             {
-                Vector2Int cell = forcedTile.Value;
-                if (emptyTiles.Remove(cell) && KeepsMapConnected(cell) && SpawnObstacle(cell))
+                Vector2Int cell = forcedObstacleCell.Value;
+                bool canForce = emptyTiles.Remove(cell) || (map.IsWalkable(cell) && !map.IsOccupied(cell)
+                    && !map.IsExit(cell) && (mapEvents == null || !mapEvents.HasEvent(cell)) && !HasItemAt(cell));
+                if (canForce && SpawnObstacle(cell))
                 {
                     placed++;
-                }
-                else
-                {
-                    Debug.LogWarning($"[Obstacle System] Could not place the forced obstacle at {cell}.");
+                    decorations.Add(cell);
                 }
             }
 
-            if (lockerPrefab != null && keyItemPrefab != null && emptyTiles.Count > 0)
-            {
-                int index = Random.Range(0, emptyTiles.Count);
-                Vector2Int lockerCell = emptyTiles[index];
-                emptyTiles.RemoveAt(index);
-
-                if (KeepsMapConnected(lockerCell) && SpawnLocker(lockerCell))
-                {
-                    placed++;
-                }
-            }
-
-            while (placed < obstacleCount && emptyTiles.Count > 0)
+            int target = forcedObstacleCount.HasValue
+                ? forcedObstacleCount.Value : Mathf.Min(obstacleCount, Random.Range(2, 4));
+            while (placed < target && emptyTiles.Count > 0)
             {
                 int index = Random.Range(0, emptyTiles.Count);
                 Vector2Int cell = emptyTiles[index];
                 emptyTiles.RemoveAt(index);
 
+                //Leave at least two tile steps between hallway objects to avoid clusters.
+                if (decorations.Exists(other => Mathf.Abs(other.x - cell.x) + Mathf.Abs(other.y - cell.y) <= 2)) continue;
                 if (KeepsMapConnected(cell) && SpawnObstacle(cell))
                 {
                     placed++;
+                    decorations.Add(cell);
                 }
             }
-
-            if (placed < obstacleCount)
-            {
-                Debug.LogWarning($"[Obstacle System] Only found room for {placed} of {obstacleCount} obstacles.");
-            }
+            HasSpawnedObstacles = true;
         }
 
         private bool IsNearDoorway(Vector2Int cell)
@@ -189,6 +141,7 @@ namespace Escape4Now.Obstacles
         private bool IsValidObstacleTile(Vector2Int cell)
         {
             return map.IsInteriorFloor(cell)
+                && map.IsLockerPosition(cell)
                 && map.IsWalkable(cell)
                 && !IsNearDoorway(cell)
                 && !map.IsDoorway(cell)
@@ -272,7 +225,7 @@ namespace Escape4Now.Obstacles
             return reached.Count == walkableCount;
         }
 
-        //Creates one obstacle on the tile and decides whether it holds an item.
+        //Creates an empty obstacle. The shared item pool fills containers afterward.
         private bool SpawnObstacle(Vector2Int cell)
         {
             ObstacleGridControl prefab = PickRandom(obstaclePrefabs);
@@ -290,20 +243,24 @@ namespace Escape4Now.Obstacles
                 return false;
             }
 
-            Item contents = PickRandom(possibleItems);
-            //Random.value can return exactly 1, so a full chance is checked separately to always hold an item.
-            obstacle.IsInteractable = contents != null && (interactableChance >= 1f || Random.value < interactableChance);
-
-            if (obstacle.IsInteractable)
-            {
-                ObstacleStorage storage = obstacle.GetComponent<ObstacleStorage>();
-                if (storage == null) storage = obstacle.gameObject.AddComponent<ObstacleStorage>();
-                storage.SetStoredItem(contents);
-            }
-
-            string detail = obstacle.IsInteractable ? $" holding {contents.ItemName}" : "";
-            Debug.Log($"[Obstacle System] Spawned {obstacle.name} at {cell}{detail}.");
+            //Put the back toward a wall and leave the door facing open hallway floor.
+            obstacle.SetFacing(map.GetObstacleFacing(cell));
+            obstacle.IsInteractable = true;
+            ObstacleStorage storage = obstacle.GetComponent<ObstacleStorage>();
+            if (storage == null) storage = obstacle.gameObject.AddComponent<ObstacleStorage>();
+            storage.SetStoredItem(null);
             return true;
+        }
+
+        //Use the shared item pool in regular rooms and hallways.
+        public void FillStorage(ObstacleStorage storage)
+        {
+            if (map == null || storage == null || storage.HasItem || !storage.CanInteract
+                || !storage.transform.IsChildOf(map.transform)
+                || map.GetSpaceType(storage.GridPosition) != SchoolSpaceType.None) return;
+            if (itemSpawner == null) itemSpawner = map.GetComponent<ItemSpawner>();
+            if (itemSpawner != null && Random.value < (forcedInteractableChance ?? interactableChance)
+                && itemSpawner.TryTakeStorageItem(possibleItems, out Item item)) storage.TryStoreItem(item);
         }
 
         //Picks one entry from a list, skipping empty slots.
