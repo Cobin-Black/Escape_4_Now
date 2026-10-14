@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using Escape4Now.GameModes;
 using Escape4Now.Player;
 using Escape4Now.TurnSystem;
 using UnityEngine;
@@ -31,6 +30,7 @@ namespace Escape4Now.Map
         private HashSet<MapEventType> allowedTypes;
         private readonly Dictionary<MapEventType, Vector2Int> forcedTiles = new Dictionary<MapEventType, Vector2Int>();
         private readonly List<EventTileMarker> placedMarkers = new List<EventTileMarker>();
+        private readonly Dictionary<EventTileMarker, Vector2Int> cellsByMarker = new Dictionary<EventTileMarker, Vector2Int>();
         private bool showEventLocations;
         private GUIStyle eventToggleStyle;
 
@@ -41,11 +41,23 @@ namespace Escape4Now.Map
         public string CurrentMessage => message;
         public int BlackoutTurns => visibilityTurnsRemaining;
         public bool EventLocationsVisible => showEventLocations;
+        public Vector2Int GetEventCell(EventTileMarker marker)
+        {
+            return marker != null && cellsByMarker.TryGetValue(marker, out Vector2Int cell)
+                ? cell : map.WorldToGrid(marker.transform.position);
+        }
 
         public void RegisterMarker(EventTileMarker marker)
         {
-            if (marker == null || placedMarkers.Contains(marker)) return;
-            placedMarkers.Add(marker);
+            if (marker == null || map == null) return;
+            RegisterMarker(marker, map.WorldToGrid(marker.transform.position));
+        }
+
+        public void RegisterMarker(EventTileMarker marker, Vector2Int cell)
+        {
+            if (marker == null || map == null) return;
+            if (!placedMarkers.Contains(marker)) placedMarkers.Add(marker);
+            cellsByMarker[marker] = cell;
             marker.SetVisible(showEventLocations);
         }
 
@@ -53,7 +65,10 @@ namespace Escape4Now.Map
         {
             showEventLocations = visible;
             placedMarkers.RemoveAll(marker => marker == null);
-            foreach (EventTileMarker marker in placedMarkers) marker.SetVisible(visible);
+            foreach (EventTileMarker marker in placedMarkers)
+            {
+                marker.SetVisible(visible);
+            }
         }
 
         public void OnlyPlaceEvents(params MapEventType[] types)
@@ -93,7 +108,7 @@ namespace Escape4Now.Map
         private void Awake()
         {
             map = GetComponent<IsometricMapTemplate>();
-            showEventLocations = FindFirstObjectByType<Tutorial_Functionality>() != null;
+            showEventLocations = false;
             var templates = new Dictionary<MapEventType, EventTileMarker>();
             foreach (EventTileMarker prefab in Resources.LoadAll<EventTileMarker>("EventTiles"))
                 if (System.Enum.IsDefined(typeof(MapEventType), prefab.EventType)) templates[prefab.EventType] = prefab;
@@ -161,7 +176,7 @@ namespace Escape4Now.Map
                 Vector2Int cell = emptyTiles[index];
                 EventTileMarker marker = Instantiate(prefab, map.GridToWorld(cell), Quaternion.identity, transform);
                 marker.Configure(map.TileWidth, map.TileHeight);
-                RegisterMarker(marker);
+                RegisterMarker(marker, cell);
                 events.Add(cell, prefab.EventType);
                 emptyTiles.RemoveAt(index);
             }

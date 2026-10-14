@@ -144,9 +144,18 @@ namespace Escape4Now.Items
                 || Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) return false;
             var choices = new List<int>();
             for (int i = 0; i < remainingItems.Count; i++)
+            {
+                //The Key Stealer can use any searchable obstacle, even if it is not in the Inspector list.
+                if (remainingItems[i] is KeyStealerItem)
+                {
+                    choices.Add(i);
+                    continue;
+                }
+
                 foreach (Item allowed in allowedItems)
                     if (allowed != null && allowed.GetType() == remainingItems[i].GetType())
                     { choices.Add(i); break; }
+            }
             if (choices.Count == 0) return false;
             int index = choices[Random.Range(0, choices.Count)];
             prefab = remainingItems[index];

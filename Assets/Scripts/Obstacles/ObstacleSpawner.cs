@@ -256,8 +256,7 @@ namespace Escape4Now.Obstacles
         public void FillStorage(ObstacleStorage storage)
         {
             if (map == null || storage == null || storage.HasItem || !storage.CanInteract
-                || !storage.transform.IsChildOf(map.transform)
-                || map.GetSpaceType(storage.GridPosition) != SchoolSpaceType.None) return;
+                || !storage.transform.IsChildOf(map.transform)) return;
             if (itemSpawner == null) itemSpawner = map.GetComponent<ItemSpawner>();
             if (itemSpawner != null && Random.value < (forcedInteractableChance ?? interactableChance)
                 && itemSpawner.TryTakeStorageItem(possibleItems, out Item item)) storage.TryStoreItem(item);
