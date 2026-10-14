@@ -58,7 +58,7 @@ GameObject:
   - component: {fileID: 7496276096224395590}
   - component: {fileID: 1560463981482339478}
   m_Layer: 0
-  m_Name: Triangle
+  m_Name: Key
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -128,8 +128,8 @@ SpriteRenderer:
   m_SortingLayer: 0
   m_SortingOrder: 0
   m_MaskInteraction: 0
-  m_Sprite: {fileID: 7482667652216324306, guid: 75f5f34dc1b5347e0b8351032682f224, type: 3}
-  m_Color: {r: 0.6262611, g: 0.9622642, b: 0.086240634, a: 1}
+  m_Sprite: {fileID: 21300000, guid: d709a4fedf1424c908dd07f821c9f9a0, type: 3}
+  m_Color: {r: 0.9607843, g: 0.84047484, b: 0.08627448, a: 1}
   m_FlipX: 0
   m_FlipY: 0
   m_DrawMode: 0

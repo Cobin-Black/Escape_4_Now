@@ -132,7 +132,7 @@ namespace Escape4Now.UI
                         new[] { "W", "A", "S", "D" }, PlayerRect());
 
                 case TutorialSection.Obstacles:
-                    if (locker == null) locker = FindFirstObjectByType<ObstacleStorage>();
+                    if (locker == null && tutorial != null) locker = tutorial.TutorialObstacle;
                     if (locker != null && locker.IsMenuOpen)
                         return MakeStep("obstacles-take", "Take the item",
                             "The locker is open. Press ENTER again to take what's inside. It goes into your inventory.",
@@ -352,7 +352,7 @@ namespace Escape4Now.UI
 
         private Rect? LockerRect()
         {
-            if (locker == null) locker = FindFirstObjectByType<ObstacleStorage>();
+            if (locker == null && tutorial != null) locker = tutorial.TutorialObstacle;
             return locker == null ? null : BoundsRect(locker.gameObject);
         }
 

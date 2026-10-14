@@ -105,11 +105,26 @@ namespace Escape4Now.Player
             }
         }
 
+
+           private Escape4Now.TurnSystem.GameTimer gameTimer;
+
+           private bool wasRolled;
+private float rollAnimStart = -10f;
+private Texture2D circleTexture;
+private const float RollAnimDuration = 0.9f;
+// Which of the 3x3 cells hold a dot for faces 1-6 (cell = row * 3 + column)
+private static readonly int[] DiceFaceMasks = { 0, 16, 257, 273, 325, 341, 365 };
         //Draws the roll prompt or the current move budget.
         private void OnGUI()
         {
             DrawKeyMarker();
             if (turnSystem != null && !turnSystem.IsPlayersTurn(this)) return;
+            
+            //find the timer once and remember it 
+             if (gameTimer == null)gameTimer = FindObjectOfType<Escape4Now.TurnSystem.GameTimer>();
+            // Start the dice animation the moment a roll happens
+            if (hasRolled && !wasRolled) rollAnimStart = Time.realtimeSinceStartup;
+            wasRolled = hasRolled;
 
             // Main panel
             GUIStyle panelStyle = new GUIStyle(GUI.skin.box);
@@ -149,7 +164,7 @@ namespace Escape4Now.Player
 
             string turnName = turnSystem != null ? turnSystem.CurrentTurnName : gameObject.name;
 
-            float panelX = 16f, panelY = 85f, panelW = 360f, panelH = 235f;
+            float panelX = 16f, panelY = 85f, panelW = 360f, panelH = 270f;
             float padding = 16f;
             float x = panelX + padding;
             float contentW = panelW - padding * 2f;
@@ -187,7 +202,9 @@ namespace Escape4Now.Player
                 GUI.Label(new Rect(x + colW, 172f, colW, 20f), "MOVES LEFT", smallStyle);
 
                 //Roll Number
-                GUI.Label(new Rect(x, 192f, colW, 55f), lastRoll.ToString(), rollStyle);
+                //GUI.Label(new Rect(x, 192f, colW, 55f), lastRoll.ToString(), rollStyle);
+                 
+                 DrawRollDisplay(new Rect(x, 192f, colW, 55f),  rollStyle);
 
                 //Moves remaining
                 GUI.Label(new Rect(x + colW, 192f, colW, 55f), movesRemaining.ToString(), rollStyle);
@@ -199,41 +216,156 @@ namespace Escape4Now.Player
                 GUI.Label(new Rect(x, 176f, contentW, 30f), "YOUR TURN", playerStyle);
                 GUI.Label(new Rect(x, 222f, contentW, 24f), "Press Spacebar to Roll Dice", playerStyle);
             }
-        }
 
-        //Shows the key's own image above a player who carries it.
-        private void DrawKeyMarker()
-        {
-            bool hasKey = networkHasKey || (inventory != null && inventory.HasKey());
-            Camera viewCamera = Camera.main;
-            if (!hasKey || !isActiveAndEnabled || viewCamera == null || mapTemplate == null) return;
-            ItemSpawner spawner = mapTemplate.GetComponent<ItemSpawner>();
-            SpriteRenderer keyVisual = spawner != null && spawner.KeyPrefab != null
-                ? spawner.KeyPrefab.GetComponentInChildren<SpriteRenderer>(true) : null;
-            Sprite sprite = keyVisual != null ? keyVisual.sprite : null;
-            if (sprite == null || sprite.texture == null) return;
+            //timer row.
+            if(gameTimer != null)
+            {
+                int totalSeconds = Mathf.CeilToInt(gameTimer.TimeRemaining);
+                int minutes = totalSeconds / 60;
+                int seconds = totalSeconds % 60;
+                
+                bool lowTime = totalSeconds <= 30;
+                Color borderColor = lowTime ? new Color(1f, 0.45f, 0.45f) : new Color(0.65f, 0.85f, 1f);
+                
+                GUIStyle timerStyle = new GUIStyle(promptStyle);
+                timerStyle.fontSize = 18;
+                timerStyle.normal.textColor = totalSeconds <= 30 ? new Color(1f, 0.45f,0.45f) : Color.white;
+            
+            //Timer box CENTERED in the panel
+                float boxW = 160f, boxH = 36f, border = 2f;
+                Rect timerRect = new Rect(panelX +(panelW - boxW) / 2f, 296f, boxW, boxH);
+              
+              //Border the four thin lines 
+               GUI.color = borderColor;
+               GUI.DrawTexture(new Rect(timerRect.x ,timerRect.y , timerRect.width ,border), Texture2D.whiteTexture);
+               GUI.DrawTexture(new Rect(timerRect.x,  timerRect.yMax - border,  timerRect.width, border), Texture2D.whiteTexture);
+               GUI.DrawTexture(new Rect(timerRect.x, timerRect.y, border, timerRect.height), Texture2D.whiteTexture);
+               GUI.DrawTexture(new Rect(timerRect.xMax - border, timerRect.y, border, timerRect.height), Texture2D.whiteTexture);
 
-            Vector3 screenPosition = viewCamera.WorldToScreenPoint(transform.position + Vector3.up * 1.05f);
-            if (screenPosition.z <= 0f) return;
-            const float size = 32f;
-            float x = Mathf.Clamp(screenPosition.x - size * 0.5f, 0f, Mathf.Max(0f, Screen.width - size));
-            float y = Mathf.Clamp(Screen.height - screenPosition.y - size, 0f, Mathf.Max(0f, Screen.height - size));
-            Rect spriteRect = sprite.textureRect;
-            Rect uv = new Rect(spriteRect.x / sprite.texture.width, spriteRect.y / sprite.texture.height,
-                spriteRect.width / sprite.texture.width, spriteRect.height / sprite.texture.height);
-            Color oldColor = GUI.color;
-            GUI.color = keyVisual.color;
-            GUI.DrawTextureWithTexCoords(new Rect(x, y, size, size), sprite.texture, uv, true);
-            GUI.color = oldColor;
+                GUI.color = oldColor;
+
+                //Timer text, centered inside the box.
+                GUI.Label(timerRect, "TIME " + minutes.ToString("00") + ":" + seconds.ToString("00"), timerStyle);
+            }
         }
-        //
-        private Texture2D MakeTransparentTexture(Color color)
+    //Shows the key's own image in a gold-bordered badge above a player who carries it.
+private void DrawKeyMarker()
+{
+    bool hasKey = networkHasKey || (inventory != null && inventory.HasKey());
+    Camera viewCamera = Camera.main;
+    if (!hasKey || !isActiveAndEnabled || viewCamera == null || mapTemplate == null) return;
+    ItemSpawner spawner = mapTemplate.GetComponent<ItemSpawner>();
+    SpriteRenderer keyVisual = spawner != null && spawner.KeyPrefab != null
+        ? spawner.KeyPrefab.GetComponentInChildren<SpriteRenderer>(true) : null;
+    Sprite sprite = keyVisual != null ? keyVisual.sprite : null;
+    if (sprite == null || sprite.texture == null) return;
+
+    Vector3 screenPosition = viewCamera.WorldToScreenPoint(transform.position + Vector3.up * 1.05f);
+    if (screenPosition.z <= 0f) return;
+
+    const float iconSize = 28f;                    // the key image
+    const float pad = 6f;                          // space between image and badge edge
+    const float border = 2f;                       // gold outline thickness
+    const float badgeSize = iconSize + pad * 2f;
+
+    float bx = Mathf.Clamp(screenPosition.x - badgeSize * 0.5f, 0f, Mathf.Max(0f, Screen.width - badgeSize));
+    float by = Mathf.Clamp(Screen.height - screenPosition.y - badgeSize, 0f, Mathf.Max(0f, Screen.height - badgeSize));
+    Rect badge = new Rect(bx, by, badgeSize, badgeSize);
+
+    Color oldColor = GUI.color;
+
+    // Gold square first, then a dark square on top, so the gold shows as a border
+    GUI.color = new Color(0.98f, 0.78f, 0.2f, 1f);
+    GUI.DrawTexture(badge, Texture2D.whiteTexture);
+    GUI.color = new Color(0.02f, 0.04f, 0.08f, 0.9f);
+    GUI.DrawTexture(new Rect(badge.x + border, badge.y + border,
+        badge.width - border * 2f, badge.height - border * 2f), Texture2D.whiteTexture);
+
+    // The key image, centered inside the badge
+    Rect spriteRect = sprite.textureRect;
+    Rect uv = new Rect(spriteRect.x / sprite.texture.width, spriteRect.y / sprite.texture.height,
+        spriteRect.width / sprite.texture.width, spriteRect.height / sprite.texture.height);
+    GUI.color = keyVisual.color;
+    GUI.DrawTextureWithTexCoords(new Rect(badge.x + pad, badge.y + pad, iconSize, iconSize),
+        sprite.texture, uv, true);
+
+    GUI.color = oldColor;
+}
+                private Texture2D MakeTransparentTexture(Color color)
         {
             Texture2D texture = new Texture2D(1, 1);
             texture.SetPixel(0, 0, color);
             texture.Apply();
             return texture;
         }
+
+        // Shows a tumbling die for a moment, then the real rolled face
+private void DrawRollDisplay(Rect area, GUIStyle fallbackStyle)
+{
+    // Item rewards can be bigger than 6, so fall back to a plain number
+    if (lastRoll < 1 || lastRoll > 6)
+    {
+        GUI.Label(area, lastRoll.ToString(), fallbackStyle);
+        return;
+    }
+
+    float t = Time.realtimeSinceStartup - rollAnimStart;
+    int face = lastRoll;
+    Rect die = new Rect(area.center.x - 23f, area.y + 4f, 46f, 46f);
+
+    if (t < RollAnimDuration)
+    {
+        face = (int)(Time.realtimeSinceStartup * 18f) % 6 + 1;              // flicker, no Random
+        die.x += Mathf.Sin(t * 60f) * 4f * (1f - t / RollAnimDuration);     // shake that fades out
+    }
+
+    DrawDie(die, face);
+}
+
+// Draws one die face: light-blue border, white body, dark dots
+private void DrawDie(Rect rect, int face)
+{
+    if (circleTexture == null) circleTexture = MakeCircleTexture(32);
+    Color oldColor = GUI.color;
+
+    GUI.color = new Color(0.65f, 0.85f, 1f);
+    GUI.DrawTexture(rect, Texture2D.whiteTexture);
+    GUI.color = new Color(0.97f, 0.97f, 0.97f);
+    GUI.DrawTexture(new Rect(rect.x + 2f, rect.y + 2f, rect.width - 4f, rect.height - 4f), Texture2D.whiteTexture);
+
+    GUI.color = new Color(0.05f, 0.08f, 0.14f);
+    float pip = rect.width * 0.18f;
+    float margin = rect.width * 0.2f;
+    float step = (rect.width - margin * 2f - pip) / 2f;
+    for (int cell = 0; cell < 9; cell++)
+    {
+        if ((DiceFaceMasks[face] & (1 << cell)) == 0) continue;
+        float px = rect.x + margin + (cell % 3) * step;
+        float py = rect.y + margin + (cell / 3) * step;
+        GUI.DrawTexture(new Rect(px, py, pip, pip), circleTexture);
+    }
+
+    GUI.color = oldColor;
+}
+
+// A white circle with soft edges, used for the dots
+private Texture2D MakeCircleTexture(int size)
+{
+    Texture2D tex = new Texture2D(size, size);
+    float r = size / 2f;
+    for (int y = 0; y < size; y++)
+    {
+        for (int x = 0; x < size; x++)
+        {
+            float dx = x + 0.5f - r;
+            float dy = y + 0.5f - r;
+            float alpha = Mathf.Clamp01(r - Mathf.Sqrt(dx * dx + dy * dy));
+            tex.SetPixel(x, y, new Color(1f, 1f, 1f, alpha));
+        }
+    }
+    tex.Apply();
+    return tex;
+}
 
 
         //Finds the player's actions in the project-wide Input System asset (Assets/Settings/InputSystem_Actions).

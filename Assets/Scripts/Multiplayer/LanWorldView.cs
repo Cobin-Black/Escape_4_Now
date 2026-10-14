@@ -173,6 +173,7 @@ namespace Escape4Now.Multiplayer
                 if (prefab == null) throw new InvalidOperationException("Event template is missing.");
                 EventTileMarker copy = UnityEngine.Object.Instantiate(prefab, map.GridToWorld(cell), Quaternion.identity, map.transform);
                 copy.Configure(map.TileWidth, map.TileHeight);
+                events.RegisterMarker(copy);
                 return copy.gameObject;
             }
             if (data.kind == 1)

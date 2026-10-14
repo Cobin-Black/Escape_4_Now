@@ -71,6 +71,7 @@ namespace Escape4Now.GameModes
         private Vector2Int startCell;
         private Item tutorialItem;
         private ObstacleStorage tutorialObstacle;
+        private bool tutorialObstacleFilled;
         private int completedFrame;
 
         //Interact action from the project-wide Input System asset, used to move on once a section is complete.
@@ -89,6 +90,8 @@ namespace Escape4Now.GameModes
         //The Items section's Double Dice, and whether the player has it yet, for the tutorial UI.
         public Item TutorialItem => tutorialItem;
         public bool TutorialItemPickedUp => tutorialItemPickedUp;
+        //The Obstacles section's locker, so the tutorial UI points at the same one.
+        public ObstacleStorage TutorialObstacle => tutorialObstacle;
         //True when each lesson is its own scene, false when every section plays in this one scene.
         public bool UsesSceneParts => !string.IsNullOrEmpty(nextTutorialScene) || isLastTutorialScene;
 
@@ -164,13 +167,9 @@ namespace Escape4Now.GameModes
                     if (tutorialItemUsed && finishedMoving) CompleteCurrentSection();
                     break;
                 case TutorialSection.Obstacles:
-                    if (tutorialObstacle == null)
-                    {
-                        tutorialObstacle = FindFirstObjectByType<ObstacleStorage>();
-                        if (tutorialObstacle != null && lockerHoldsKey && keyItemPrefab != null)
-                            tutorialObstacle.SetStoredItem(keyItemPrefab);
-                    }
-                    if (tutorialObstacle != null && !tutorialObstacle.HasItem) CompleteCurrentSection();
+                    if (tutorialObstacle == null) SetUpTutorialObstacle();
+                    //Only ends once the item put in the locker has been taken out.
+                    if (tutorialObstacle != null && tutorialObstacleFilled && !tutorialObstacle.HasItem) CompleteCurrentSection();
                     break;
                 case TutorialSection.Exit:
                     if (player.HasReachedExit) CompleteCurrentSection();
@@ -344,6 +343,46 @@ namespace Escape4Now.GameModes
             DoubleDiceItem item = Instantiate(doubleDicePrefab, map.GridToWorld(cell), Quaternion.identity, transform);
             item.SetSpawnPosition(map, cell);
             tutorialItem = item;
+        }
+
+        //Picks the locker the spawner placed for this lesson and puts an item inside, since floor items are off in the tutorial.
+        //Furniture also has storage, so only the spawner's own obstacles are used.
+        private void SetUpTutorialObstacle()
+        {
+            if (obstacleSpawner == null || !obstacleSpawner.HasSpawnedObstacles) return;
+
+            Vector2Int forcedCell = startCell + obstacleOffset;
+            ObstacleStorage closest = null;
+            int closestDistance = int.MaxValue;
+            foreach (ObstacleStorage storage in obstacleSpawner.GetComponentsInChildren<ObstacleStorage>())
+            {
+                if (!storage.CanInteract) continue;
+                Vector2Int offset = storage.GridPosition - forcedCell;
+                int distance = Mathf.Abs(offset.x) + Mathf.Abs(offset.y);
+                if (distance < closestDistance)
+                {
+                    closest = storage;
+                    closestDistance = distance;
+                }
+            }
+
+            if (closest == null)
+            {
+                Debug.LogWarning("[Tutorial] No obstacle was placed for the Obstacles section.");
+                return;
+            }
+
+            Item contents = lockerHoldsKey && keyItemPrefab != null ? keyItemPrefab
+                : doubleDicePrefab != null ? doubleDicePrefab : (Item)keyItemPrefab;
+            if (contents == null)
+            {
+                Debug.LogWarning("[Tutorial] Assign the key or Double Dice prefab so the Obstacles section's locker has something to take.");
+                return;
+            }
+
+            tutorialObstacle = closest;
+            tutorialObstacle.SetStoredItem(contents);
+            tutorialObstacleFilled = tutorialObstacle.HasItem;
         }
 
         //Takes the tutorial's Double Dice back out of the inventory if it was not used.
