@@ -16,6 +16,7 @@ namespace Escape4Now.Map
         private Mesh markerMesh;
         private Material markerMaterial;
         private bool needsRedraw;
+        private bool isVisible = true;
 
         public MapEventType EventType => eventType;
 
@@ -49,6 +50,18 @@ namespace Escape4Now.Map
             DrawMarker();
         }
 
+        public void SetVisible(bool visible)
+        {
+            isVisible = visible;
+            MeshRenderer markerRenderer = GetComponent<MeshRenderer>();
+            if (markerRenderer != null) markerRenderer.enabled = visible;
+            if (label != null)
+            {
+                MeshRenderer labelRenderer = label.GetComponent<MeshRenderer>();
+                if (labelRenderer != null) labelRenderer.enabled = visible;
+            }
+        }
+
         //Makes the colored diamond and draws its text on top.
         private void DrawMarker()
         {
@@ -73,6 +86,7 @@ namespace Escape4Now.Map
             MeshRenderer renderer = GetComponent<MeshRenderer>();
             renderer.sharedMaterial = markerMaterial;
             renderer.sortingOrder = -900;
+            renderer.enabled = isVisible;
 
             if (label == null) return;
             if (label.font == null) label.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
@@ -81,6 +95,7 @@ namespace Escape4Now.Map
             {
                 labelRenderer.sharedMaterial = label.font.material;
                 labelRenderer.sortingOrder = -899;
+                labelRenderer.enabled = isVisible;
             }
         }
 

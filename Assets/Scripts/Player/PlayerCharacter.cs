@@ -33,6 +33,7 @@ namespace Escape4Now.Player
         private Vector2Int registeredPosition;
         private bool hasReachedExit;
         private bool hasRolled;
+        private bool isTutorial;
         private int lastRoll;
         private int movesRemaining;
         private GUIStyle rollDisplayStyle;
@@ -70,6 +71,7 @@ namespace Escape4Now.Player
         //Checks settings and places the player on its starting tile.
         private void Awake()
         {
+            isTutorial = FindFirstObjectByType<Escape4Now.GameModes.Tutorial_Functionality>() != null;
             ValidateSettings();
             SetupInputActions();
             SetupMarker();
@@ -97,6 +99,7 @@ namespace Escape4Now.Player
             }
 
             HandleDiceRollInput();
+            if (IsRollAnimating) return;
 
             Vector2Int direction = ReadDirectionPressedThisFrame();
             if (direction != Vector2Int.zero)
@@ -108,10 +111,11 @@ namespace Escape4Now.Player
 
            private Escape4Now.TurnSystem.GameTimer gameTimer;
 
-           private bool wasRolled;
 private float rollAnimStart = -10f;
 private Texture2D circleTexture;
 private const float RollAnimDuration = 0.9f;
+        private bool IsRollAnimating => rollAnimStart >= 0f
+            && Time.realtimeSinceStartup - rollAnimStart < RollAnimDuration;
 // Which of the 3x3 cells hold a dot for faces 1-6 (cell = row * 3 + column)
 private static readonly int[] DiceFaceMasks = { 0, 16, 257, 273, 325, 341, 365 };
         //Draws the roll prompt or the current move budget.
@@ -122,22 +126,17 @@ private static readonly int[] DiceFaceMasks = { 0, 16, 257, 273, 325, 341, 365 }
             
             //find the timer once and remember it 
              if (gameTimer == null)gameTimer = FindObjectOfType<Escape4Now.TurnSystem.GameTimer>();
-            // Start the dice animation the moment a roll happens
-            if (hasRolled && !wasRolled) rollAnimStart = Time.realtimeSinceStartup;
-            wasRolled = hasRolled;
-
             // Main panel
             GUIStyle panelStyle = new GUIStyle(GUI.skin.box);
             panelStyle.normal.background = MakeTransparentTexture(new Color(0.02f, 0.04f, 0.08f, 0.88f));
 
-            //header style
             GUIStyle headerStyle = new GUIStyle(GUI.skin.label);
             headerStyle.fontSize = 13;
             headerStyle.fontStyle = FontStyle.Bold;
             headerStyle.alignment = TextAnchor.MiddleCenter;
             headerStyle.normal.textColor = new Color(0.65f, 0.85f, 1f);
 
-            // Player name style 
+            //Player status and prompt style.
             GUIStyle playerStyle = new GUIStyle(GUI.skin.label);
             playerStyle.fontSize = 22;
             playerStyle.fontStyle = FontStyle.Bold;
@@ -162,31 +161,23 @@ private static readonly int[] DiceFaceMasks = { 0, 16, 257, 273, 325, 341, 365 }
             promptStyle.fontSize = 16;
             promptStyle.normal.textColor = Color.white;
 
-            string turnName = turnSystem != null ? turnSystem.CurrentTurnName : gameObject.name;
-
             float panelX = 16f, panelY = 85f, panelW = 360f, panelH = 270f;
             float padding = 16f;
             float x = panelX + padding;
             float contentW = panelW - padding * 2f;
             float colW = contentW / 2f;
 
-            float moveOffset = -6f;
+            string turnName = turnSystem != null ? turnSystem.CurrentTurnName : gameObject.name;
 
             GUI.Box(new Rect(panelX, panelY, panelW, panelH), "", panelStyle);
 
-
-
-            //header
             GUI.Label(new Rect(x, 95f, contentW, 22f), "CURRENT TURN", headerStyle);
-
-            // Player name
             GUI.Label(new Rect(x, 114f, contentW, 34f), turnName.ToUpper(), playerStyle);
-
-            //Divder
-            Color oldColor = GUI.color;
+            Color dividerColor = GUI.color;
             GUI.color = new Color(1f, 1f, 1f, 0.25f);
             GUI.DrawTexture(new Rect(x + 15f, 164f, contentW - 30f, 2f), Texture2D.whiteTexture);
-            GUI.color = oldColor;
+            GUI.color = dividerColor;
+
 
 
             if (hasReachedExit)
@@ -196,25 +187,25 @@ private static readonly int[] DiceFaceMasks = { 0, 16, 257, 273, 325, 341, 365 }
             }
             else if (hasRolled)
             {
-                GUI.Label(new Rect(x, 172f, colW, 20f), "ROLL", smallStyle);
+                GUI.Label(new Rect(x, 175f, colW, 20f), "DIE RESULT", smallStyle);
 
                 //Moves Label
-                GUI.Label(new Rect(x + colW, 172f, colW, 20f), "MOVES LEFT", smallStyle);
+                GUI.Label(new Rect(x + colW, 175f, colW, 20f), "MOVES LEFT", smallStyle);
 
                 //Roll Number
                 //GUI.Label(new Rect(x, 192f, colW, 55f), lastRoll.ToString(), rollStyle);
                  
-                 DrawRollDisplay(new Rect(x, 192f, colW, 55f),  rollStyle);
+                 DrawRollDisplay(new Rect(x, 195f, colW, 55f),  rollStyle);
 
                 //Moves remaining
-                GUI.Label(new Rect(x + colW, 192f, colW, 55f), movesRemaining.ToString(), rollStyle);
+                GUI.Label(new Rect(x + colW, 195f, colW, 55f), IsRollAnimating ? "..." : movesRemaining.ToString(), rollStyle);
                 //Bottom instruction
-                GUI.Label(new Rect(x, 262f, contentW, 24f), "Press Arrow Keys or WASD to Move", smallStyle);
+                GUI.Label(new Rect(x, 260f, contentW, 24f), "Arrows/WASD move; bonuses and events can change moves.", smallStyle);
             }
             else
             {
-                GUI.Label(new Rect(x, 176f, contentW, 30f), "YOUR TURN", playerStyle);
-                GUI.Label(new Rect(x, 222f, contentW, 24f), "Press Spacebar to Roll Dice", playerStyle);
+                GUI.Label(new Rect(x, 180f, contentW, 30f), "YOUR TURN", playerStyle);
+                GUI.Label(new Rect(x, 222f, contentW, 24f), "Press Spacebar to Roll Dice", promptStyle);
             }
 
             //timer row.
@@ -234,6 +225,7 @@ private static readonly int[] DiceFaceMasks = { 0, 16, 257, 273, 325, 341, 365 }
             //Timer box CENTERED in the panel
                 float boxW = 160f, boxH = 36f, border = 2f;
                 Rect timerRect = new Rect(panelX +(panelW - boxW) / 2f, 296f, boxW, boxH);
+                Color oldColor = GUI.color;
               
               //Border the four thin lines 
                GUI.color = borderColor;
@@ -409,6 +401,7 @@ private Texture2D MakeCircleTexture(int size)
             int second = lucky || bad ? Random.Range(1, 7) : first;
             lastRoll = lucky ? Mathf.Max(first, second) : bad ? Mathf.Min(first, second) : first;
             movesRemaining = eventState.UseRoll(first, second);
+            rollAnimStart = Time.realtimeSinceStartup;
             hasRolled = true;
             if (mapEvents != null && (lucky || bad || bonus))
             {
@@ -616,7 +609,7 @@ private Texture2D MakeCircleTexture(int size)
         public bool MoveToGridPosition(Vector2Int newGridPosition)
         {
             if (!isActiveAndEnabled || IsMoving || hasReachedExit || mapTemplate == null
-                || !hasRolled || movesRemaining <= 0
+                || !hasRolled || IsRollAnimating || movesRemaining <= 0
                 || (turnSystem != null && !turnSystem.IsPlayersTurn(this)))
             {
                 return false;
