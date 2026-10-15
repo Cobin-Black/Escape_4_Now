@@ -4,6 +4,7 @@ using UnityEngine.InputSystem;
 using Escape4Now.Player;
 using Escape4Now.Items;
 using Escape4Now.TurnSystem;
+using Escape4Now.Bots;
 
 namespace Escape4Now.Battle
 {
@@ -27,24 +28,39 @@ namespace Escape4Now.Battle
         private int challengerRoll;
         private int opponentRoll;
         private bool challengerLost;
+        private float botResultCloseTime;
+
+        public bool IsBattleActive => state != BattleState.None;
+
         public string NetworkMessage => state == BattleState.Result ? battleMessage : "";
 
         // Checks for input to start a battle or close the results.
         private void Update()
         {
-            if (Escape4Now.Multiplayer.LanMultiplayerSession.Active) return;
-            if (Keyboard.current == null)
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.Active)
                 return;
 
             if (state == BattleState.Result)
             {
-                if (Keyboard.current.enterKey.wasPressedThisFrame)
+                BotController bot = challenger != null
+                    ? challenger.GetComponent<BotController>()
+                    : null;
+
+                if (bot != null && bot.enabled)
+                {
+                    if (Time.time >= botResultCloseTime)
+                        CloseBattle();
+                }
+                else if (Keyboard.current != null
+                    && Keyboard.current.enterKey.wasPressedThisFrame)
+                {
                     CloseBattle();
+                }
 
                 return;
             }
 
-            if (state != BattleState.None)
+            if (Keyboard.current == null || state != BattleState.None)
                 return;
 
             if (!Keyboard.current.enterKey.wasPressedThisFrame)
@@ -121,6 +137,32 @@ namespace Escape4Now.Battle
             }
         }
 
+        // Allows a bot to challenge a key carrier on the same tile.
+        public bool TryBotBattle(PlayerCharacter bot, PlayerCharacter target)
+        {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.Active
+                || state != BattleState.None
+                || bot == null
+                || target == null
+                || bot == target
+                || !bot.IsCurrentTurn
+                || bot.IsMoving
+                || bot.HasReachedExit
+                || bot.Inventory == null
+                || bot.Inventory.HasKey()
+                || target.Inventory == null
+                || !target.Inventory.HasKey()
+                || bot.GridPosition != target.GridPosition
+                || !target.CanBeTargetedBy(bot))
+            {
+                return false;
+            }
+
+            challenger = bot;
+            StartBattle(target);
+            return state == BattleState.Result;
+        }
+
         // Rolls for both players and gives the key to the winner.
         private void StartBattle(PlayerCharacter target)
         {
@@ -182,6 +224,11 @@ namespace Escape4Now.Battle
 
             challenger.SetInMenu(true);
             state = BattleState.Result;
+
+            BotController bot = challenger.GetComponent<BotController>();
+
+            if (bot != null && bot.enabled)
+                botResultCloseTime = Time.time + 2f;
         }
 
         //The host checks the same rules for a connected player's battle request.
