@@ -37,6 +37,9 @@ namespace Escape4Now.Multiplayer
             var state = new LanSnapshot { seed = map.LayoutSeed, exitX = map.ExitPosition.x,
                 exitY = map.ExitPosition.y, turn = turns.CurrentPlayerIndex, round = turns.TurnNumber,
                 blackout = events.BlackoutTurns, message = events.CurrentMessage,
+                paused = LanMultiplayerSession.Instance != null && LanMultiplayerSession.Instance.MatchPaused,
+                mapSettings = map.GenerationSettings,
+                furnitureSettings = map.FurnitureSettings,
                 players = new LanPlayerState[session.Participants.Count] };
             state.secondsRemaining = UnityEngine.Object.FindFirstObjectByType<GameTimer>()?.TimeRemaining ?? 0f;
             state.battleMessage = UnityEngine.Object.FindFirstObjectByType<Escape4Now.Battle.KeyStealBattleController>()?.NetworkMessage ?? "";
@@ -62,7 +65,9 @@ namespace Escape4Now.Multiplayer
             {
                 LanObjectState data = ObjectState(obstacle, 1, 0, obstacle.GridPosition);
                 data.facing = (int)obstacle.Facing;
-                data.interactable = obstacle.IsInteractable && obstacle.GetComponent<ObstacleStorage>()?.HasItem == true;
+                ObstacleStorage storage = obstacle.GetComponent<ObstacleStorage>();
+                data.interactable = obstacle.IsInteractable && storage?.HasItem == true;
+                data.containsKey = storage != null && storage.ContainsKey;
                 objects.Add(data);
             }
             foreach (Item item in UnityEngine.Object.FindObjectsByType<Item>(FindObjectsSortMode.None))
@@ -76,7 +81,9 @@ namespace Escape4Now.Multiplayer
             foreach (SchoolFurniture furniture in UnityEngine.Object.FindObjectsByType<SchoolFurniture>(FindObjectsSortMode.None))
             {
                 var data = ObjectState(furniture, 3, (int)furniture.Kind, furniture.Cell);
-                data.interactable = furniture.GetComponent<ObstacleStorage>()?.HasItem == true;
+                ObstacleStorage storage = furniture.GetComponent<ObstacleStorage>();
+                data.interactable = storage?.HasItem == true;
+                data.containsKey = storage != null && storage.ContainsKey;
                 objects.Add(data);
             }
             state.objects = objects.ToArray();
@@ -92,7 +99,9 @@ namespace Escape4Now.Multiplayer
         //Rejects malformed state before creating any objects.
         public static bool IsValid(LanSnapshot state)
         {
-            if (state == null || state.players == null || state.players.Length < 2 || state.players.Length > 4
+            if (state == null || state.mapSettings == null || !state.mapSettings.IsValid
+                || state.furnitureSettings == null || !state.furnitureSettings.IsValid
+                || state.players == null || state.players.Length < 2 || state.players.Length > 4
                 || state.objects == null || state.objects.Length > 128 || state.turn < 0
                 || state.turn >= state.players.Length || state.round < 1 || state.blackout < 0 || state.blackout > 4
                 || state.message == null || state.message.Length > 1024 || !Cell(state.exitX, state.exitY)
@@ -127,7 +136,7 @@ namespace Escape4Now.Multiplayer
             if (!IsValid(state)) return false;
             if (!hasLayout)
             {
-                map.UseNetworkLayout(state.seed);
+                map.UseNetworkLayout(state.seed, state.mapSettings, state.furnitureSettings);
                 if (!session.StartNetworkMatch(state.players.Length)) return false;
                 map.PlaceNetworkExit(new Vector2Int(state.exitX, state.exitY));
                 hasLayout = true;
@@ -143,6 +152,9 @@ namespace Escape4Now.Multiplayer
             map.ReplacePlayerOccupants(occupied);
             events.ApplyNetworkDisplay(state.message, state.blackout);
             UnityEngine.Object.FindFirstObjectByType<GameTimer>()?.ApplyNetworkTime(state.secondsRemaining);
+            bool matchFinished = state.secondsRemaining <= 0f;
+            foreach (LanPlayerState player in state.players) matchFinished |= player.won;
+            session.ApplyNetworkPause(state.paused, matchFinished);
             var present = new HashSet<int>();
             foreach (LanObjectState data in state.objects)
             {
@@ -151,7 +163,7 @@ namespace Escape4Now.Multiplayer
                 if (data.kind == 1 && copies[data.id] != null)
                     copies[data.id].GetComponent<ObstacleGridControl>().IsInteractable = data.interactable;
                 if ((data.kind == 1 || data.kind == 3) && copies[data.id] != null)
-                    copies[data.id].GetComponent<ObstacleStorage>()?.ApplyNetworkContents(data.interactable);
+                    copies[data.id].GetComponent<ObstacleStorage>()?.ApplyNetworkContents(data.interactable, data.containsKey);
             }
             var removed = new List<int>();
             foreach (var entry in copies)

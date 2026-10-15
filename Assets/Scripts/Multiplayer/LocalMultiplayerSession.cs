@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Escape4Now.Map;
 using Escape4Now.Player;
 using Escape4Now.TurnSystem;
+using Escape4Now.UI;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
@@ -13,10 +14,53 @@ namespace Escape4Now.Multiplayer
     public sealed class LocalMultiplayerSession : MonoBehaviour
     {
         [SerializeField] private bool showTemporaryUI = true;
+        [Header("Pause Menu Layout")]
+        [SerializeField, Tooltip("Pause button width and height in screen pixels.")]
+        private Vector2 pauseButtonSize = new Vector2(126f, 36f);
+        [SerializeField, Tooltip("Pause button distance from the top and right edges.")]
+        private Vector2 pauseButtonMargin = new Vector2(16f, 16f);
+        [SerializeField, Tooltip("Pause panel width and height in screen pixels.")]
+        private Vector2 pauseMenuSize = new Vector2(380f, 360f);
+        [SerializeField] private string displayOptionsTitle = "DISPLAY OPTIONS";
+        [Header("Player Colors")]
+        [SerializeField] private Color[] playerColors =
+        {
+            new Color(0.15f, 0.7f, 1f), new Color(1f, 0.35f, 0.3f),
+            new Color(0.3f, 0.85f, 0.4f), new Color(1f, 0.8f, 0.2f)
+        };
+        [Header("Pause Menu Colors")]
+        [SerializeField] private Color pauseBackdropTint = new Color(0f, 0f, 0f, 0.52f);
+        [SerializeField] private Color pausePanelColor = new Color(0.035f, 0.055f, 0.085f, 0.98f);
+        [SerializeField] private Color pauseTitleBarColor = new Color(0.08f, 0.13f, 0.19f, 1f);
+        [SerializeField] private Color pauseTitleColor = Color.white;
+        [SerializeField, Range(18, 40)] private int pauseTitleFontSize = 28;
+        [Header("Result Screen Text")]
+        [SerializeField] private string escapeTitleSuffix = "ESCAPED";
+        [SerializeField] private string timeoutTitle = "EVERYONE LOSES";
+        [SerializeField] private string otherPlayersLoseMessage = "All other players lose.";
+        [SerializeField] private string timeoutMessage = "Time ran out before anyone escaped.";
+        [SerializeField] private string resultTimeLabel = "TIME LEFT";
+        [SerializeField] private string resultButtonLabel = "Back to Lobby";
+        [Header("Result Screen Layout")]
+        [SerializeField, Min(180f)] private float resultContentWidth = 420f;
+        [SerializeField, Min(0f)] private float resultScreenMargin = 24f;
+        [SerializeField, Min(0f)] private float resultSpacing = 18f;
+        [SerializeField, Min(28f)] private float resultButtonHeight = 44f;
+        [SerializeField, Min(1f)] private float resultAccentThickness = 2f;
+        [SerializeField, Range(24, 72)] private int resultTitleFontSize = 48;
+        [SerializeField, Range(12, 28)] private int resultMessageFontSize = 20;
+        [SerializeField, Range(10, 24)] private int resultDetailFontSize = 16;
+        [Header("Result Screen Colors")]
+        [SerializeField] private Color resultBackdropColor = new Color(0.02f, 0.035f, 0.055f, 0.94f);
+        [SerializeField] private Color resultWinColor = new Color(0.3f, 0.9f, 0.73f);
+        [SerializeField] private Color resultLoseColor = new Color(1f, 0.43f, 0.4f);
+        [SerializeField] private Color resultTextColor = Color.white;
+        [SerializeField] private Color resultDetailColor = new Color(0.7f, 0.77f, 0.82f);
         private static LocalMultiplayerSession instance;
         private readonly List<MonoBehaviour> heldScripts = new List<MonoBehaviour>();
         private IsometricMapTemplate map;
         private TurnSystemController turns;
+        private GameTimer matchTimer;
         private PlayerCharacter sourcePlayer;
         private PlayerCharacter[] participants;
         private int playerCount = 2;
@@ -26,16 +70,48 @@ namespace Escape4Now.Multiplayer
         private string status = "";
         private Vector2 setupScroll;
         private GUIStyle titleStyle, labelStyle, smallStyle, buttonStyle, selectedStyle, errorStyle;
+        private GUIStyle pauseTitleStyle;
+        private GUIStyle resultTitleStyle, resultMessageStyle, resultDetailStyle;
         private Texture2D buttonTexture, hoverTexture, selectedTexture;
+        private bool pauseMenuOpen;
+        private bool showEventTiles;
+        private bool showItemObstacles;
+        private bool showKeyLocation;
         public bool MatchStarted { get; private set; }
         public string Status => status;
         public bool ShowTemporaryUI => showTemporaryUI;
+        public static bool MatchIsRunning => instance != null && instance.MatchStarted;
+        public static bool MatchHasEnded => instance != null && instance.MatchStarted && instance.HasMatchFinished();
+        public static bool GameplayPaused => instance != null && instance.pauseMenuOpen;
+        public static bool ShowItemObstacles => instance != null && instance.showItemObstacles;
+        public static bool ShowKeyLocation => instance != null && instance.showKeyLocation;
 
-        private static readonly Color[] PlayerColors =
+        private void OnValidate()
         {
-            new Color(0.15f, 0.7f, 1f), new Color(1f, 0.35f, 0.3f),
-            new Color(0.3f, 0.85f, 0.4f), new Color(1f, 0.8f, 0.2f)
-        };
+            if (playerColors == null || playerColors.Length != 4)
+                System.Array.Resize(ref playerColors, 4);
+            pauseButtonSize = new Vector2(Mathf.Clamp(pauseButtonSize.x, 80f, 240f), Mathf.Clamp(pauseButtonSize.y, 28f, 80f));
+            pauseButtonMargin = new Vector2(Mathf.Clamp(pauseButtonMargin.x, 0f, 100f), Mathf.Clamp(pauseButtonMargin.y, 0f, 100f));
+            pauseMenuSize = new Vector2(Mathf.Clamp(pauseMenuSize.x, 320f, 700f), Mathf.Clamp(pauseMenuSize.y, 320f, 700f));
+            if (string.IsNullOrWhiteSpace(displayOptionsTitle)) displayOptionsTitle = "DISPLAY OPTIONS";
+            pauseTitleFontSize = Mathf.Clamp(pauseTitleFontSize, 18, 40);
+            resultContentWidth = Mathf.Max(180f, resultContentWidth);
+            resultScreenMargin = Mathf.Max(0f, resultScreenMargin);
+            resultSpacing = Mathf.Max(0f, resultSpacing);
+            resultButtonHeight = Mathf.Max(28f, resultButtonHeight);
+            resultAccentThickness = Mathf.Max(1f, resultAccentThickness);
+            resultTitleFontSize = Mathf.Clamp(resultTitleFontSize, 24, 72);
+            resultMessageFontSize = Mathf.Clamp(resultMessageFontSize, 12, 28);
+            resultDetailFontSize = Mathf.Clamp(resultDetailFontSize, 10, 24);
+            pauseTitleStyle = null;
+            resultTitleStyle = null;
+        }
+
+        private Color GetPlayerColor(int index)
+        {
+            return playerColors != null && index >= 0 && index < playerColors.Length
+                ? playerColors[index] : Color.white;
+        }
 
         //Turn controls are available once the shared-device match has started.
         public static bool AllowTurnButtons => (instance == null || instance.MatchStarted)
@@ -45,12 +121,20 @@ namespace Escape4Now.Multiplayer
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetSession() { instance = null; }
 
+        //Applies the host's pause state to every local copy of a network match.
+        internal void ApplyNetworkPause(bool paused, bool matchFinished)
+        {
+            pauseMenuOpen = paused;
+            Time.timeScale = paused || matchFinished ? 0f : 1f;
+        }
+
         //Waits for a player count without disabling a teammate's menu canvas.
         private void Awake()
         {
             instance = this;
             map = FindFirstObjectByType<IsometricMapTemplate>();
             turns = FindFirstObjectByType<TurnSystemController>();
+            matchTimer = FindFirstObjectByType<GameTimer>();
             sourcePlayer = FindFirstObjectByType<PlayerCharacter>();
             foreach (MonoBehaviour script in FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None))
             {
@@ -119,7 +203,7 @@ namespace Escape4Now.Multiplayer
             for (int i = 0; i < count; i++)
             {
                 PlayerCharacter player = participants[i];
-                player.ConfigureParticipant(map, turns, cells[i], i + 1, PlayerColors[i], GetPlayerName(i));
+                player.ConfigureParticipant(map, turns, cells[i], i + 1, GetPlayerColor(i), GetPlayerName(i));
                 player.enabled = true;
                 if (player.Inventory != null) player.Inventory.enabled = true;
                 foreach (Renderer renderer in player.GetComponentsInChildren<Renderer>(true)) renderer.enabled = true;
@@ -143,13 +227,14 @@ namespace Escape4Now.Multiplayer
         //Temporary controls can be replaced by the team's main menu later.
         private void OnGUI()
         {
-            if (!showTemporaryUI) return;
             PrepareSetupStyles();
             if (MatchStarted)
             {
-                if (GUI.Button(new Rect(Screen.width - 156, 16, 140, 38), "Leave Match", buttonStyle)) ReturnToSetup();
+                if (TryGetMatchResult(out PlayerCharacter winner)) DrawMatchResult(winner);
+                else DrawMatchPauseMenu();
                 return;
             }
+            if (!showTemporaryUI) return;
             DrawSetupColor(new Rect(0, 0, Screen.width, Screen.height), new Color(0.075f, 0.085f, 0.08f));
             float width = Mathf.Max(180, Mathf.Min(480, Screen.width - 32));
             float height = Mathf.Max(120, Mathf.Min(530, Screen.height - 32));
@@ -173,7 +258,7 @@ namespace Escape4Now.Multiplayer
             {
                 float y = 212 + i * 42;
                 bool playing = i < playerCount;
-                Color color = playing ? PlayerColors[i] : new Color(0.24f, 0.27f, 0.25f);
+                Color color = playing ? GetPlayerColor(i) : new Color(0.24f, 0.27f, 0.25f);
                 DrawSetupColor(new Rect(8, y + 4, 14, 26), color);
                 if (playing)
                 {
@@ -187,6 +272,137 @@ namespace Escape4Now.Multiplayer
             if (GUI.Button(new Rect(0, 402, contentWidth, 48), "Start Match", selectedStyle)) StartLocalMatch();
             GUI.Label(new Rect(0, 464, contentWidth, 56), status, errorStyle);
             GUI.EndScrollView();
+        }
+
+        //Keeps match controls in one menu instead of covering the map.
+        private void DrawMatchPauseMenu()
+        {
+            Rect pauseButton = new Rect(Screen.width - pauseButtonMargin.x - pauseButtonSize.x,
+                pauseButtonMargin.y, pauseButtonSize.x, pauseButtonSize.y);
+            if (!pauseMenuOpen && GUI.Button(pauseButton, "Pause", buttonStyle))
+            {
+                pauseMenuOpen = true;
+                if (LanMultiplayerSession.Active)
+                {
+                    Time.timeScale = 0f;
+                    lan.Submit("pause");
+                }
+                else Time.timeScale = 0f;
+            }
+
+            if (!pauseMenuOpen) return;
+
+            float panelWidth = Mathf.Min(pauseMenuSize.x, Screen.width - pauseButtonMargin.x * 2f);
+            float panelHeight = Mathf.Min(pauseMenuSize.y, Screen.height - pauseButtonMargin.y * 2f);
+            Rect panel = new Rect((Screen.width - panelWidth) * 0.5f,
+                (Screen.height - panelHeight) * 0.5f, panelWidth, panelHeight);
+            DrawSetupColor(new Rect(0f, 0f, Screen.width, Screen.height), pauseBackdropTint);
+            DrawSetupColor(panel, pausePanelColor);
+            DrawSetupColor(new Rect(panel.x, panel.y, panel.width, 46f), pauseTitleBarColor);
+            if (pauseTitleStyle == null)
+            {
+                pauseTitleStyle = new GUIStyle(GUI.skin.label)
+                {
+                    fontSize = pauseTitleFontSize,
+                    fontStyle = FontStyle.Bold,
+                    alignment = TextAnchor.MiddleCenter
+                };
+                pauseTitleStyle.normal.textColor = pauseTitleColor;
+            }
+            GUI.Label(new Rect(panel.x + 12f, panel.y + 4f, panel.width - 24f, 38f), "PAUSED", pauseTitleStyle);
+            float left = panel.x + 20f;
+            float rowWidth = panel.width - 40f;
+            if (GUI.Button(new Rect(left, panel.y + 52f, rowWidth, 38f), "Resume Game", selectedStyle))
+            {
+                if (LanMultiplayerSession.Active) lan.Submit("resume");
+                else ApplyNetworkPause(false, HasMatchFinished());
+            }
+
+            GUI.Label(new Rect(left, panel.y + 100f, rowWidth, 24f), displayOptionsTitle, labelStyle);
+            DrawPauseToggle(new Rect(left, panel.y + 132f, rowWidth, 30f), "Show Event Tiles", ref showEventTiles, true);
+            DrawPauseToggle(new Rect(left, panel.y + 170f, rowWidth, 30f), "Show Item Obstacles", ref showItemObstacles);
+            DrawPauseToggle(new Rect(left, panel.y + 208f, rowWidth, 30f), "Show Key Location", ref showKeyLocation);
+
+            DrawSetupColor(new Rect(left, panel.y + 258f, rowWidth, 1f), new Color(1f, 1f, 1f, 0.2f));
+            if (GUI.Button(new Rect(left, panel.y + 278f, rowWidth, 38f), "Leave Match", buttonStyle))
+                ReturnToSetup();
+        }
+
+        //Sends event visibility changes to the controller that already owns the event markers.
+        private void DrawPauseToggle(Rect rect, string label, ref bool value, bool controlsEventVisibility = false)
+        {
+            bool nextValue = GUI.Toggle(rect, value, label);
+            if (nextValue == value) return;
+            value = nextValue;
+            if (controlsEventVisibility)
+                map?.GetComponent<MapEventController>()?.SetEventLocationsVisible(value);
+        }
+
+        //Keeps a finished match stopped if the pause menu is opened after the result.
+        private bool HasMatchFinished()
+        {
+            return TryGetMatchResult(out _);
+        }
+
+        private bool TryGetMatchResult(out PlayerCharacter winner)
+        {
+            winner = null;
+            if (participants != null)
+                foreach (PlayerCharacter player in participants)
+                    if (player != null && player.HasReachedExit)
+                    {
+                        winner = player;
+                        return true;
+                    }
+            return matchTimer != null && matchTimer.HasExpired;
+        }
+
+        private void DrawMatchResult(PlayerCharacter winner)
+        {
+            Color accent = winner != null ? resultWinColor : resultLoseColor;
+            if (resultTitleStyle == null)
+            {
+                resultTitleStyle = new GUIStyle(GUI.skin.label)
+                {
+                    fontSize = resultTitleFontSize, fontStyle = FontStyle.Bold,
+                    alignment = TextAnchor.MiddleCenter, wordWrap = true
+                };
+                resultMessageStyle = new GUIStyle(resultTitleStyle) { fontSize = resultMessageFontSize, fontStyle = FontStyle.Normal };
+                resultDetailStyle = new GUIStyle(resultMessageStyle) { fontSize = resultDetailFontSize };
+            }
+            resultTitleStyle.normal.textColor = accent;
+            resultMessageStyle.normal.textColor = resultTextColor;
+            resultDetailStyle.normal.textColor = resultDetailColor;
+            string title = winner != null ? winner.name.ToUpperInvariant() + " " + escapeTitleSuffix : timeoutTitle;
+            string message = winner != null ? otherPlayersLoseMessage : timeoutMessage;
+            int seconds = matchTimer != null ? Mathf.Max(0, Mathf.CeilToInt(matchTimer.TimeRemaining)) : 0;
+            string detail = resultTimeLabel + " " + (seconds / 60).ToString("00") + ":" + (seconds % 60).ToString("00");
+
+            Matrix4x4 previousMatrix = HudScale.Apply();
+            int previousDepth = GUI.depth;
+            bool previousEnabled = GUI.enabled;
+            GUI.depth = -1000;
+            GUI.enabled = true;
+            DrawSetupColor(new Rect(0f, 0f, HudScale.Width, HudScale.Height), resultBackdropColor);
+            float width = Mathf.Max(1f, Mathf.Min(resultContentWidth, HudScale.Width - resultScreenMargin * 2f));
+            float titleHeight = resultTitleStyle.CalcHeight(new GUIContent(title), width);
+            float messageHeight = resultMessageStyle.CalcHeight(new GUIContent(message), width);
+            float detailHeight = resultDetailStyle.CalcHeight(new GUIContent(detail), width);
+            float height = titleHeight + resultAccentThickness + messageHeight + detailHeight + resultButtonHeight + resultSpacing * 5f;
+            float left = (HudScale.Width - width) * 0.5f;
+            float top = Mathf.Max(resultScreenMargin, (HudScale.Height - height) * 0.5f);
+            GUI.Label(new Rect(left, top, width, titleHeight), title, resultTitleStyle);
+            top += titleHeight + resultSpacing;
+            DrawSetupColor(new Rect(left + width * 0.4f, top, width * 0.2f, resultAccentThickness), accent);
+            top += resultAccentThickness + resultSpacing;
+            GUI.Label(new Rect(left, top, width, messageHeight), message, resultMessageStyle);
+            top += messageHeight + resultSpacing;
+            GUI.Label(new Rect(left, top, width, detailHeight), detail, resultDetailStyle);
+            top += detailHeight + resultSpacing * 2f;
+            if (GUI.Button(new Rect(left, top, width, resultButtonHeight), resultButtonLabel, selectedStyle)) ReturnToSetup();
+            GUI.enabled = previousEnabled;
+            GUI.depth = previousDepth;
+            GUI.matrix = previousMatrix;
         }
 
         private string GetPlayerName(int index)
@@ -225,6 +441,7 @@ namespace Escape4Now.Multiplayer
             selectedStyle.normal.textColor = new Color(0.04f, 0.1f, 0.06f);
             selectedStyle.hover.background = selectedTexture;
             selectedStyle.hover.textColor = selectedStyle.normal.textColor;
+            pauseTitleStyle = null;
         }
 
         //Makes a small reusable button background.

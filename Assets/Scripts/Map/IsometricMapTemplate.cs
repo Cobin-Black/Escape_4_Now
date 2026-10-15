@@ -6,31 +6,49 @@ namespace Escape4Now.Map
     //Draws a connected school floor plan using the existing diamond-shaped tiles.
     public sealed class IsometricMapTemplate : MonoBehaviour
     {
-        //Map size, tile shape, and floor colors.
+        //The school generator currently requires a 25 by 25 grid for its room and path checks.
         [SerializeField, HideInInspector] private int width = SchoolMapLayout.Size;
         [SerializeField, HideInInspector] private int height = SchoolMapLayout.Size;
+        [Header("Tile Shape")]
         [SerializeField, Min(0.1f)] private float tileWidth = 1.2f;
         [SerializeField, Min(0.1f)] private float tileHeight = 0.6f;
         [SerializeField, Min(0f)] private float tileDepth = 0.28f;
+        [Header("Floor Colors")]
         [SerializeField] private Color floorColor = new Color(0.02f, 0.02f, 0.02f, 1f);
         [SerializeField] private Color alternateFloorColor = new Color(0.08f, 0.08f, 0.08f, 1f);
         [SerializeField] private Color hallwayFloorColor = new Color(0.52f, 0.59f, 0.58f);
         [SerializeField] private Color secondaryFloorColor = new Color(0.36f, 0.43f, 0.48f);
+        [SerializeField] private Color libraryFloorColor = new Color(0.19f, 0.35f, 0.29f);
+        [SerializeField] private Color computerLabFloorColor = new Color(0.2f, 0.3f, 0.43f);
+        [SerializeField] private Color classroomFloorColor = new Color(0.43f, 0.32f, 0.17f);
+        [SerializeField] private Color scienceLabFloorColor = new Color(0.36f, 0.23f, 0.33f);
+        [SerializeField] private Color otherFloorColor = new Color(0.19f, 0.2f, 0.22f);
+        [Header("Wall Colors")]
         [SerializeField] private Color rightSideColor = new Color(0.16f, 0.16f, 0.16f, 1f);
         [SerializeField] private Color leftSideColor = new Color(0.1f, 0.1f, 0.1f, 1f);
+        [SerializeField] private Color wallColor = new Color(0.18f, 0.22f, 0.21f);
+        [SerializeField] private Color wallCapColor = new Color(0.28f, 0.32f, 0.3f);
+        [Header("Generation")]
         [SerializeField] private bool generateOnStart = true;
         [SerializeField] private bool useSchoolLayout = true;
+        [Header("School Layout Rules")]
+        [SerializeField] private SchoolMapGenerationSettings generationSettings = new SchoolMapGenerationSettings();
         //Leave this off for normal games. A fixed seed repeats a map when testing.
         [SerializeField] private bool useFixedSeed;
         [SerializeField] private int fixedSeed;
         //A prefab is a reusable template. The map makes a copy for each grid space.
+        [Header("Tile Prefab")]
         [SerializeField] private IsometricMapTile floorTilePrefab;
+        [Header("Furniture Settings")]
+        [SerializeField] private SchoolFurnitureSettings furnitureSettings = new SchoolFurnitureSettings();
+        [SerializeField] private SchoolFurniture[] furniturePrefabOverrides;
 
         //Exit placement and how much the front walls fade when a player stands behind them.
         [SerializeField] private bool hasExit = false;
         [SerializeField] private bool exitDoorAllowed = true;
         private Vector2Int? requestedExitCell;
         [SerializeField] private Vector2Int exitGridPosition = new Vector2Int(9, 0);
+        [Header("Exit and Wall Fade")]
         [SerializeField] private Color exitColor = new Color(0.2f, 0.75f, 0.35f);
         [SerializeField, Range(0f, 1f)] private float nearWallFadedAlpha = 0.15f;
 
@@ -60,6 +78,10 @@ namespace Escape4Now.Map
 
         //Shares read-only room bounds and themes with other systems.
         public bool UsesSchoolLayout => useSchoolLayout;
+        public SchoolMapGenerationSettings GenerationSettings => generationSettings != null
+            ? generationSettings.Copy() : new SchoolMapGenerationSettings();
+        public SchoolFurnitureSettings FurnitureSettings => furnitureSettings != null
+            ? furnitureSettings.Copy() : new SchoolFurnitureSettings();
         public IReadOnlyList<SchoolRoom> Rooms { get { if (!useSchoolLayout) return System.Array.Empty<SchoolRoom>(); PrepareLayout(); return layout.Rooms; } }
         public int LayoutSeed { get { PrepareLayout(); return layout.Seed; } }
         public IReadOnlyList<SchoolSecondarySpace> SecondarySpaces { get { if (!useSchoolLayout) return System.Array.Empty<SchoolSecondarySpace>(); PrepareLayout(); return layout.SecondarySpaces; } }
@@ -69,13 +91,22 @@ namespace Escape4Now.Map
         public void SetHasExit(bool value) { exitDoorAllowed = value; hasExit = false; }
         public void SetExitPosition(Vector2Int cell) { requestedExitCell = cell; }
 
+        public void SetFurniturePrefabOverrides(SchoolFurniture[] prefabs)
+        {
+            furniturePrefabOverrides = prefabs ?? System.Array.Empty<SchoolFurniture>();
+            if (layout != null && useSchoolLayout) PrepareFurniture();
+        }
+
         //Clients draw the host's layout instead of choosing another random map.
-        public void UseNetworkLayout(int seed)
+        public void UseNetworkLayout(int seed, SchoolMapGenerationSettings settings = null,
+            SchoolFurnitureSettings furniture = null)
         {
             ValidateSettings();
+            if (settings != null) generationSettings = settings.Copy();
+            if (furniture != null) furnitureSettings = furniture.Copy();
             useSchoolLayout = true;
             hasExit = false;
-            layout = new SchoolMapLayout(seed);
+            layout = new SchoolMapLayout(seed, generationSettings);
             PrepareFurniture();
         }
 
@@ -88,7 +119,7 @@ namespace Escape4Now.Map
                 return;
             }
             ValidateSettings();
-            layout = new SchoolMapLayout(useFixedSeed ? fixedSeed : System.Guid.NewGuid().GetHashCode());
+            layout = new SchoolMapLayout(useFixedSeed ? fixedSeed : System.Guid.NewGuid().GetHashCode(), generationSettings);
             if (!useSchoolLayout) return;
             PrepareFurniture();
         }
@@ -102,16 +133,25 @@ namespace Escape4Now.Map
             furniturePlan = null;
             furniturePrefabs.Clear();
             if (!useSchoolLayout) return;
-            foreach (SchoolFurniture prefab in Resources.LoadAll<SchoolFurniture>("SchoolObstacles"))
+            var obstacleSpawner = GetComponent<Escape4Now.Obstacles.ObstacleSpawner>();
+            IEnumerable<SchoolFurniture> templates = obstacleSpawner != null
+                ? obstacleSpawner.GetSchoolPrefabs() : Resources.LoadAll<SchoolFurniture>("SchoolObstacles");
+            foreach (SchoolFurniture prefab in templates)
             {
                 if (prefab == null || !prefab.IsValidTemplate() || furniturePrefabs.ContainsKey(prefab.Kind))
                     throw new System.InvalidOperationException("A school furniture prefab is invalid or duplicated.");
                 furniturePrefabs.Add(prefab.Kind, prefab);
             }
+            foreach (SchoolFurniture prefab in furniturePrefabOverrides ?? System.Array.Empty<SchoolFurniture>())
+            {
+                if (prefab == null || !prefab.IsValidTemplate())
+                    throw new System.InvalidOperationException("A furniture prefab override is invalid.");
+                furniturePrefabs[prefab.Kind] = prefab;
+            }
             foreach (SchoolFurnitureKind kind in System.Enum.GetValues(typeof(SchoolFurnitureKind)))
                 if (!furniturePrefabs.ContainsKey(kind))
                     throw new System.InvalidOperationException("Missing school furniture prefab: " + kind);
-            furniturePlan = new SchoolFurniturePlan(layout);
+            furniturePlan = new SchoolFurniturePlan(layout, furnitureSettings);
             foreach (SchoolFurniturePlacement item in furniturePlan.Furniture)
                 blockedPositions.Add(new Vector2Int(item.Cell % Width, item.Cell / Width));
         }
@@ -348,6 +388,11 @@ namespace Escape4Now.Map
         private void ValidateSettings()
         {
             width = height = SchoolMapLayout.Size;
+            if (generationSettings == null) generationSettings = new SchoolMapGenerationSettings();
+            SchoolMapGenerationSettings validSettings = generationSettings.Copy();
+            generationSettings = validSettings;
+            if (furnitureSettings == null) furnitureSettings = new SchoolFurnitureSettings();
+            furnitureSettings = furnitureSettings.Copy();
             tileWidth = float.IsNaN(tileWidth) ? 1.2f : Mathf.Clamp(tileWidth, 0.1f, 10f);
             tileHeight = float.IsNaN(tileHeight) ? 0.6f : Mathf.Clamp(tileHeight, 0.1f, 10f);
             tileDepth = float.IsNaN(tileDepth) ? 0.28f : Mathf.Clamp(tileDepth, 0f, 10f);
@@ -627,15 +672,15 @@ namespace Escape4Now.Map
         }
 
         //Gives each school area a quiet identifying floor color.
-        private static Color RoomColor(SchoolRoomType room)
+        private Color RoomColor(SchoolRoomType room)
         {
             switch (room)
             {
-                case SchoolRoomType.Library: return new Color(0.19f, 0.35f, 0.29f);
-                case SchoolRoomType.ComputerLab: return new Color(0.2f, 0.3f, 0.43f);
-                case SchoolRoomType.Classroom: return new Color(0.43f, 0.32f, 0.17f);
-                case SchoolRoomType.ScienceLab: return new Color(0.36f, 0.23f, 0.33f);
-                default: return new Color(0.19f, 0.2f, 0.22f);
+                case SchoolRoomType.Library: return libraryFloorColor;
+                case SchoolRoomType.ComputerLab: return computerLabFloorColor;
+                case SchoolRoomType.Classroom: return classroomFloorColor;
+                case SchoolRoomType.ScienceLab: return scienceLabFloorColor;
+                default: return otherFloorColor;
             }
         }
 
@@ -738,16 +783,16 @@ namespace Escape4Now.Map
                 {
                     //A low solid infill makes sealed areas look intentional, not like missing floor.
                     CreateBlock(tile, "Sealed wall base", Vector2.zero, 1f, 1f, 0f, 0.06f,
-                        new Color(0.15f, 0.17f, 0.18f), order - 1);
+                        wallColor * 0.85f, order - 1);
                     AddRoomWallEdges(tile, cell, order);
                     return;
                 }
                 // All borders use the same low height to keep the floor visible.
                 const float wallHeight = 0.22f;
                 Renderer wall = CreateBlock(tile, "Wall", Vector2.zero, 0.98f, 0.98f, 0f, wallHeight,
-                    new Color(0.18f, 0.22f, 0.21f), order);
+                    wallColor, order);
                 Renderer wallCap = CreateBlock(tile, "Wall cap", Vector2.zero, 1f, 1f, wallHeight, 0.06f,
-                    new Color(0.28f, 0.32f, 0.3f), order + 1);
+                    wallCapColor, order + 1);
 
                 //Room walls can also stand in front of a player.
                 mapTile.SetWallRenderers(wall, wallCap);
@@ -764,9 +809,9 @@ namespace Escape4Now.Map
                 float sizeX = direction.x != 0 ? 0.12f : 1f;
                 float sizeY = direction.y != 0 ? 0.12f : 1f;
                 CreateBlock(tile, "Room wall", offset, sizeX, sizeY, 0f, 0.22f,
-                    new Color(0.18f, 0.22f, 0.21f), order);
+                    wallColor, order);
                 CreateBlock(tile, "Room wall cap", offset, sizeX, sizeY, 0.22f, 0.04f,
-                    new Color(0.28f, 0.32f, 0.3f), order + 1);
+                    wallCapColor, order + 1);
             }
         }
 

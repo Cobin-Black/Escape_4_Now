@@ -98,7 +98,32 @@ internal static class Program
         Require(Snapshot(new SchoolMapLayout(123)) == Snapshot(new SchoolMapLayout(123)), "Same seed is repeatable");
         Require(EnvironmentSnapshot(new SchoolMapLayout(123)) == EnvironmentSnapshot(new SchoolMapLayout(123)),
             "Environment metadata repeats with its seed");
+        var noSecondarySettings = new SchoolMapGenerationSettings { SecondaryRoomChance = 0f };
+        Require(new SchoolMapLayout(123, noSecondarySettings).SecondarySpaces.Count == 0,
+            "Inspector setting can turn off optional secondary rooms");
+        var compactRoomSettings = new SchoolMapGenerationSettings
+        {
+            MainRoomMinimumSize = 6,
+            MainRoomMaximumSize = 7
+        };
+        Require(new SchoolMapLayout(456, compactRoomSettings).HasGoodSpaceUsage(),
+            "Inspector room-size settings still produce a valid map");
+        var compactFurniture = new SchoolFurnitureSettings
+        {
+            LibraryShelvesMinimum = 2,
+            LibraryShelvesMaximum = 2,
+            LibraryTablesMaximum = 0,
+            LibraryCartsMaximum = 0,
+            HallwayObjectsMinimum = 1,
+            HallwayObjectsMaximum = 1
+        };
+        var customPlan = new SchoolFurniturePlan(new SchoolMapLayout(123), compactFurniture);
+        int shelfCount = 0;
+        foreach (SchoolFurniturePlacement placement in customPlan.Furniture)
+            if (placement.Kind == SchoolFurnitureKind.Bookshelf) shelfCount++;
+        Require(shelfCount == 2, "Inspector furniture settings control the library shelf count");
         Console.WriteLine("PASS: 10,002 seeds: size, rooms, borders, centers, floor connectivity, and safe bounds.");
+        Console.WriteLine("PASS: Map-generation and furniture settings preserve their placement rules.");
         Console.WriteLine("PASS: " + shapes.Count + " different layouts; shuffled themes; repeatable seeds.");
         Console.WriteLine("Legend: # wall, . hallway, L library, C computer lab, R classroom, S science lab");
         for (int seed = 1; seed <= 3; seed++)

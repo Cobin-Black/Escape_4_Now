@@ -8,7 +8,9 @@ namespace Escape4Now.Items
 {
     public sealed class ItemSpawner : MonoBehaviour
     {
+        [Header("Map")]
         [SerializeField] private IsometricMapTemplate map;
+        [Header("Item Prefabs")]
         [SerializeField] private DoubleDiceItem doubleDicePrefab;
         [SerializeField] private CustomDiceItem customDicePrefab;
         [SerializeField] private KeyStealerItem keyStealerPrefab;

@@ -9,6 +9,15 @@ namespace Escape4Now.Battle
 {
     public sealed class KeyStealBattleController : MonoBehaviour
     {
+        [Header("Battle Window")]
+        [SerializeField, Min(240f)] private float windowWidth = 360f;
+        [SerializeField, Min(140f)] private float resultWindowHeight = 180f;
+        [SerializeField, Min(80f)] private float opponentWindowBaseHeight = 100f;
+        [SerializeField, Min(80f)] private float opponentRowHeight = 40f;
+        [SerializeField, Min(0f)] private float windowPadding = 15f;
+        [SerializeField, Min(0f)] private float contentSpacing = 10f;
+        [SerializeField, Range(10, 32)] private int headingFontSize = 18;
+
         private enum BattleState
         {
             None,
@@ -27,12 +36,26 @@ namespace Escape4Now.Battle
         private int challengerRoll;
         private int opponentRoll;
         private bool challengerLost;
+        private GUIStyle headingStyle;
         public string NetworkMessage => state == BattleState.Result ? battleMessage : "";
+
+        private void OnValidate()
+        {
+            windowWidth = Mathf.Clamp(windowWidth, 240f, 1000f);
+            resultWindowHeight = Mathf.Clamp(resultWindowHeight, 140f, 700f);
+            opponentWindowBaseHeight = Mathf.Clamp(opponentWindowBaseHeight, 80f, 500f);
+            opponentRowHeight = Mathf.Clamp(opponentRowHeight, 24f, 100f);
+            windowPadding = Mathf.Clamp(windowPadding, 0f, 80f);
+            contentSpacing = Mathf.Clamp(contentSpacing, 0f, 60f);
+            headingFontSize = Mathf.Clamp(headingFontSize, 10, 32);
+            headingStyle = null;
+        }
 
         // Checks for input to start a battle or close the results.
         private void Update()
         {
-            if (Escape4Now.Multiplayer.LanMultiplayerSession.Active) return;
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.Active || Time.timeScale <= 0f
+                || Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused) return;
             if (Keyboard.current == null)
                 return;
 
@@ -187,7 +210,8 @@ namespace Escape4Now.Battle
         //The host checks the same rules for a connected player's battle request.
         public bool TryNetworkBattle(PlayerCharacter player, PlayerCharacter target)
         {
-            if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient || state != BattleState.None
+            if (Time.timeScale <= 0f || Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused
+                || Escape4Now.Multiplayer.LanMultiplayerSession.IsClient || state != BattleState.None
                 || player == null || target == null || !target.CanBeTargetedBy(player)) return false;
             challenger = player;
             StartBattle(target);
@@ -197,7 +221,8 @@ namespace Escape4Now.Battle
         //Only the challenger may dismiss a network battle result.
         public bool FinishNetworkBattle(PlayerCharacter player)
         {
-            if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient || state != BattleState.Result
+            if (Time.timeScale <= 0f || Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused
+                || Escape4Now.Multiplayer.LanMultiplayerSession.IsClient || state != BattleState.Result
                 || player == null || player != challenger) return false;
             CloseBattle();
             return true;
@@ -231,32 +256,40 @@ namespace Escape4Now.Battle
         // Displays the opponent choices and battle results.
         private void OnGUI()
         {
-            if (Escape4Now.Multiplayer.LanMultiplayerSession.Active) return;
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.Active || Time.timeScale <= 0f) return;
             if (state == BattleState.None)
                 return;
+            if (headingStyle == null)
+            {
+                headingStyle = new GUIStyle(GUI.skin.label)
+                {
+                    fontSize = headingFontSize,
+                    fontStyle = FontStyle.Bold,
+                    alignment = TextAnchor.MiddleCenter
+                };
+            }
 
-            float width = 360f;
             float height = state == BattleState.ChooseOpponent
-                ? 100f + eligibleOpponents.Count * 40f
-                : 180f;
+                ? opponentWindowBaseHeight + eligibleOpponents.Count * opponentRowHeight
+                : resultWindowHeight;
 
             Rect panel = new Rect(
-                (Screen.width - width) / 2f,
+                (Screen.width - windowWidth) / 2f,
                 (Screen.height - height) / 2f,
-                width,
+                windowWidth,
                 height);
 
             GUI.Box(panel, "");
 
             GUILayout.BeginArea(new Rect(
-                panel.x + 15f,
-                panel.y + 15f,
-                panel.width - 30f,
-                panel.height - 30f));
+                panel.x + windowPadding,
+                panel.y + windowPadding,
+                panel.width - windowPadding * 2f,
+                panel.height - windowPadding * 2f));
 
             if (state == BattleState.ChooseOpponent)
             {
-                GUILayout.Label("Choose an opponent to challenge:");
+                GUILayout.Label("Choose an opponent to challenge:", headingStyle);
 
                 foreach (PlayerCharacter player in eligibleOpponents)
                 {
@@ -266,10 +299,10 @@ namespace Escape4Now.Battle
             }
             else if (state == BattleState.Result)
             {
-                GUILayout.Label("KEY-STEALING BATTLE");
-                GUILayout.Space(10f);
+                GUILayout.Label("KEY-STEALING BATTLE", headingStyle);
+                GUILayout.Space(contentSpacing);
                 GUILayout.Label(battleMessage);
-                GUILayout.Space(15f);
+                GUILayout.Space(contentSpacing * 1.5f);
                 GUILayout.Label("Press Enter to continue.");
             }
 

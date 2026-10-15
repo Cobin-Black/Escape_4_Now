@@ -5,6 +5,7 @@ namespace Escape4Now.TurnSystem
     //Counts down the amount of time the player has to escape.
     public sealed class GameTimer : MonoBehaviour
     {
+        [Header("Match Settings")]
         [SerializeField, Min(1)] private float timeLimit = 300f;
 
         private float timeRemaining;
@@ -12,7 +13,9 @@ namespace Escape4Now.TurnSystem
 
         //Read-only access to the remaining time.
         public float TimeRemaining => timeRemaining;
+        public bool HasExpired => hasStarted && timeRemaining <= 0f;
         private bool timerRunning;
+        private bool hasStarted;
 
         //Starts the timer at the selected time limit.
         private void Start()
@@ -20,13 +23,14 @@ namespace Escape4Now.TurnSystem
             if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) return;
             timeRemaining = timeLimit;
             timerRunning = true;
+            hasStarted = true;
         }
 
         //Counts down the remaining game time.
         private void Update()
         {
             if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) return;
-            if (!timerRunning)
+            if (!timerRunning || Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused)
             {
                 return;
             }
@@ -48,19 +52,9 @@ namespace Escape4Now.TurnSystem
         {
             if (!Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) return;
             timeRemaining = seconds;
+            hasStarted = true;
             if (seconds <= 0f) Time.timeScale = 0f;
         }
-
-        //Displays the remaining game time on screen.
-        //private void OnGUI()
-        //{
-            //int minutes = Mathf.FloorToInt(timeRemaining / 60f);
-            //int seconds = Mathf.FloorToInt(timeRemaining % 60f);
-
-            //GUI.Label(
-            //    new Rect(Screen.width - 156f, 100f, 140f, 30f),
-            //    $"Time: {minutes:00}:{seconds:00}"
-            //);
-        }
     }
+}
 

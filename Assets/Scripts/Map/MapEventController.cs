@@ -10,15 +10,45 @@ namespace Escape4Now.Map
         ExtraStep, SecondChance, BadRoll, Stumble, WrongRoom, FireDrill, GoodLuckDay }
     public enum MapEventCategory { Positive, Negative, Neutral, Global }
 
+    [System.Serializable]
+    public sealed class MapEventSpawnChance
+    {
+        [SerializeField] private MapEventType eventType;
+        [SerializeField, Range(0f, 1f)] private float chance = 1f;
+
+        public MapEventType EventType { get => eventType; set => eventType = value; }
+        public float Chance { get => chance; set => chance = value; }
+    }
+
     //Places special tiles around the map and applies their effects when crossed.
     [RequireComponent(typeof(IsometricMapTemplate))]
     public sealed class MapEventController : MonoBehaviour
     {
         private IsometricMapTemplate map;
         private readonly Dictionary<Vector2Int, MapEventType> events = new Dictionary<Vector2Int, MapEventType>();
-        //Reusable templates for the colored event tiles.
-        [SerializeField] private EventTileMarker[] eventPrefabs;
+        [Header("Event Placement")]
+        [SerializeField, Tooltip("Event prefabs available for spawning. Removing a prefab excludes that event tile; its spawn chance controls how often an included event appears.")]
+        private EventTileMarker[] eventPrefabs;
+        [SerializeField, HideInInspector] private bool eventCatalogInitialized;
+        [Header("Event Spawn Chances")]
+        [SerializeField] private MapEventSpawnChance[] spawnChances =
+        {
+            new MapEventSpawnChance { EventType = MapEventType.Warp, Chance = 0.6f },
+            new MapEventSpawnChance { EventType = MapEventType.RandomEvent, Chance = 1f },
+            new MapEventSpawnChance { EventType = MapEventType.Freeze, Chance = 0.35f },
+            new MapEventSpawnChance { EventType = MapEventType.Blackout, Chance = 0.35f },
+            new MapEventSpawnChance { EventType = MapEventType.LuckyRoll, Chance = 1f },
+            new MapEventSpawnChance { EventType = MapEventType.LocationSwitch, Chance = 0.35f },
+            new MapEventSpawnChance { EventType = MapEventType.ExtraStep, Chance = 1f },
+            new MapEventSpawnChance { EventType = MapEventType.SecondChance, Chance = 1f },
+            new MapEventSpawnChance { EventType = MapEventType.BadRoll, Chance = 1f },
+            new MapEventSpawnChance { EventType = MapEventType.Stumble, Chance = 1f },
+            new MapEventSpawnChance { EventType = MapEventType.WrongRoom, Chance = 0.6f },
+            new MapEventSpawnChance { EventType = MapEventType.FireDrill, Chance = 0.35f },
+            new MapEventSpawnChance { EventType = MapEventType.GoodLuckDay, Chance = 1f }
+        };
         private EventTileMarker[] availablePrefabs;
+        private bool eventPrefabsDirty = true;
         private string message = "";
         private int visibilityTurnsRemaining;
         private bool blackoutStartedThisTurn;
@@ -32,6 +62,7 @@ namespace Escape4Now.Map
         private readonly List<EventTileMarker> placedMarkers = new List<EventTileMarker>();
         private readonly Dictionary<EventTileMarker, Vector2Int> cellsByMarker = new Dictionary<EventTileMarker, Vector2Int>();
         private bool showEventLocations;
+        private bool isTutorial;
         private GUIStyle eventToggleStyle;
 
         public event System.Action<PlayerCharacter, MapEventType> EventTriggered;
@@ -61,7 +92,7 @@ namespace Escape4Now.Map
             marker.SetVisible(showEventLocations);
         }
 
-        private void SetEventLocationsVisible(bool visible)
+        public void SetEventLocationsVisible(bool visible)
         {
             showEventLocations = visible;
             placedMarkers.RemoveAll(marker => marker == null);
@@ -84,7 +115,7 @@ namespace Escape4Now.Map
         //Finds a known event template without loading anything supplied over the network.
         public EventTileMarker GetNetworkPrefab(int type)
         {
-            if (availablePrefabs == null) return null;
+            RefreshEventPrefabs();
             foreach (EventTileMarker prefab in availablePrefabs)
                 if (prefab != null && (int)prefab.EventType == type) return prefab;
             return null;
@@ -108,15 +139,78 @@ namespace Escape4Now.Map
         private void Awake()
         {
             map = GetComponent<IsometricMapTemplate>();
-            showEventLocations = false;
+            isTutorial = FindFirstObjectByType<Escape4Now.GameModes.Tutorial_Functionality>() != null;
+            showEventLocations = isTutorial;
+            RefreshEventPrefabs();
+        }
+
+        //Existing partial lists receive their missing defaults once; later edits stay authoritative.
+        private void InitializeEventCatalog()
+        {
+            if (eventCatalogInitialized) return;
             var templates = new Dictionary<MapEventType, EventTileMarker>();
+            foreach (EventTileMarker prefab in eventPrefabs ?? System.Array.Empty<EventTileMarker>())
+                if (prefab != null && System.Enum.IsDefined(typeof(MapEventType), prefab.EventType)) templates[prefab.EventType] = prefab;
             foreach (EventTileMarker prefab in Resources.LoadAll<EventTileMarker>("EventTiles"))
-                if (System.Enum.IsDefined(typeof(MapEventType), prefab.EventType)) templates[prefab.EventType] = prefab;
-            foreach (EventTileMarker prefab in eventPrefabs ?? new EventTileMarker[0])
+                if (prefab != null && System.Enum.IsDefined(typeof(MapEventType), prefab.EventType)
+                    && !templates.ContainsKey(prefab.EventType)) templates.Add(prefab.EventType, prefab);
+            eventPrefabs = new List<EventTileMarker>(templates.Values).ToArray();
+            System.Array.Sort(eventPrefabs, (a, b) => a.EventType.CompareTo(b.EventType));
+            eventCatalogInitialized = true;
+            eventPrefabsDirty = true;
+        }
+
+        private void RefreshEventPrefabs()
+        {
+            InitializeEventCatalog();
+            if (availablePrefabs != null && !eventPrefabsDirty) return;
+            var templates = new Dictionary<MapEventType, EventTileMarker>();
+            foreach (EventTileMarker prefab in eventPrefabs ?? System.Array.Empty<EventTileMarker>())
                 if (prefab != null && System.Enum.IsDefined(typeof(MapEventType), prefab.EventType)) templates[prefab.EventType] = prefab;
             availablePrefabs = new List<EventTileMarker>(templates.Values).ToArray();
             System.Array.Sort(availablePrefabs, (a, b) => a.EventType.CompareTo(b.EventType));
+            eventPrefabsDirty = false;
         }
+
+        private void OnValidate()
+        {
+            eventPrefabsDirty = true;
+            foreach (MapEventSpawnChance setting in spawnChances ?? System.Array.Empty<MapEventSpawnChance>())
+                if (setting != null)
+                    setting.Chance = float.IsNaN(setting.Chance) ? 1f : Mathf.Clamp01(setting.Chance);
+#if UNITY_EDITOR
+            if (!eventCatalogInitialized && !catalogInitializationQueued)
+            {
+                catalogInitializationQueued = true;
+                UnityEditor.EditorApplication.delayCall += InitializeEventCatalogInEditor;
+            }
+#endif
+        }
+
+#if UNITY_EDITOR
+        private bool catalogInitializationQueued;
+
+        private void InitializeEventCatalogInEditor()
+        {
+            catalogInitializationQueued = false;
+            if (this == null || eventCatalogInitialized) return;
+            bool persistChanges = !Application.IsPlaying(gameObject);
+            if (persistChanges) UnityEditor.Undo.RecordObject(this, "Initialize event prefabs");
+            InitializeEventCatalog();
+            if (!persistChanges) return;
+            UnityEditor.EditorUtility.SetDirty(this);
+            if (gameObject.scene.IsValid() && gameObject.scene.isLoaded)
+                UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(gameObject.scene);
+        }
+
+        [ContextMenu("Populate Missing Event Prefabs")]
+        private void PopulateMissingEventPrefabs()
+        {
+            UnityEditor.Undo.RecordObject(this, "Populate event prefabs");
+            eventCatalogInitialized = false;
+            InitializeEventCatalogInEditor();
+        }
+#endif
 
         //Starts receiving turn updates so Blackout can count finished player turns.
         private void OnEnable()
@@ -134,7 +228,7 @@ namespace Escape4Now.Map
         //Counts full player turns after the turn that started Blackout.
         private void CountBlackoutTurn()
         {
-            if (visibilityTurnsRemaining <= 0) return;
+            if (visibilityTurnsRemaining <= 0 || Time.timeScale <= 0f) return;
             if (blackoutStartedThisTurn)
             {
                 blackoutStartedThisTurn = false;
@@ -147,6 +241,7 @@ namespace Escape4Now.Map
         //Small events appear regularly. Stronger events may be absent from a match.
         private System.Collections.IEnumerator Start()
         {
+            RefreshEventPrefabs();
             if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) yield break;
             yield return null;
             players = FindObjectsByType<PlayerCharacter>(FindObjectsSortMode.None);
@@ -169,7 +264,7 @@ namespace Escape4Now.Map
                     || !System.Enum.IsDefined(typeof(MapEventType), prefab.EventType)
                     || (allowedTypes != null && !allowedTypes.Contains(prefab.EventType))
                     || !placedTypes.Add(prefab.EventType)
-                    || (!forcedTiles.ContainsKey(prefab.EventType) && Random.value >= SpawnChance(prefab.EventType))) continue;
+                    || (!forcedTiles.ContainsKey(prefab.EventType) && Random.value >= GetSpawnChance(prefab.EventType))) continue;
                 int index = forcedTiles.TryGetValue(prefab.EventType, out Vector2Int forcedCell)
                     ? emptyTiles.IndexOf(forcedCell) : -1;
                 if (index < 0) index = Random.Range(0, emptyTiles.Count);
@@ -190,6 +285,14 @@ namespace Escape4Now.Map
                 || type == MapEventType.LocationSwitch || type == MapEventType.FireDrill) return 0.35f;
             if (type == MapEventType.Warp || type == MapEventType.WrongRoom) return 0.6f;
             return 1f;
+        }
+
+        //Uses a designer-selected spawn chance and keeps the old defaults for unlisted types.
+        private float GetSpawnChance(MapEventType type)
+        {
+            foreach (MapEventSpawnChance setting in spawnChances ?? System.Array.Empty<MapEventSpawnChance>())
+                if (setting != null && setting.EventType == type) return Mathf.Clamp01(setting.Chance);
+            return SpawnChance(type);
         }
 
         //Categories describe who the effect helps or affects.
@@ -213,11 +316,15 @@ namespace Escape4Now.Map
         //Keeps the latest result readable beside the turn panel, including during Blackout.
         private void OnGUI()
         {
+            if (Escape4Now.Multiplayer.LocalMultiplayerSession.MatchHasEnded) return;
             if (visibilityTurnsRemaining > 0) DrawReducedVisibility();
-            eventToggleStyle ??= new GUIStyle(GUI.skin.button) { fontSize = 14, fontStyle = FontStyle.Bold };
-            bool visible = GUI.Toggle(new Rect(Screen.width - 174f, 62f, 162f, 32f),
-                showEventLocations, showEventLocations ? "Hide Event Tiles" : "Show Event Tiles", eventToggleStyle);
-            if (visible != showEventLocations) SetEventLocationsVisible(visible);
+            if (!Escape4Now.Multiplayer.LocalMultiplayerSession.MatchIsRunning && isTutorial)
+            {
+                eventToggleStyle ??= new GUIStyle(GUI.skin.button) { fontSize = 14, fontStyle = FontStyle.Bold };
+                bool visible = GUI.Toggle(new Rect(Screen.width - 174f, 62f, 162f, 32f),
+                    showEventLocations, showEventLocations ? "Hide Event Tiles" : "Show Event Tiles", eventToggleStyle);
+                if (visible != showEventLocations) SetEventLocationsVisible(visible);
+            }
             if (string.IsNullOrEmpty(message)) return;
             noticeText ??= new GUIStyle(GUI.skin.label) { fontSize = 18, wordWrap = true, richText = false };
             noticeTitle ??= new GUIStyle(GUI.skin.label) { fontSize = 14, fontStyle = FontStyle.Bold, richText = false };
@@ -250,7 +357,8 @@ namespace Escape4Now.Map
         //Checks for an event after each completed step, not just at the end of a turn.
         public bool ResolveStep(PlayerCharacter player, Vector2Int direction)
         {
-            if (player == null || !player.IsResolvingEventStep) return false;
+            if (Time.timeScale <= 0f || Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused
+                || player == null || !player.IsResolvingEventStep) return false;
             return ResolveEvent(player, direction, player.GridPosition);
         }
 

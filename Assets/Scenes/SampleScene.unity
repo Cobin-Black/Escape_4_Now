@@ -475,13 +475,45 @@ MonoBehaviour:
   alternateFloorColor: {r: 0.08, g: 0.08, b: 0.08, a: 1}
   hallwayFloorColor: {r: 0.52, g: 0.59, b: 0.58, a: 1}
   secondaryFloorColor: {r: 0.36, g: 0.43, b: 0.48, a: 1}
+  libraryFloorColor: {r: 0.19, g: 0.35, b: 0.29, a: 1}
+  computerLabFloorColor: {r: 0.2, g: 0.3, b: 0.43, a: 1}
+  classroomFloorColor: {r: 0.43, g: 0.32, b: 0.17, a: 1}
+  scienceLabFloorColor: {r: 0.36, g: 0.23, b: 0.33, a: 1}
+  otherFloorColor: {r: 0.19, g: 0.2, b: 0.22, a: 1}
   rightSideColor: {r: 0.16, g: 0.16, b: 0.16, a: 1}
   leftSideColor: {r: 0.1, g: 0.1, b: 0.1, a: 1}
+  wallColor: {r: 0.18, g: 0.22, b: 0.21, a: 1}
+  wallCapColor: {r: 0.28, g: 0.32, b: 0.3, a: 1}
   generateOnStart: 1
   useSchoolLayout: 1
+  generationSettings:
+    generationAttempts: 128
+    secondaryRoomChance: 0.5
+    secondaryRoomPlacementAttempts: 160
+    mainRoomMinimumSize: 6
+    mainRoomMaximumSize: 9
   useFixedSeed: 0
   fixedSeed: 0
   floorTilePrefab: {fileID: 1877436113, guid: 079ada1107f54d908eea5bcb6018c07c, type: 3}
+  furnitureSettings:
+    libraryShelvesMinimum: 2
+    libraryShelvesMaximum: 3
+    libraryTablesMaximum: 2
+    libraryCartsMaximum: 1
+    computerDesksMinimum: 2
+    computerDesksMaximum: 4
+    printersMaximum: 1
+    classroomDesksMinimum: 3
+    classroomDesksMaximum: 5
+    teacherDesksMaximum: 1
+    scienceTablesMinimum: 2
+    scienceTablesMaximum: 4
+    scienceCabinetsMaximum: 1
+    scienceSinksMaximum: 1
+    hallwayObjectsMinimum: 1
+    hallwayObjectsMaximum: 2
+    specialRoomExtraObjectsMaximum: 1
+  furniturePrefabOverrides: []
   hasExit: 0
   exitDoorAllowed: 1
   exitGridPosition: {x: 9, y: 0}
@@ -505,6 +537,42 @@ MonoBehaviour:
   - {fileID: 11400000, guid: c5ab702d344b49a7b05f1f81aae29f02, type: 3}
   - {fileID: 11400000, guid: c5ab702d344b49a7b05f1f81aae29f03, type: 3}
   - {fileID: 11400000, guid: c5ab702d344b49a7b05f1f81aae29f04, type: 3}
+  - {fileID: 11400000, guid: e1745c6809b94a18bd77302b642583ad, type: 3}
+  - {fileID: 11400000, guid: a3482ecd127b4f0498bd76140ee1ab06, type: 3}
+  - {fileID: 11400000, guid: a3482ecd127b4f0498bd76140ee1ab07, type: 3}
+  - {fileID: 11400000, guid: a3482ecd127b4f0498bd76140ee1ab08, type: 3}
+  - {fileID: 11400000, guid: a3482ecd127b4f0498bd76140ee1ab09, type: 3}
+  - {fileID: 11400000, guid: a3482ecd127b4f0498bd76140ee1ab0a, type: 3}
+  - {fileID: 11400000, guid: a3482ecd127b4f0498bd76140ee1ab0b, type: 3}
+  - {fileID: 11400000, guid: a3482ecd127b4f0498bd76140ee1ab0c, type: 3}
+  eventCatalogInitialized: 1
+  spawnChances:
+  - eventType: 0
+    chance: 0.6
+  - eventType: 1
+    chance: 1
+  - eventType: 2
+    chance: 0.35
+  - eventType: 3
+    chance: 0.35
+  - eventType: 4
+    chance: 1
+  - eventType: 5
+    chance: 0.35
+  - eventType: 6
+    chance: 1
+  - eventType: 7
+    chance: 1
+  - eventType: 8
+    chance: 1
+  - eventType: 9
+    chance: 1
+  - eventType: 10
+    chance: 0.6
+  - eventType: 11
+    chance: 0.35
+  - eventType: 12
+    chance: 1
 --- !u!114 &1200000004
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -535,9 +603,33 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Obstacles.ObstacleSpawner
   map: {fileID: 1200000002}
+  obstacleCatalogInitialized: 1
   obstaclePrefabs:
+  - {fileID: 11400000, guid: e7c06474f71b480a9437000000000001, type: 3}
+  - {fileID: 11400000, guid: e7c06474f71b480a9437000000000002, type: 3}
+  - {fileID: 11400000, guid: e7c06474f71b480a9437000000000003, type: 3}
+  - {fileID: 11400000, guid: e7c06474f71b480a9437000000000004, type: 3}
+  - {fileID: 11400000, guid: e7c06474f71b480a9437000000000005, type: 3}
+  - {fileID: 11400000, guid: e7c06474f71b480a9437000000000006, type: 3}
+  - {fileID: 11400000, guid: e7c06474f71b480a9437000000000007, type: 3}
+  - {fileID: 11400000, guid: e7c06474f71b480a9437000000000008, type: 3}
+  - {fileID: 11400000, guid: e7c06474f71b480a9437000000000009, type: 3}
+  - {fileID: 11400000, guid: e7c06474f71b480a943700000000000a, type: 3}
+  - {fileID: 11400000, guid: e7c06474f71b480a943700000000000b, type: 3}
+  - {fileID: 11400000, guid: e7c06474f71b480a943700000000000c, type: 3}
+  - {fileID: 11400000, guid: e7c06474f71b480a943700000000000d, type: 3}
+  - {fileID: 11400000, guid: e7c06474f71b480a943700000000000e, type: 3}
+  - {fileID: 11400000, guid: e7c06474f71b480a943700000000000f, type: 3}
+  - {fileID: 11400000, guid: 17ba6e5a54c23e0f54475eb6f39bd75f, type: 3}
+  - {fileID: 11400000, guid: 969b9cf07ffe1f3a97ca140c75eae93d, type: 3}
+  - {fileID: 11400000, guid: 4e334bd9ae9703bb7c26942bc8282a85, type: 3}
+  - {fileID: 11400000, guid: c5866ed8086f51cd0d3719eab282022b, type: 3}
+  - {fileID: 11400000, guid: 87ec64ee1a07acd1675ec245d0afef9b, type: 3}
+  - {fileID: 11400000, guid: c67f9649028393368ce03f5a8bd65b32, type: 3}
+  - {fileID: 11400000, guid: 6370f1c58a4ae5ffcda3f9796ea34f40, type: 3}
   - {fileID: 8008263496219192108, guid: d0329ec4a35ffd94f8f7d200ad63eb7c, type: 3}
-  obstacleCount: 6
+  minimumObstacleCount: 2
+  maximumObstacleCount: 3
   interactableChance: 0.5
   possibleItems:
   - {fileID: 1119616090794593453, guid: 798c830d404504ec993fb50111c722ba, type: 3}
@@ -659,6 +751,55 @@ MonoBehaviour:
   moveSpeed: 4
   inventory: {fileID: 1200000014}
   health: 5
+  objectiveBeforeKey: Find the key, then reach the exit.
+  objectiveAfterKey: Reach the exit.
+  rollPrompt: 'ROLL: SPACE'
+  hudTopLeftMargin: {x: 12, y: 8}
+  hudPanelSize: {x: 260, y: 210}
+  tutorialHudSize: {x: 360, y: 118}
+  hudPadding: 14
+  hudTopRightClearance: 150
+  hudTitleFontSize: 18
+  hudInfoFontSize: 13
+  hudTimerFontSize: 18
+  hudObjectiveFontSize: 15
+  hudObjectiveBodyFontSize: 15
+  hudBackgroundColor: {r: 0.02, g: 0.04, b: 0.08, a: 0.9}
+  hudTextColor: {r: 1, g: 1, b: 1, a: 1}
+  hudMutedTextColor: {r: 0.72, g: 0.79, b: 0.86, a: 1}
+  hudDividerColor: {r: 0.72, g: 0.79, b: 0.86, a: 0.22}
+  hudOutlineColor: {r: 0, g: 0.78, b: 0.95, a: 1}
+  hudObjectiveColor: {r: 1, g: 0.76, b: 0.16, a: 1}
+  hudBorderThickness: 1.5
+  hudCornerRadius: 3
+  hudTimerWidth: 82
+  hudRollIconSize: 44
+  hudRollTextOffset: 50
+  hudDetailsRowHeight: 44
+  hudDetailsRowPosition: 0.3
+  hudObjectiveRowPosition: 0.6
+  hudObjectiveTextWidthRatio: 0.82
+  hudColumnGap: 8
+  hudSectionGap: 8
+  hudDividerThickness: 1
+  hudTimerIcon: {fileID: 0}
+  hudTimerIconSize: 25
+  hudTimerIconStroke: 0.045
+  hudDieBorderThickness: 3
+  hudDieCornerRadius: 6
+  hudDieBorderColor: {r: 0, g: 0.78, b: 0.95, a: 1}
+  hudDieFaceColor: {r: 0.97, g: 0.98, b: 1, a: 1}
+  hudDiePipColor: {r: 0.02, g: 0.04, b: 0.08, a: 1}
+  keyBadgeHeightAbovePlayer: 1.05
+  keyBadgeIconSize: 28
+  keyBadgePadding: 6
+  keyBadgeBorder: 2
+  keyBadgeBorderColor: {r: 0.98, g: 0.78, b: 0.2, a: 1}
+  keyBadgeBackgroundColor: {r: 0.02, g: 0.04, b: 0.08, a: 0.9}
+  diceRollAnimationDuration: 0.9
+  sharedTileHorizontalOffset: 0.14
+  sharedTileVerticalOffset: 0.08
+  exitNeedsKey: 1
 --- !u!114 &1200000014
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -725,6 +866,13 @@ MonoBehaviour:
   enemyTurnName: Enemy
   showTurnDisplay: 1
   showEndTurnButton: 0
+  turnDisplayPosition: {x: 16, y: 16}
+  turnDisplayWidth: 420
+  turnDisplayHeight: 40
+  turnDisplayFontSize: 24
+  turnDisplayColor: {r: 1, g: 1, b: 1, a: 1}
+  endTurnButtonOffset: {x: 0, y: 42}
+  endTurnButtonSize: {x: 120, y: 32}
   currentTurnOwner: 0
   currentPlayerIndex: 0
   turnNumber: 1
@@ -755,6 +903,20 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Multiplayer.LocalMultiplayerSession
   showTemporaryUI: 1
+  pauseButtonSize: {x: 126, y: 36}
+  pauseButtonMargin: {x: 16, y: 16}
+  pauseMenuSize: {x: 380, y: 360}
+  displayOptionsTitle: DISPLAY OPTIONS
+  playerColors:
+  - {r: 0.15, g: 0.7, b: 1, a: 1}
+  - {r: 1, g: 0.35, b: 0.3, a: 1}
+  - {r: 0.3, g: 0.85, b: 0.4, a: 1}
+  - {r: 1, g: 0.8, b: 0.2, a: 1}
+  pauseBackdropTint: {r: 0, g: 0, b: 0, a: 0.52}
+  pausePanelColor: {r: 0.035, g: 0.055, b: 0.085, a: 0.98}
+  pauseTitleBarColor: {r: 0.08, g: 0.13, b: 0.19, a: 1}
+  pauseTitleColor: {r: 1, g: 1, b: 1, a: 1}
+  pauseTitleFontSize: 28
 --- !u!114 &1200000025
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -767,6 +929,13 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 01cfff2c6f7624f0a93e95ade9b6b5dd, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Battle.KeyStealBattleController
+  windowWidth: 360
+  resultWindowHeight: 180
+  opponentWindowBaseHeight: 100
+  opponentRowHeight: 40
+  windowPadding: 15
+  contentSpacing: 10
+  headingFontSize: 18
 --- !u!1 &1200000030
 GameObject:
   m_ObjectHideFlags: 0
@@ -812,15 +981,32 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   slotCount: 1
-  slotSize: 64
-  slotSpacing: 8
-  bottomMargin: 16
-  anchor: 0
-  sideMargin: 16
+  slotSize: 48
+  slotSpacing: 4
+  bottomMargin: 12
+  anchor: 2
+  sideMargin: 12
   title: 
-  popupSeconds: 2.5
+  showPlayerName: 0
+  hideWhenEmpty: 1
+  panelPadding: 6
+  minimumPanelWidth: 180
+  titleHeight: 18
+  hintHeight: 14
   panelColor: {r: 0, g: 0, b: 0, a: 0.65}
+  panelOutlineColor: {r: 0.18, g: 0.72, b: 0.95, a: 0.95}
+  panelAccentColor: {r: 1, g: 0.76, b: 0.16, a: 1}
+  panelBorderThickness: 1.5
+  accentWidth: 3
   slotColor: {r: 1, g: 1, b: 1, a: 0.12}
+  titleFontSize: 12
+  itemNameFontSize: 12
+  hintFontSize: 10
+  popupFontSize: 18
+  titleColor: {r: 1, g: 1, b: 1, a: 1}
+  itemNameColor: {r: 1, g: 1, b: 1, a: 1}
+  hintColor: {r: 1, g: 1, b: 1, a: 0.7}
+  popupSeconds: 2.5
   highlightColor: {r: 1, g: 0.85, b: 0.2, a: 1}
 --- !u!1 &1751425146
 GameObject:

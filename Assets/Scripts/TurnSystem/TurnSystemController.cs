@@ -18,7 +18,15 @@ namespace Escape4Now.TurnSystem
         [SerializeField] private bool includeEnemyTurn = false;
         [SerializeField] private string enemyTurnName = "Enemy";
         [SerializeField] private bool showTurnDisplay = true;
-          [SerializeField] private bool showEndTurnButton = false;
+        [SerializeField] private bool showEndTurnButton = false;
+        [Header("Turn Display")]
+        [SerializeField] private Vector2 turnDisplayPosition = new Vector2(16f, 16f);
+        [SerializeField, Min(120f)] private float turnDisplayWidth = 420f;
+        [SerializeField, Min(24f)] private float turnDisplayHeight = 40f;
+        [SerializeField, Range(10, 40)] private int turnDisplayFontSize = 24;
+        [SerializeField] private Color turnDisplayColor = Color.white;
+        [SerializeField] private Vector2 endTurnButtonOffset = new Vector2(0f, 42f);
+        [SerializeField] private Vector2 endTurnButtonSize = new Vector2(120f, 32f);
         [SerializeField] private TurnOwner currentTurnOwner = TurnOwner.Player;
         [SerializeField] private int currentPlayerIndex;
         [SerializeField] private int turnNumber = 1;
@@ -42,7 +50,9 @@ namespace Escape4Now.TurnSystem
         //A key used on the previous turn must not also control the next player.
         public bool CanReadInput(PlayerCharacter player)
         {
-            return IsPlayersTurn(player) && Time.frameCount > turnStartedFrame;
+            return Time.timeScale > 0f
+                && !Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused
+                && IsPlayersTurn(player) && Time.frameCount > turnStartedFrame;
         }
 
         //Notifies shared effects when a player finishes or skips a turn.
@@ -75,13 +85,20 @@ namespace Escape4Now.TurnSystem
         {
             currentPlayerIndex = Mathf.Clamp(currentPlayerIndex, 0, Mathf.Max(0, GetPlayerCount() - 1));
             turnNumber = Mathf.Max(1, turnNumber);
+            turnDisplayWidth = Mathf.Clamp(turnDisplayWidth, 120f, 1200f);
+            turnDisplayHeight = Mathf.Clamp(turnDisplayHeight, 24f, 160f);
+            endTurnButtonOffset = new Vector2(Mathf.Clamp(endTurnButtonOffset.x, -500f, 500f),
+                Mathf.Clamp(endTurnButtonOffset.y, -500f, 500f));
+            endTurnButtonSize = new Vector2(Mathf.Clamp(endTurnButtonSize.x, 60f, 500f),
+                Mathf.Clamp(endTurnButtonSize.y, 24f, 160f));
+            turnDisplayStyle = null;
             RefreshCurrentTurnName();
         }
 
         //Draws the current turn label and End Turn button.
         private void OnGUI()
         {
-            if (!showTurnDisplay)
+            if (!showTurnDisplay || Escape4Now.Multiplayer.LocalMultiplayerSession.MatchIsRunning)
             {
                 return;
             }
@@ -89,15 +106,18 @@ namespace Escape4Now.TurnSystem
             if (turnDisplayStyle == null)
             {
                 turnDisplayStyle = new GUIStyle(GUI.skin.label);
-                turnDisplayStyle.fontSize = 24;
+                turnDisplayStyle.fontSize = turnDisplayFontSize;
                 turnDisplayStyle.fontStyle = FontStyle.Bold;
-                turnDisplayStyle.normal.textColor = Color.white;
+                turnDisplayStyle.normal.textColor = turnDisplayColor;
             }
 
-            GUI.Label(new Rect(16f, 16f, 420f, 40f), $"Turn {turnNumber}: {currentTurnName}", turnDisplayStyle);
+            GUI.Label(new Rect(turnDisplayPosition.x, turnDisplayPosition.y,
+                turnDisplayWidth, turnDisplayHeight), $"Turn {turnNumber}: {currentTurnName}", turnDisplayStyle);
 
             if (showEndTurnButton && Escape4Now.Multiplayer.LocalMultiplayerSession.AllowTurnButtons
-                && GUI.Button(new Rect(16f, 58f, 120f, 32f), "End Turn"))
+                && GUI.Button(new Rect(turnDisplayPosition.x + endTurnButtonOffset.x,
+                    turnDisplayPosition.y + endTurnButtonOffset.y,
+                    endTurnButtonSize.x, endTurnButtonSize.y), "End Turn"))
             {
                 if (Escape4Now.Multiplayer.LanMultiplayerSession.Active)
                     Escape4Now.Multiplayer.LanMultiplayerSession.Instance.Submit("end");
@@ -107,6 +127,8 @@ namespace Escape4Now.TurnSystem
 
         public void EndTurnAfterBattleLoss(PlayerCharacter player)
         {
+            if (Time.timeScale <= 0f || Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused)
+                return;
             if (!IsPlayersTurn(player))
                 return;
 
@@ -125,6 +147,9 @@ namespace Escape4Now.TurnSystem
 
         private void AdvanceTurn(bool battleLoss)
         {
+            if (Time.timeScale <= 0f || Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused)
+                return;
+
             int playerCount = GetPlayerCount();
 
             if (playerCount == 0)

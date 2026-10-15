@@ -104,12 +104,15 @@ public static class LocalMultiplayerChecks
         Require(!session.TryStartLocalMatch(5), "More than four players are rejected");
         Require(!session.TryStartLocalMatch(1), "At least two players are needed");
         Require(session.TryStartLocalMatch(count), "Selected player count can start");
+        Require(!LocalMultiplayerSession.MatchHasEnded, "An unstarted timer does not show a loss screen");
         Require(!session.TryStartLocalMatch(4), "A running match cannot duplicate players");
         for (int i = 0; i < 10; i++) yield return null;
         PlayerCharacter[] players = UnityEngine.Object.FindObjectsByType<PlayerCharacter>(FindObjectsSortMode.None);
         Array.Sort(players, (left, right) => string.CompareOrdinal(left.name, right.name));
         TurnSystemController turns = UnityEngine.Object.FindFirstObjectByType<TurnSystemController>();
+        CheckTimeoutResult();
         IsometricMapTemplate map = UnityEngine.Object.FindFirstObjectByType<IsometricMapTemplate>();
+        CheckObstacleCatalog(map);
         Require(players.Length == count && map.Width == 25 && map.Height == 25, "Selected players on an 25 by 25 map");
         int doorCount = 0;
         int exitCount = 0;
@@ -137,6 +140,7 @@ public static class LocalMultiplayerChecks
         Require(doorCount >= 3, "Connected rooms have visible entrances");
         Require(exitCount == 1, "One working exit door is present");
         MapEventController events = UnityEngine.Object.FindFirstObjectByType<MapEventController>();
+        CheckEventCatalog(events);
         Require(events != null && events.isActiveAndEnabled && events.EventsPlaced,
             "Existing event spawner is active");
         int eventCount = UnityEngine.Object.FindObjectsByType<EventTileMarker>(FindObjectsSortMode.None).Length;
@@ -342,8 +346,137 @@ public static class LocalMultiplayerChecks
         Require(players[0].MoveToGridPosition(exitCell), "Player can walk through the exit");
         while (players[0].IsMoving) yield return null;
         Require(players[0].GridPosition == exitCell && Time.timeScale == 0f, "Reaching the door pauses the match for the win");
+        Require(LocalMultiplayerSession.MatchHasEnded, "Escaping selects the match result screen");
+        typeof(PlayerCharacter).GetMethod("ReachExit", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+            .Invoke(players[1], null);
+        Require(!players[1].HasReachedExit, "Only the first player can escape");
         Time.timeScale = 1f;
         Debug.Log("SAME-DEVICE AND SCHOOL MAP CHECKS PASSED");
+    }
+
+    private static void CheckEventCatalog(MapEventController controller)
+    {
+        int typeCount = Enum.GetValues(typeof(MapEventType)).Length;
+        var configuration = new SerializedObject(controller);
+        Require(configuration.FindProperty("eventPrefabs").arraySize == typeCount,
+            "The event Inspector includes every event prefab");
+        var templates = new EventTileMarker[typeCount];
+        for (int type = 0; type < typeCount; type++)
+        {
+            templates[type] = controller.GetNetworkPrefab(type);
+            Require(templates[type] != null && (int)templates[type].EventType == type,
+                "Event prefab lookup preserves its type: " + (MapEventType)type);
+        }
+
+        var testObject = new GameObject("Event catalog check");
+        testObject.SetActive(false);
+        try
+        {
+            var migratedController = testObject.AddComponent<MapEventController>();
+            var migratedConfiguration = new SerializedObject(migratedController);
+            var catalog = migratedConfiguration.FindProperty("eventPrefabs");
+            catalog.arraySize = 5;
+            for (int type = 0; type < 5; type++) catalog.GetArrayElementAtIndex(type).objectReferenceValue = templates[type];
+            migratedConfiguration.ApplyModifiedPropertiesWithoutUndo();
+            Require(migratedController.GetNetworkPrefab(typeCount - 1) != null,
+                "The old five-event configuration migrates to the complete event list");
+            migratedConfiguration.Update();
+            Require(catalog.arraySize == typeCount, "Migrated event references are exposed in the Inspector");
+
+            var replacement = UnityEngine.Object.Instantiate(templates[0], testObject.transform);
+            catalog.GetArrayElementAtIndex(0).objectReferenceValue = replacement;
+            migratedConfiguration.ApplyModifiedPropertiesWithoutUndo();
+            const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            typeof(MapEventController).GetMethod("OnValidate", flags).Invoke(migratedController, null);
+            Require(migratedController.GetNetworkPrefab(0) == replacement, "An Inspector-assigned event prefab overrides the default");
+
+            catalog.arraySize = 0;
+            migratedConfiguration.ApplyModifiedPropertiesWithoutUndo();
+            typeof(MapEventController).GetMethod("OnValidate", flags).Invoke(migratedController, null);
+            Require(migratedController.GetNetworkPrefab(0) == null && migratedController.GetNetworkPrefab(typeCount - 1) == null,
+                "Removing events does not silently restore them from Resources");
+            catalog.arraySize = 1;
+            catalog.GetArrayElementAtIndex(0).objectReferenceValue = replacement;
+            var chances = migratedConfiguration.FindProperty("spawnChances");
+            chances.arraySize = 1;
+            chances.GetArrayElementAtIndex(0).FindPropertyRelative("eventType").intValue = 0;
+            chances.GetArrayElementAtIndex(0).FindPropertyRelative("chance").floatValue = 0f;
+            migratedConfiguration.ApplyModifiedPropertiesWithoutUndo();
+            var getChance = typeof(MapEventController).GetMethod("GetSpawnChance", flags);
+            Require((float)getChance.Invoke(migratedController, new object[] { MapEventType.Warp }) == 0f,
+                "Inspector chance zero disables an included event");
+            chances.GetArrayElementAtIndex(0).FindPropertyRelative("chance").floatValue = 1f;
+            migratedConfiguration.ApplyModifiedPropertiesWithoutUndo();
+            Require((float)getChance.Invoke(migratedController, new object[] { MapEventType.Warp }) == 1f,
+                "Inspector chance one guarantees an included event");
+        }
+        finally { UnityEngine.Object.Destroy(testObject); }
+    }
+
+    private static void CheckObstacleCatalog(IsometricMapTemplate map)
+    {
+        var spawner = map.GetComponent<ObstacleSpawner>();
+        var configuration = new SerializedObject(spawner);
+        var catalog = configuration.FindProperty("obstaclePrefabs");
+        var furniture = new List<SchoolFurniture>(spawner.GetSchoolPrefabs());
+        var kinds = new HashSet<SchoolFurnitureKind>();
+        foreach (SchoolFurniture prefab in furniture)
+            Require(prefab.IsValidTemplate() && kinds.Add(prefab.Kind), "Obstacle catalog has a valid unique furniture kind: " + prefab.Kind);
+        Require(kinds.Count == Enum.GetValues(typeof(SchoolFurnitureKind)).Length,
+            "The spawner Inspector contains every school furniture kind");
+        Require(catalog.arraySize == furniture.Count + 1 && spawner.GetNetworkPrefab() != null,
+            "One Inspector list contains school furniture and the hallway prefab");
+
+        var migrationObject = new GameObject("Obstacle catalog check");
+        migrationObject.SetActive(false);
+        try
+        {
+            var migratedSpawner = migrationObject.AddComponent<ObstacleSpawner>();
+            var migratedConfiguration = new SerializedObject(migratedSpawner);
+            var migratedCatalog = migratedConfiguration.FindProperty("obstaclePrefabs");
+            migratedCatalog.arraySize = 1;
+            migratedCatalog.GetArrayElementAtIndex(0).objectReferenceValue = spawner.GetNetworkPrefab();
+            migratedConfiguration.ApplyModifiedPropertiesWithoutUndo();
+            Require(new List<SchoolFurniture>(migratedSpawner.GetSchoolPrefabs()).Count == furniture.Count,
+                "A saved locker-only configuration migrates to the complete catalog");
+            migratedConfiguration.Update();
+            Require(migratedCatalog.arraySize == catalog.arraySize && migratedSpawner.GetNetworkPrefab() == spawner.GetNetworkPrefab(),
+                "Migration preserves the existing hallway prefab reference");
+            migratedCatalog.arraySize = 1;
+            migratedConfiguration.ApplyModifiedPropertiesWithoutUndo();
+            Require(new List<SchoolFurniture>(migratedSpawner.GetSchoolPrefabs()).Count == 0,
+                "Later Inspector edits are preserved instead of silently refilling the list");
+        }
+        finally { UnityEngine.Object.Destroy(migrationObject); }
+    }
+
+    private static void CheckTimeoutResult()
+    {
+        GameTimer timer = UnityEngine.Object.FindFirstObjectByType<GameTimer>();
+        const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var remaining = typeof(GameTimer).GetField("timeRemaining", flags);
+        var running = typeof(GameTimer).GetField("timerRunning", flags);
+        float previousRemaining = timer.TimeRemaining;
+        object previousRunning = running.GetValue(timer);
+        float previousScale = Time.timeScale;
+        try
+        {
+            remaining.SetValue(timer, 0.000001f);
+            typeof(GameTimer).GetMethod("Update", flags).Invoke(timer, null);
+            Require(timer.HasExpired && timer.TimeRemaining == 0f, "Timer reports actual expiry");
+            Require(LocalMultiplayerSession.MatchHasEnded && Time.timeScale == 0f,
+                "Timeout selects the result screen and stops gameplay");
+            PlayerCharacter player = UnityEngine.Object.FindFirstObjectByType<PlayerCharacter>();
+            typeof(PlayerCharacter).GetMethod("ReachExit", flags).Invoke(player, null);
+            Require(!player.HasReachedExit, "Nobody can escape after time expires");
+        }
+        finally
+        {
+            remaining.SetValue(timer, previousRemaining);
+            running.SetValue(timer, previousRunning);
+            Time.timeScale = previousScale;
+        }
+        Require(!LocalMultiplayerSession.MatchHasEnded, "An unfinished match keeps the gameplay screen");
     }
 
     //Checks the new key rules together with storage, protection, and shared player tiles.

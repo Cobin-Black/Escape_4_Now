@@ -4,23 +4,28 @@ using Escape4Now.Items;
 using Escape4Now.Map;
 using Escape4Now.Player;
 using UnityEngine;
+using UnityEngine.Serialization;
 
 namespace Escape4Now.Obstacles
 {
     //Places obstacles on random empty tiles once the events and items have their spots, and fills interactable ones with an item.
     public sealed class ObstacleSpawner : MonoBehaviour
     {
+        [Header("Map")]
         [SerializeField] private IsometricMapTemplate map;
-
-        //Obstacle prefabs to pick from, and how many to place.
-        [SerializeField] private ObstacleGridControl[] obstaclePrefabs;
-        [SerializeField, Min(1)] private int obstacleCount = 6;
-
-        //Chance that a searchable object holds an item, and the allowed item prefabs.
+        [Header("Obstacle Placement")]
+        [SerializeField, Tooltip("All school and hallway obstacle prefabs. Assign SchoolFurniture or ObstacleGridControl components. School layouts require one furniture prefab for each kind.")]
+        private Component[] obstaclePrefabs;
+        [SerializeField, HideInInspector, FormerlySerializedAs("schoolObstaclePrefabs")]
+        private SchoolFurniture[] previousSchoolPrefabs;
+        [SerializeField, HideInInspector] private bool obstacleCatalogInitialized;
+        [Header("Additional Hallway Obstacles")]
+        [SerializeField, Range(0, 10), InspectorName("Minimum Hallway Obstacles")] private int minimumObstacleCount = 2;
+        [SerializeField, Range(0, 10), InspectorName("Maximum Hallway Obstacles")] private int maximumObstacleCount = 3;
+        [Header("Stored Items")]
         [SerializeField, Range(0f, 1f)] private float interactableChance = 0.5f;
         [SerializeField] private Item[] possibleItems;
-
-        //Spawners that must finish first so obstacles never cover an event or item. Found on the map when left empty.
+        [Header("Spawner References")]
         [SerializeField] private MapEventController mapEvents;
         [SerializeField] private ItemSpawner itemSpawner;
         private int? forcedObstacleCount;
@@ -33,6 +38,88 @@ namespace Escape4Now.Obstacles
         public void SetInteractableChance(float chance) { forcedInteractableChance = Mathf.Clamp01(chance); }
         public void ForceObstacleTile(Vector2Int cell) { forcedObstacleCell = cell; }
 
+        private void Awake()
+        {
+            if (map == null) map = FindFirstObjectByType<IsometricMapTemplate>();
+            InitializeObstacleCatalog();
+            if (map != null && map.GetComponent<ObstacleSpawner>() != this)
+                map.SetFurniturePrefabOverrides(new List<SchoolFurniture>(GetSchoolPrefabs()).ToArray());
+        }
+
+        private void OnValidate()
+        {
+            minimumObstacleCount = Mathf.Clamp(minimumObstacleCount, 0, 10);
+            maximumObstacleCount = Mathf.Clamp(maximumObstacleCount, minimumObstacleCount, 10);
+            interactableChance = float.IsNaN(interactableChance) ? 0.5f : Mathf.Clamp01(interactableChance);
+#if UNITY_EDITOR
+            if (!obstacleCatalogInitialized && !catalogInitializationQueued)
+            {
+                catalogInitializationQueued = true;
+                UnityEditor.EditorApplication.delayCall += InitializeCatalogInEditor;
+            }
+#endif
+        }
+
+        //Migrate existing scenes once, then preserve the team's Inspector edits.
+        private void InitializeObstacleCatalog()
+        {
+            if (obstacleCatalogInitialized) return;
+            var catalog = new List<Component>();
+            var furnitureKinds = new HashSet<SchoolFurnitureKind>();
+            void Add(Component prefab)
+            {
+                if (prefab == null || catalog.Exists(entry => entry.gameObject == prefab.gameObject)) return;
+                catalog.Add(prefab);
+                SchoolFurniture furniture = prefab.GetComponent<SchoolFurniture>();
+                if (furniture != null) furnitureKinds.Add(furniture.Kind);
+            }
+            foreach (Component prefab in obstaclePrefabs ?? System.Array.Empty<Component>()) Add(prefab);
+            foreach (SchoolFurniture prefab in previousSchoolPrefabs ?? System.Array.Empty<SchoolFurniture>()) Add(prefab);
+            foreach (SchoolFurniture prefab in Resources.LoadAll<SchoolFurniture>("SchoolObstacles"))
+                if (prefab != null && !furnitureKinds.Contains(prefab.Kind)) Add(prefab);
+            obstaclePrefabs = catalog.ToArray();
+            previousSchoolPrefabs = null;
+            obstacleCatalogInitialized = true;
+        }
+
+        public IEnumerable<SchoolFurniture> GetSchoolPrefabs() => GetObstaclePrefabs<SchoolFurniture>();
+
+        private IEnumerable<T> GetObstaclePrefabs<T>() where T : Component
+        {
+            InitializeObstacleCatalog();
+            foreach (Component entry in obstaclePrefabs ?? System.Array.Empty<Component>())
+            {
+                if (entry == null) continue;
+                T prefab = entry.GetComponent<T>();
+                if (prefab != null) yield return prefab;
+            }
+        }
+
+#if UNITY_EDITOR
+        private bool catalogInitializationQueued;
+
+        private void InitializeCatalogInEditor()
+        {
+            catalogInitializationQueued = false;
+            if (this == null || obstacleCatalogInitialized) return;
+            bool persistChanges = !Application.IsPlaying(gameObject);
+            if (persistChanges) UnityEditor.Undo.RecordObject(this, "Initialize obstacle prefabs");
+            InitializeObstacleCatalog();
+            if (!persistChanges) return;
+            UnityEditor.EditorUtility.SetDirty(this);
+            if (gameObject.scene.IsValid() && gameObject.scene.isLoaded)
+                UnityEditor.SceneManagement.EditorSceneManager.MarkSceneDirty(gameObject.scene);
+        }
+
+        [ContextMenu("Populate Missing Obstacle Prefabs")]
+        private void PopulateMissingObstaclePrefabs()
+        {
+            UnityEditor.Undo.RecordObject(this, "Populate obstacle prefabs");
+            obstacleCatalogInitialized = false;
+            InitializeCatalogInEditor();
+        }
+#endif
+
         private void Start()
         {
             StartCoroutine(SpawnObstacles());
@@ -41,8 +128,7 @@ namespace Escape4Now.Obstacles
         //The current scene uses one obstacle template on every computer.
         public ObstacleGridControl GetNetworkPrefab()
         {
-            if (obstaclePrefabs == null) return null;
-            foreach (ObstacleGridControl prefab in obstaclePrefabs) if (prefab != null) return prefab;
+            foreach (ObstacleGridControl prefab in GetObstaclePrefabs<ObstacleGridControl>()) return prefab;
             return null;
         }
 
@@ -98,7 +184,7 @@ namespace Escape4Now.Obstacles
             }
 
             int target = forcedObstacleCount.HasValue
-                ? forcedObstacleCount.Value : Mathf.Min(obstacleCount, Random.Range(2, 4));
+                ? forcedObstacleCount.Value : Random.Range(minimumObstacleCount, maximumObstacleCount + 1);
             while (placed < target && emptyTiles.Count > 0)
             {
                 int index = Random.Range(0, emptyTiles.Count);
@@ -228,7 +314,7 @@ namespace Escape4Now.Obstacles
         //Creates an empty obstacle. The shared item pool fills containers afterward.
         private bool SpawnObstacle(Vector2Int cell)
         {
-            ObstacleGridControl prefab = PickRandom(obstaclePrefabs);
+            ObstacleGridControl prefab = PickRandom(new List<ObstacleGridControl>(GetObstaclePrefabs<ObstacleGridControl>()).ToArray());
             if (prefab == null)
             {
                 return false;
