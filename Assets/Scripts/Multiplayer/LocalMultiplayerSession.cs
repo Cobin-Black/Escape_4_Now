@@ -208,7 +208,7 @@ namespace Escape4Now.Multiplayer
                 if (player.Inventory != null) player.Inventory.enabled = true;
                 foreach (Renderer renderer in player.GetComponentsInChildren<Renderer>(true)) renderer.enabled = true;
             }
-            turns.SetPlayers(participants);
+            turns.SetPlayers(participants, map.LayoutSeed);
             foreach (PlayerCharacter player in participants) player.gameObject.SetActive(true);
             foreach (MonoBehaviour script in heldScripts)
             {

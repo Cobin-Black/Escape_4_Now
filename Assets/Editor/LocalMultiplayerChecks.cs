@@ -112,6 +112,8 @@ public static class LocalMultiplayerChecks
         TurnSystemController turns = UnityEngine.Object.FindFirstObjectByType<TurnSystemController>();
         CheckTimeoutResult();
         IsometricMapTemplate map = UnityEngine.Object.FindFirstObjectByType<IsometricMapTemplate>();
+        IEnumerator orderChecks = CheckRandomTurnOrder(map, players, turns);
+        while (orderChecks.MoveNext()) yield return orderChecks.Current;
         CheckObstacleCatalog(map);
         Require(players.Length == count && map.Width == 25 && map.Height == 25, "Selected players on an 25 by 25 map");
         int doorCount = 0;
@@ -321,6 +323,7 @@ public static class LocalMultiplayerChecks
         for (int i = 1; i < count; i++)
         {
             Require(turns.CurrentPlayerIndex == i, "Next player's turn");
+            yield return null;
             players[i].SetMovesFromItem(1);
             turns.AdvanceTurn();
         }
@@ -477,6 +480,81 @@ public static class LocalMultiplayerChecks
             Time.timeScale = previousScale;
         }
         Require(!LocalMultiplayerSession.MatchHasEnded, "An unfinished match keeps the gameplay screen");
+    }
+
+    private static IEnumerator CheckRandomTurnOrder(IsometricMapTemplate map, PlayerCharacter[] players,
+        TurnSystemController turns)
+    {
+        var names = Array.ConvertAll(players, player => player.name);
+        var inventories = Array.ConvertAll(players, player => player.Inventory);
+        var positions = Array.ConvertAll(players, player => player.GridPosition);
+        var colors = Array.ConvertAll(players, player => new SerializedObject(player).FindProperty("playerColor").colorValue);
+        int[] order = turns.CopyTurnOrder();
+        Require(new HashSet<int>(order).Count == players.Length, "Shuffled sequence contains every identity once");
+        UnityEngine.Random.State randomBefore = UnityEngine.Random.state;
+        turns.SetPlayers(players, map.LayoutSeed);
+        turns.RestartTurnCycle();
+        Require(string.Join(",", order) == string.Join(",", turns.CopyTurnOrder()), "Map seed reproduces the starting sequence");
+        Require(JsonUtility.ToJson(randomBefore) == JsonUtility.ToJson(UnityEngine.Random.state),
+            "Turn shuffling does not consume dice or event randomness");
+        for (int round = 1; round <= 3; round++)
+        for (int position = 0; position < order.Length; position++)
+        {
+            int slot = order[position];
+            Require(turns.CurrentPlayerIndex == slot && turns.TurnNumber == round,
+                "The same shuffled sequence repeats with the correct round counter");
+            Require(turns.CurrentTurnName == names[slot] && turns.IsPlayersTurn(players[slot]),
+                "HUD identity and turn ownership use the active participant, not their turn position");
+            for (int i = 0; i < players.Length; i++)
+                Require(turns.IsPlayersTurn(players[i]) == (i == slot), "Exactly one player owns the turn");
+            yield return null;
+            players[slot].SetMovesFromItem(1);
+            turns.AdvanceTurn();
+        }
+        Require(turns.CurrentPlayerIndex == order[0] && turns.TurnNumber == 4,
+            "Three full rounds return to the original shuffled first player");
+        Time.timeScale = 0f;
+        turns.AdvanceTurn();
+        Require(turns.CurrentPlayerIndex == order[0] && turns.TurnNumber == 4, "Pause blocks shuffled turn advancement");
+        Time.timeScale = 1f;
+        players[order[0]].EventState.GiveFreeze();
+        turns.RestartTurnCycle();
+        Require(turns.CurrentPlayerIndex == order[1] && turns.TurnNumber == 1,
+            "Freeze skips to the next chosen player without reshuffling");
+        Require(string.Join(",", order) == string.Join(",", turns.CopyTurnOrder()), "Restarts and skips preserve match order");
+
+        LanSnapshot snapshot = new LanWorldView(UnityEngine.Object.FindFirstObjectByType<LocalMultiplayerSession>()).Capture();
+        snapshot = JsonUtility.FromJson<LanSnapshot>(JsonUtility.ToJson(snapshot));
+        Require(LanWorldView.IsValid(snapshot), "Shuffled match produces a valid host snapshot");
+        var replicaObject = new GameObject("Turn order test replica");
+        var replica = replicaObject.AddComponent<TurnSystemController>();
+        replica.enabled = false;
+        replica.SetPlayers(players, int.MinValue);
+        Require(replica.ApplyNetworkTurn(snapshot.turn, snapshot.round, snapshot.turnOrder)
+            && replica.CurrentPlayerIndex == order[1] && replica.CurrentTurnName == names[order[1]],
+            "Clients follow host identity slots and order even with a different local seed");
+        int[] changedOrder = (int[])order.Clone();
+        int saved = changedOrder[0]; changedOrder[0] = changedOrder[1]; changedOrder[1] = saved;
+        Require(!replica.ApplyNetworkTurn(snapshot.turn, snapshot.round, changedOrder),
+            "Clients reject an order change during the match");
+        snapshot.turnOrder = new int[players.Length];
+        Require(!LanWorldView.IsValid(snapshot), "Network rejects repeated identities in the sequence");
+        UnityEngine.Object.Destroy(replicaObject);
+        for (int i = 0; i < players.Length; i++)
+        {
+            Require(players[i].name == names[i] && players[i].Inventory == inventories[i]
+                && players[i].GridPosition == positions[i]
+                && new SerializedObject(players[i]).FindProperty("playerColor").colorValue == colors[i],
+                "Turn order never changes names, colors, inventories, or map positions");
+            players[i].BeginEventTurn();
+        }
+        //The existing gameplay scenarios use identity-ordered fixtures, not a first-player assumption in the game.
+        var settings = new SerializedObject(turns);
+        settings.FindProperty("randomizeStartingOrder").boolValue = false;
+        settings.ApplyModifiedPropertiesWithoutUndo();
+        turns.SetPlayers(players, map.LayoutSeed);
+        turns.RestartTurnCycle();
+        yield return null;
     }
 
     //Checks the new key rules together with storage, protection, and shared player tiles.

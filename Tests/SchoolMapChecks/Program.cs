@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Text;
 using Escape4Now.Map;
 using Escape4Now.Obstacles;
+using Escape4Now.TurnSystem;
 
 //Runs repeatable floor-plan tests without needing a Unity scene or license.
 internal static class Program
@@ -10,6 +11,7 @@ internal static class Program
     //Checks many seeds, including the smallest and largest possible seed values.
     private static void Main()
     {
+        CheckTurnOrders();
         var shapes = new HashSet<string>();
         var libraryPositions = new HashSet<int>();
         int minFloor = 625, maxFloor = 0, totalFloor = 0, multipleEntrances = 0;
@@ -479,6 +481,36 @@ internal static class Program
             text.AppendLine();
         }
         return text.ToString();
+    }
+
+    private static void CheckTurnOrders()
+    {
+        foreach (int count in new[] { 2, 3, 4 })
+        {
+            var permutations = new HashSet<string>();
+            var startingPlayers = new HashSet<int>();
+            for (int seed = 0; seed < 10000; seed++)
+            {
+                int[] order = PlayerTurnOrder.Create(count, seed);
+                Require(PlayerTurnOrder.IsValid(order, count), "Every participant occurs exactly once");
+                Require(string.Join(",", order) == string.Join(",", PlayerTurnOrder.Create(count, seed)),
+                    "Fixed match seeds reproduce the complete order");
+                permutations.Add(string.Join(",", order));
+                startingPlayers.Add(order[0]);
+            }
+            int expectedPermutations = count == 2 ? 2 : count == 3 ? 6 : 24;
+            Require(permutations.Count == expectedPermutations && startingPlayers.Count == count,
+                "Every order and starting identity is possible");
+            foreach (int seed in new[] { int.MinValue, int.MaxValue })
+                Require(PlayerTurnOrder.IsValid(PlayerTurnOrder.Create(count, seed), count), "Extreme seeds are valid");
+            int[] originalOrder = PlayerTurnOrder.Create(count, 42, false);
+            for (int i = 0; i < count; i++) Require(originalOrder[i] == i, "Inspector opt-out preserves identity order");
+        }
+        Require(PlayerTurnOrder.Create(0, 42).Length == 0 && PlayerTurnOrder.Create(1, 42)[0] == 0,
+            "Empty setup and solo tutorial remain safe");
+        foreach (int[] invalid in new[] { null, new[] { 0 }, new[] { 0, 0 }, new[] { -1, 1 }, new[] { 0, 2 } })
+            Require(!PlayerTurnOrder.IsValid(invalid, 2), "Malformed network turn sequences are rejected");
+        Console.WriteLine("PASS: 30,000 seeded turn orders for 2-4 players; all permutations, repeatability, solo fallback, and validation.");
     }
 
     //Stops at the first failed rule so the failing seed can be investigated.

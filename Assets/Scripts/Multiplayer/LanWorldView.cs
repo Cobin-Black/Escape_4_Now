@@ -36,6 +36,7 @@ namespace Escape4Now.Multiplayer
         {
             var state = new LanSnapshot { seed = map.LayoutSeed, exitX = map.ExitPosition.x,
                 exitY = map.ExitPosition.y, turn = turns.CurrentPlayerIndex, round = turns.TurnNumber,
+                turnOrder = turns.CopyTurnOrder(),
                 blackout = events.BlackoutTurns, message = events.CurrentMessage,
                 paused = LanMultiplayerSession.Instance != null && LanMultiplayerSession.Instance.MatchPaused,
                 mapSettings = map.GenerationSettings,
@@ -102,6 +103,7 @@ namespace Escape4Now.Multiplayer
             if (state == null || state.mapSettings == null || !state.mapSettings.IsValid
                 || state.furnitureSettings == null || !state.furnitureSettings.IsValid
                 || state.players == null || state.players.Length < 2 || state.players.Length > 4
+                || !PlayerTurnOrder.IsValid(state.turnOrder, state.players.Length)
                 || state.objects == null || state.objects.Length > 128 || state.turn < 0
                 || state.turn >= state.players.Length || state.round < 1 || state.blackout < 0 || state.blackout > 4
                 || state.message == null || state.message.Length > 1024 || !Cell(state.exitX, state.exitY)
@@ -142,7 +144,7 @@ namespace Escape4Now.Multiplayer
                 hasLayout = true;
             }
             if (state.seed != map.LayoutSeed || state.players.Length != session.Participants.Count) return false;
-            turns.ApplyNetworkTurn(state.turn, state.round);
+            if (!turns.ApplyNetworkTurn(state.turn, state.round, state.turnOrder)) return false;
             var occupied = new List<Vector2Int>();
             for (int i = 0; i < state.players.Length; i++)
             {

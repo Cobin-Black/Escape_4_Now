@@ -862,6 +862,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   players:
   - {fileID: 1200000013}
+  randomizeStartingOrder: 1
   includeEnemyTurn: 0
   enemyTurnName: Enemy
   showTurnDisplay: 1

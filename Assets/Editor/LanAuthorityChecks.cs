@@ -15,6 +15,10 @@ public static class LanAuthorityChecks
         yield return null;
         LanMultiplayerSession lan = LanMultiplayerSession.Instance;
         Require(lan.StartHost(2), "Host starts");
+        //These command-forgery scenarios explicitly use host then guest; random-order checks run separately.
+        var turnSettings = new UnityEditor.SerializedObject(UnityEngine.Object.FindFirstObjectByType<Escape4Now.TurnSystem.TurnSystemController>());
+        turnSettings.FindProperty("randomizeStartingOrder").boolValue = false;
+        turnSettings.ApplyModifiedPropertiesWithoutUndo();
         using (LanConnection wrong = Connect())
         {
             wrong.Send(JsonUtility.ToJson(new LanMessage { kind = "hello", code = "invalid" }));
