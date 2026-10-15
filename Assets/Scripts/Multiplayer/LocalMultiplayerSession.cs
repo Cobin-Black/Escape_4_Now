@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Escape4Now.Map;
 using Escape4Now.Player;
 using Escape4Now.TurnSystem;
+using Escape4Now.Bots;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
@@ -21,6 +22,7 @@ namespace Escape4Now.Multiplayer
         private PlayerCharacter[] participants;
         private int playerCount = 2;
         private readonly string[] playerNames = { "Player 1", "Player 2", "Player 3", "Player 4" };
+        private readonly bool[] playerIsBot = new bool[4];
         private LanMultiplayerSession lan;
         public IReadOnlyList<PlayerCharacter> Participants => participants;
         private string status = "";
@@ -116,14 +118,38 @@ namespace Escape4Now.Multiplayer
             participants[0] = sourcePlayer;
             sourcePlayer.gameObject.SetActive(false);
             for (int i = 1; i < count; i++) participants[i] = Instantiate(sourcePlayer);
+
             for (int i = 0; i < count; i++)
             {
                 PlayerCharacter player = participants[i];
-                player.ConfigureParticipant(map, turns, cells[i], i + 1, PlayerColors[i], GetPlayerName(i));
+                player.ConfigureParticipant(
+                    map, turns, cells[i], i + 1, PlayerColors[i], GetPlayerName(i));
+
+                bool isBot = !LanMultiplayerSession.Active && IsBotPlayer(i);
+                player.SetBotControlled(isBot);
+                BotController bot = player.GetComponent<BotController>();
+                if (isBot)
+                {
+                    if (bot == null)
+                        bot = player.gameObject.AddComponent<BotController>();
+
+                    bot.enabled = true;
+                    bot.ResetSearchMemory();
+                }
+                else if (bot != null)
+                {
+                    bot.enabled = false;
+                }
+
                 player.enabled = true;
-                if (player.Inventory != null) player.Inventory.enabled = true;
-                foreach (Renderer renderer in player.GetComponentsInChildren<Renderer>(true)) renderer.enabled = true;
+
+                if (player.Inventory != null)
+                    player.Inventory.enabled = true;
+
+                foreach (Renderer renderer in player.GetComponentsInChildren<Renderer>(true))
+                    renderer.enabled = true;
             }
+
             turns.SetPlayers(participants);
             foreach (PlayerCharacter player in participants) player.gameObject.SetActive(true);
             foreach (MonoBehaviour script in heldScripts)
@@ -138,6 +164,12 @@ namespace Escape4Now.Multiplayer
             status = "";
             Time.timeScale = 1f;
             return true;
+        }
+
+        //Returns whether the selected player slot is a bot.
+        public bool IsBotPlayer(int index)
+        {
+            return index >= 0 && index < playerIsBot.Length && playerIsBot[index];
         }
 
         //Temporary controls can be replaced by the team's main menu later.
@@ -175,14 +207,42 @@ namespace Escape4Now.Multiplayer
                 bool playing = i < playerCount;
                 Color color = playing ? PlayerColors[i] : new Color(0.24f, 0.27f, 0.25f);
                 DrawSetupColor(new Rect(8, y + 4, 14, 26), color);
+
                 if (playing)
                 {
                     GUI.Label(new Rect(40, y, 48, 32), "Name", smallStyle);
-                    playerNames[i] = GUI.TextField(new Rect(92, y + 2, Mathf.Max(50, contentWidth - 100), 28),
-                        playerNames[i], 16, buttonStyle);
+
+                    float buttonWidth = 76;
+                    float buttonX = contentWidth - buttonWidth;
+                    float nameWidth = Mathf.Max(30, buttonX - 100);
+
+                    if (playerIsBot[i])
+                    {
+                        GUI.Label(new Rect(92, y + 2, nameWidth, 28), "Bot " + GetBotNumber(i), buttonStyle);
+                    }
+                    else
+                    {
+                        playerNames[i] = GUI.TextField(
+                            new Rect(92, y + 2, nameWidth, 28),
+                            playerNames[i], 16, buttonStyle);
+                    }
+
+                    if (GUI.Button(
+                        new Rect(buttonX, y + 2, buttonWidth, 28),
+                        playerIsBot[i] ? "Bot" : "Human",
+                        playerIsBot[i] ? selectedStyle : buttonStyle))
+                    {
+                        playerIsBot[i] = !playerIsBot[i];
+                    }
                 }
-                else GUI.Label(new Rect(40, y + 4, 110, 26), "Not playing", smallStyle);
-                DrawSetupColor(new Rect(0, y + 38, contentWidth, 1), new Color(0.16f, 0.19f, 0.17f));
+                else
+                {
+                    GUI.Label(new Rect(40, y + 4, 110, 26), "Not playing", smallStyle);
+                }
+
+                DrawSetupColor(
+                    new Rect(0, y + 38, contentWidth, 1),
+                    new Color(0.16f, 0.19f, 0.17f));
             }
             if (GUI.Button(new Rect(0, 402, contentWidth, 48), "Start Match", selectedStyle)) StartLocalMatch();
             GUI.Label(new Rect(0, 464, contentWidth, 56), status, errorStyle);
@@ -196,6 +256,12 @@ namespace Escape4Now.Multiplayer
             value = value.Replace("<", "").Replace(">", "").Trim();
             if (value.Length == 0) value = "Player " + (index + 1);
             return value.Length > 16 ? value.Substring(0, 16) : value;
+        }
+
+        //Returns the bot's display number.
+        private int GetBotNumber(int index)
+        {
+            return index + 1;
         }
 
         //Creates the temporary menu styles once, instead of allocating them every frame.
