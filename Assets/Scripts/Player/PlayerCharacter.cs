@@ -35,8 +35,6 @@ namespace Escape4Now.Player
         [SerializeField, Range(0.01f, 0.2f)] private float turnRingThickness = 0.045f;
         [SerializeField] private float turnRingGroundOffset = 0.015f;
         [Header("Current Game Mode Objective")]
-        [SerializeField] private string objectiveBeforeKey = "Find the key, then reach the exit.";
-        [SerializeField] private string objectiveAfterKey = "Reach the exit.";
         [SerializeField] private string rollPrompt = "ROLL: SPACE";
         [SerializeField] private string compactRollPrompt = "SPACE";
         [Header("Gameplay HUD")]
@@ -96,9 +94,6 @@ namespace Escape4Now.Player
         [SerializeField, Min(0.1f)] private float diceRollAnimationDuration = 0.9f;
         [SerializeField, Min(0f)] private float sharedTileHorizontalOffset = 0.14f;
         [SerializeField, Min(0f)] private float sharedTileVerticalOffset = 0.08f;
-        [Header("Exit Rules")]
-        [SerializeField, Tooltip("When enabled, players must carry the key before they can escape.")]
-        private bool exitNeedsKey = true;
 
         private SpriteRenderer spriteRenderer;
         private Coroutine moveRoutine;
@@ -147,8 +142,15 @@ namespace Escape4Now.Player
         public Vector2Int GridPosition => gridPosition;
         public bool IsMoving => moveRoutine != null;
 
-        public void SetExitNeedsKey(bool value) { exitNeedsKey = value; }
-        private bool CanUseExit => !exitNeedsKey || (inventory != null && inventory.HasKey());
+        //The scene's gamemode decides who may leave. With no gamemode (such as the tutorial) the exit is open.
+        private bool CanUseExit
+        {
+            get
+            {
+                var mode = Escape4Now.GameModes.GameMode.Current;
+                return mode == null || mode.CanUseExit(this);
+            }
+        }
 
         //Checks settings and places the player on its starting tile.
         private void Awake()
@@ -216,6 +218,26 @@ private Texture2D circleTexture;
             && Time.realtimeSinceStartup - rollAnimStart < diceRollAnimationDuration;
 // Which of the 3x3 cells hold a dot for faces 1-6 (cell = row * 3 + column)
 private static readonly int[] DiceFaceMasks = { 0, 16, 257, 273, 325, 341, 365 };
+        //The turn panel's size before shrinking, and how much it shrinks to fit a small window.
+        private Vector2 GetHudPanelSize(out float fitScale)
+        {
+            Vector2 requestedSize = isTutorial ? tutorialHudSize : hudPanelSize;
+            float availableWidth = HudScale.Width - hudTopLeftMargin.x * 2f - hudTopRightClearance;
+            fitScale = Mathf.Clamp(Mathf.Min(availableWidth / requestedSize.x,
+                (HudScale.Height - hudTopLeftMargin.y * 2f) / requestedSize.y), 0.01f, 1f);
+            return requestedSize;
+        }
+
+        //Where the turn panel is drawn, in HudScale units, so other UI (like the tutorial) can point at it.
+        public Rect HudPanelRect
+        {
+            get
+            {
+                Vector2 size = GetHudPanelSize(out float fitScale);
+                return new Rect(hudTopLeftMargin.x, hudTopLeftMargin.y, size.x * fitScale, size.y * fitScale);
+            }
+        }
+
         //Draws the roll prompt or the current move budget.
         private void OnGUI()
         {
@@ -226,12 +248,7 @@ private static readonly int[] DiceFaceMasks = { 0, 16, 257, 273, 325, 341, 365 }
             PrepareHudStyles();
 
             Matrix4x4 previousMatrix = HudScale.Apply();
-            float screenWidth = HudScale.Width;
-            float screenHeight = HudScale.Height;
-            Vector2 requestedSize = isTutorial ? tutorialHudSize : hudPanelSize;
-            float availableWidth = screenWidth - hudTopLeftMargin.x * 2f - hudTopRightClearance;
-            float fitScale = Mathf.Clamp(Mathf.Min(availableWidth / requestedSize.x,
-                (screenHeight - hudTopLeftMargin.y * 2f) / requestedSize.y), 0.01f, 1f);
+            Vector2 requestedSize = GetHudPanelSize(out float fitScale);
             GUI.matrix *= Matrix4x4.Scale(new Vector3(fitScale, fitScale, 1f));
             Rect panel = new Rect(hudTopLeftMargin.x / fitScale, hudTopLeftMargin.y / fitScale,
                 requestedSize.x, requestedSize.y);
@@ -298,9 +315,10 @@ private static readonly int[] DiceFaceMasks = { 0, 16, 257, 273, 325, 341, 365 }
                     (stackHudDetails ? contentWidth : timerWidth) - timerTextOffset, detailsHeight), time, hudTimerStyle);
             }
 
-            if (!hasReachedExit && !isTutorial)
+            var gameMode = isTutorial ? null : Escape4Now.GameModes.GameMode.Current;
+            string objective = gameMode != null ? gameMode.GetObjective(this) : "";
+            if (!hasReachedExit && !string.IsNullOrEmpty(objective))
             {
-                string objective = inventory != null && inventory.HasKey() ? objectiveAfterKey : objectiveBeforeKey;
                 float minimumObjectiveY = detailsY + detailsHeight * (stackHudDetails ? 2f : 1f) + hudSectionGap * 2f;
                 float objectiveY = Mathf.Max(minimumObjectiveY, panel.y + panel.height * hudObjectiveRowPosition);
                 DrawHudColor(new Rect(contentX, objectiveY - hudSectionGap, contentWidth, hudDividerThickness), hudDividerColor);
@@ -432,9 +450,9 @@ private void DrawKeyMarker()
     bool hasKey = networkHasKey || (inventory != null && inventory.HasKey());
     Camera viewCamera = Camera.main;
     if (!hasKey || !isActiveAndEnabled || viewCamera == null || mapTemplate == null) return;
-    ItemSpawner spawner = mapTemplate.GetComponent<ItemSpawner>();
-    SpriteRenderer keyVisual = spawner != null && spawner.KeyPrefab != null
-        ? spawner.KeyPrefab.GetComponentInChildren<SpriteRenderer>(true) : null;
+    var race = Escape4Now.GameModes.Race_Gamemode.Current;
+    SpriteRenderer keyVisual = race != null && race.KeyPrefab != null
+        ? race.KeyPrefab.GetComponentInChildren<SpriteRenderer>(true) : null;
     Sprite sprite = keyVisual != null ? keyVisual.sprite : null;
     if (sprite == null || sprite.texture == null) return;
 

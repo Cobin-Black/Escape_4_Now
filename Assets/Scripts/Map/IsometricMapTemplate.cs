@@ -58,7 +58,10 @@ namespace Escape4Now.Map
         private int screenHeight;
         private SchoolMapLayout layout;
         private SchoolFurniturePlan furniturePlan;
-        private readonly Dictionary<SchoolFurnitureKind, SchoolFurniture> furniturePrefabs = new Dictionary<SchoolFurnitureKind, SchoolFurniture>();
+        //Each room only draws furniture from its own obstacle spawner section. None is the hallway.
+        private readonly Dictionary<SchoolRoomType, List<SchoolFurniture>> roomFurniturePrefabs = new Dictionary<SchoolRoomType, List<SchoolFurniture>>();
+        private readonly List<SchoolFurniture> allFurniturePrefabs = new List<SchoolFurniture>();
+        private Escape4Now.Obstacles.ObstacleSpawner obstacleSpawnerSource;
 
         //Generated tiles by grid address and which addresses currently hold a player.
         private readonly Dictionary<Vector2Int, IsometricMapTile> tileLookup = new Dictionary<Vector2Int, IsometricMapTile>();
@@ -90,6 +93,13 @@ namespace Escape4Now.Map
 
         public void SetHasExit(bool value) { exitDoorAllowed = value; hasExit = false; }
         public void SetExitPosition(Vector2Int cell) { requestedExitCell = cell; }
+
+        //Lets an obstacle spawner on another object supply the room sections.
+        public void SetObstacleSpawner(Escape4Now.Obstacles.ObstacleSpawner spawner)
+        {
+            obstacleSpawnerSource = spawner;
+            if (layout != null && useSchoolLayout) PrepareFurniture();
+        }
 
         public void SetFurniturePrefabOverrides(SchoolFurniture[] prefabs)
         {
@@ -131,29 +141,53 @@ namespace Escape4Now.Map
                 foreach (SchoolFurniturePlacement item in furniturePlan.Furniture)
                     blockedPositions.Remove(new Vector2Int(item.Cell % Width, item.Cell / Width));
             furniturePlan = null;
-            furniturePrefabs.Clear();
+            roomFurniturePrefabs.Clear();
+            allFurniturePrefabs.Clear();
             if (!useSchoolLayout) return;
-            var obstacleSpawner = GetComponent<Escape4Now.Obstacles.ObstacleSpawner>();
-            IEnumerable<SchoolFurniture> templates = obstacleSpawner != null
-                ? obstacleSpawner.GetSchoolPrefabs() : Resources.LoadAll<SchoolFurniture>("SchoolObstacles");
-            foreach (SchoolFurniture prefab in templates)
+            var obstacleSpawner = obstacleSpawnerSource != null
+                ? obstacleSpawnerSource : GetComponent<Escape4Now.Obstacles.ObstacleSpawner>();
+            SchoolFurniture[] fallback = obstacleSpawner == null ? Resources.LoadAll<SchoolFurniture>("SchoolObstacles") : null;
+            foreach (SchoolRoomType room in System.Enum.GetValues(typeof(SchoolRoomType)))
             {
-                if (prefab == null || !prefab.IsValidTemplate() || furniturePrefabs.ContainsKey(prefab.Kind))
-                    throw new System.InvalidOperationException("A school furniture prefab is invalid or duplicated.");
-                furniturePrefabs.Add(prefab.Kind, prefab);
+                var section = new List<SchoolFurniture>();
+                foreach (SchoolFurniture prefab in obstacleSpawner != null ? obstacleSpawner.GetRoomPrefabs(room) : fallback)
+                {
+                    if (prefab == null || !prefab.IsValidTemplate())
+                        throw new System.InvalidOperationException("A school furniture prefab is invalid.");
+                    section.Add(prefab);
+                    if (!allFurniturePrefabs.Contains(prefab)) allFurniturePrefabs.Add(prefab);
+                }
+                roomFurniturePrefabs[room] = section;
             }
             foreach (SchoolFurniture prefab in furniturePrefabOverrides ?? System.Array.Empty<SchoolFurniture>())
-            {
                 if (prefab == null || !prefab.IsValidTemplate())
                     throw new System.InvalidOperationException("A furniture prefab override is invalid.");
-                furniturePrefabs[prefab.Kind] = prefab;
-            }
-            foreach (SchoolFurnitureKind kind in System.Enum.GetValues(typeof(SchoolFurnitureKind)))
-                if (!furniturePrefabs.ContainsKey(kind))
-                    throw new System.InvalidOperationException("Missing school furniture prefab: " + kind);
-            furniturePlan = new SchoolFurniturePlan(layout, furnitureSettings);
+            var plan = new SchoolFurniturePlan(layout, furnitureSettings);
+            foreach (SchoolFurniturePlacement item in plan.Furniture)
+                if (GetFurniturePrefab(item) == null)
+                {
+                    SchoolRoomType room = layout.GetRoomType(item.Cell % Width, item.Cell / Width);
+                    string section = room == SchoolRoomType.None ? "Hallway" : room.ToString();
+                    throw new System.InvalidOperationException($"The {section} obstacle section needs a {item.Kind} prefab.");
+                }
+            furniturePlan = plan;
             foreach (SchoolFurniturePlacement item in furniturePlan.Furniture)
                 blockedPositions.Add(new Vector2Int(item.Cell % Width, item.Cell / Width));
+        }
+
+        //Picks a prefab from the room's own section. Special rooms try the hallway first, then any room.
+        //Several prefabs of one kind in a section are variants, chosen by tile so every computer agrees.
+        private SchoolFurniture GetFurniturePrefab(SchoolFurniturePlacement item)
+        {
+            foreach (SchoolFurniture prefab in furniturePrefabOverrides ?? System.Array.Empty<SchoolFurniture>())
+                if (prefab != null && prefab.Kind == item.Kind) return prefab;
+            int x = item.Cell % Width, y = item.Cell / Width;
+            SchoolRoomType room = layout.GetRoomType(x, y);
+            var choices = roomFurniturePrefabs.TryGetValue(room, out List<SchoolFurniture> section)
+                ? section.FindAll(prefab => prefab.Kind == item.Kind) : new List<SchoolFurniture>();
+            if (choices.Count == 0 && layout.GetSpaceType(x, y) != SchoolSpaceType.None)
+                choices = allFurniturePrefabs.FindAll(prefab => prefab.Kind == item.Kind);
+            return choices.Count == 0 ? null : choices[item.Cell % choices.Count];
         }
 
         //Other spawners leave these floor tiles clear for the special-room rewards.
@@ -185,7 +219,7 @@ namespace Escape4Now.Map
             foreach (SchoolFurniturePlacement item in furniturePlan.Furniture)
             {
                 var cell = new Vector2Int(item.Cell % Width, item.Cell / Width);
-                SchoolFurniture copy = Instantiate(furniturePrefabs[item.Kind], tileLookup[cell].transform);
+                SchoolFurniture copy = Instantiate(GetFurniturePrefab(item), tileLookup[cell].transform);
                 copy.name = item.Kind.ToString();
                 copy.Build(this, cell, item.Facing);
             }
@@ -321,7 +355,7 @@ namespace Escape4Now.Map
                     if (!IsBorder(cell) || ((x == 0 || x == width - 1) && (y == 0 || y == height - 1))) continue;
                     Vector2Int inside = new Vector2Int(Mathf.Clamp(x, 1, width - 2), Mathf.Clamp(y, 1, height - 2));
                     if (!IsInteriorFloor(inside) || !IsWalkable(inside) || IsOccupied(inside)
-                        || (events != null && events.HasEvent(inside))) continue;
+                        || (events != null && (events.HasEvent(inside) || events.HasMovingEventNear(inside)))) continue;
                     bool hasItem = false;
                     foreach (Escape4Now.Items.Item item in items)
                         if (item.IsAtPosition(inside)) { hasItem = true; break; }
@@ -513,6 +547,41 @@ namespace Escape4Now.Map
         public bool IsWalkable(Vector2Int cell)
         {
             return IsInsideMap(cell) && !IsWall(cell) && !blockedPositions.Contains(cell);
+        }
+
+        //Floods out from an open tile and checks every open tile can be reached. Tiles where cannotCross is true
+        //can be stepped onto but not walked through, such as events that move the player somewhere else.
+        public bool AllWalkableTilesConnected(System.Predicate<Vector2Int> cannotCross = null, Vector2Int? preferredStart = null)
+        {
+            int walkableCount = 0;
+            Vector2Int? start = null;
+            for (int y = 0; y < Height; y++)
+                for (int x = 0; x < Width; x++)
+                {
+                    var cell = new Vector2Int(x, y);
+                    if (!IsWalkable(cell)) continue;
+                    walkableCount++;
+                    if (start == null && (cannotCross == null || !cannotCross(cell))) start = cell;
+                }
+            if (preferredStart.HasValue && IsWalkable(preferredStart.Value)
+                && (cannotCross == null || !cannotCross(preferredStart.Value))) start = preferredStart;
+            if (start == null) return walkableCount == 0;
+
+            var reached = new HashSet<Vector2Int> { start.Value };
+            var pending = new Queue<Vector2Int>();
+            pending.Enqueue(start.Value);
+            Vector2Int[] steps = { Vector2Int.right, Vector2Int.up, Vector2Int.left, Vector2Int.down };
+            while (pending.Count > 0)
+            {
+                Vector2Int cell = pending.Dequeue();
+                foreach (Vector2Int step in steps)
+                {
+                    Vector2Int next = cell + step;
+                    if (!IsWalkable(next) || !reached.Add(next)) continue;
+                    if (cannotCross == null || !cannotCross(next)) pending.Enqueue(next);
+                }
+            }
+            return reached.Count == walkableCount;
         }
 
         //Checks whether a player is standing on a tile.

@@ -43,7 +43,7 @@ namespace Escape4Now.Multiplayer
                 furnitureSettings = map.FurnitureSettings,
                 players = new LanPlayerState[session.Participants.Count] };
             state.secondsRemaining = UnityEngine.Object.FindFirstObjectByType<GameTimer>()?.TimeRemaining ?? 0f;
-            state.battleMessage = UnityEngine.Object.FindFirstObjectByType<Escape4Now.Battle.KeyStealBattleController>()?.NetworkMessage ?? "";
+            state.battleMessage = UnityEngine.Object.FindFirstObjectByType<Escape4Now.GameModes.Race_Gamemode>()?.NetworkMessage ?? "";
             for (int i = 0; i < state.players.Length; i++)
             {
                 PlayerCharacter player = session.Participants[i];

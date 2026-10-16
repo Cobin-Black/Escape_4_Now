@@ -74,6 +74,7 @@ namespace Escape4Now.Multiplayer
         private GUIStyle resultTitleStyle, resultMessageStyle, resultDetailStyle;
         private Texture2D buttonTexture, hoverTexture, selectedTexture;
         private bool pauseMenuOpen;
+        private InputAction pauseAction;
         private bool showEventTiles;
         private bool showItemObstacles;
         private bool showKeyLocation;
@@ -142,7 +143,7 @@ namespace Escape4Now.Multiplayer
                     || script is TurnSystemController || script is Escape4Now.Items.PlayerInventory
                     || script is MapEventController || script is Escape4Now.Items.ItemSpawner
                     || script is Escape4Now.Obstacles.ObstacleSpawner || script is Escape4Now.UI.ItemPickupBar
-                    || script is GameTimer || script is Escape4Now.Battle.KeyStealBattleController;
+                    || script is GameTimer || script is Escape4Now.GameModes.Race_Gamemode;
                 if (!gameplay || !script.enabled) continue;
                 heldScripts.Add(script);
                 script.enabled = false;
@@ -151,6 +152,28 @@ namespace Escape4Now.Multiplayer
                 foreach (Renderer renderer in sourcePlayer.GetComponentsInChildren<Renderer>()) renderer.enabled = false;
             lan = gameObject.AddComponent<LanMultiplayerSession>();
             lan.Initialize(this);
+            pauseAction = InputSystem.actions != null ? InputSystem.actions.FindAction("Player/Pause") : null;
+        }
+
+        //The Pause key opens and closes the same menu as the on-screen Pause button.
+        private void Update()
+        {
+            if (!MatchStarted || pauseAction == null || !pauseAction.WasPressedThisFrame() || HasMatchFinished()) return;
+            if (pauseMenuOpen) ResumeMatch();
+            else OpenPauseMenu();
+        }
+
+        private void OpenPauseMenu()
+        {
+            pauseMenuOpen = true;
+            Time.timeScale = 0f;
+            if (LanMultiplayerSession.Active) lan.Submit("pause");
+        }
+
+        private void ResumeMatch()
+        {
+            if (LanMultiplayerSession.Active) lan.Submit("resume");
+            else ApplyNetworkPause(false, HasMatchFinished());
         }
 
         //A replacement UI can connect its player-count selector to this method.
@@ -279,16 +302,7 @@ namespace Escape4Now.Multiplayer
         {
             Rect pauseButton = new Rect(Screen.width - pauseButtonMargin.x - pauseButtonSize.x,
                 pauseButtonMargin.y, pauseButtonSize.x, pauseButtonSize.y);
-            if (!pauseMenuOpen && GUI.Button(pauseButton, "Pause", buttonStyle))
-            {
-                pauseMenuOpen = true;
-                if (LanMultiplayerSession.Active)
-                {
-                    Time.timeScale = 0f;
-                    lan.Submit("pause");
-                }
-                else Time.timeScale = 0f;
-            }
+            if (!pauseMenuOpen && GUI.Button(pauseButton, "Pause", buttonStyle)) OpenPauseMenu();
 
             if (!pauseMenuOpen) return;
 
@@ -312,11 +326,7 @@ namespace Escape4Now.Multiplayer
             GUI.Label(new Rect(panel.x + 12f, panel.y + 4f, panel.width - 24f, 38f), "PAUSED", pauseTitleStyle);
             float left = panel.x + 20f;
             float rowWidth = panel.width - 40f;
-            if (GUI.Button(new Rect(left, panel.y + 52f, rowWidth, 38f), "Resume Game", selectedStyle))
-            {
-                if (LanMultiplayerSession.Active) lan.Submit("resume");
-                else ApplyNetworkPause(false, HasMatchFinished());
-            }
+            if (GUI.Button(new Rect(left, panel.y + 52f, rowWidth, 38f), "Resume Game", selectedStyle)) ResumeMatch();
 
             GUI.Label(new Rect(left, panel.y + 100f, rowWidth, 24f), displayOptionsTitle, labelStyle);
             DrawPauseToggle(new Rect(left, panel.y + 132f, rowWidth, 30f), "Show Event Tiles", ref showEventTiles, true);
@@ -347,7 +357,13 @@ namespace Escape4Now.Multiplayer
         private bool TryGetMatchResult(out PlayerCharacter winner)
         {
             winner = null;
-            if (participants != null)
+            //Each gamemode has its own win condition. Without one, the first player out wins.
+            var mode = Escape4Now.GameModes.GameMode.Current;
+            if (mode != null)
+            {
+                if (mode.TryGetWinner(participants, out winner)) return true;
+            }
+            else if (participants != null)
                 foreach (PlayerCharacter player in participants)
                     if (player != null && player.HasReachedExit)
                     {

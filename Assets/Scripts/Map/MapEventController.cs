@@ -26,6 +26,7 @@ namespace Escape4Now.Map
     {
         private IsometricMapTemplate map;
         private readonly Dictionary<Vector2Int, MapEventType> events = new Dictionary<Vector2Int, MapEventType>();
+        private bool checkMovingEventPaths = true;
         [Header("Event Placement")]
         [SerializeField, Tooltip("Event prefabs available for spawning. Removing a prefab excludes that event tile; its spawn chance controls how often an included event appears.")]
         private EventTileMarker[] eventPrefabs;
@@ -254,6 +255,9 @@ namespace Escape4Now.Map
                     if (IsEmptyEventTile(cell)) emptyTiles.Add(cell);
                 }
             }
+            //Only use the reachability rule when the map starts out fully connected, otherwise no tile could pass it.
+            checkMovingEventPaths = map.AllWalkableTilesConnected(HasMovingEvent);
+            if (!checkMovingEventPaths) Debug.LogWarning("[Events] Some open tiles are already unreachable; moving events only avoid doorways and the exit.");
             var templates = new List<EventTileMarker>(availablePrefabs);
             HashSet<MapEventType> placedTypes = new HashSet<MapEventType>();
             foreach (EventTileMarker prefab in templates)
@@ -267,7 +271,12 @@ namespace Escape4Now.Map
                     || (!forcedTiles.ContainsKey(prefab.EventType) && Random.value >= GetSpawnChance(prefab.EventType))) continue;
                 int index = forcedTiles.TryGetValue(prefab.EventType, out Vector2Int forcedCell)
                     ? emptyTiles.IndexOf(forcedCell) : -1;
-                if (index < 0) index = Random.Range(0, emptyTiles.Count);
+                if (index < 0) index = PickEventTile(emptyTiles, prefab.EventType);
+                if (index < 0)
+                {
+                    Debug.Log($"[Events] No safe tile for {prefab.EventType}; it is skipped this match.");
+                    continue;
+                }
                 Vector2Int cell = emptyTiles[index];
                 EventTileMarker marker = Instantiate(prefab, map.GridToWorld(cell), Quaternion.identity, transform);
                 marker.Configure(map.TileWidth, map.TileHeight);
@@ -303,6 +312,61 @@ namespace Escape4Now.Map
             if (type == MapEventType.Blackout || type == MapEventType.LocationSwitch || type == MapEventType.FireDrill
                 || type == MapEventType.GoodLuckDay) return MapEventCategory.Global;
             return MapEventCategory.Neutral;
+        }
+
+        //Events that move players somewhere else. Crossing one always sends the player away,
+        //so they must never sit where a player has to pass to reach a room or the exit.
+        public static bool MovesPlayers(MapEventType type)
+        {
+            return type == MapEventType.Warp || type == MapEventType.RandomEvent || type == MapEventType.LocationSwitch
+                || type == MapEventType.WrongRoom || type == MapEventType.FireDrill;
+        }
+
+        //False when the map was already split before events were placed, so path checks are skipped.
+        public bool ProtectsPaths => checkMovingEventPaths;
+
+        public bool HasMovingEvent(Vector2Int cell)
+        {
+            return events.TryGetValue(cell, out MapEventType type) && MovesPlayers(type);
+        }
+
+        //True when this tile or one beside it holds an event that moves players. Used to keep the exit's approach clear.
+        public bool HasMovingEventNear(Vector2Int cell)
+        {
+            if (HasMovingEvent(cell)) return true;
+            foreach (Vector2Int step in new[] { Vector2Int.right, Vector2Int.up, Vector2Int.left, Vector2Int.down })
+                if (HasMovingEvent(cell + step)) return true;
+            return false;
+        }
+
+        //Ordinary events can go on any empty tile. Moving events try tiles in random order until one is safe.
+        private int PickEventTile(List<Vector2Int> emptyTiles, MapEventType type)
+        {
+            if (!MovesPlayers(type)) return Random.Range(0, emptyTiles.Count);
+            var order = new List<int>(emptyTiles.Count);
+            for (int i = 0; i < emptyTiles.Count; i++) order.Add(i);
+            while (order.Count > 0)
+            {
+                int pick = Random.Range(0, order.Count);
+                int index = order[pick];
+                order.RemoveAt(pick);
+                if (CanHoldMovingEvent(emptyTiles[index], type)) return index;
+            }
+            return -1;
+        }
+
+        //Keeps moving events off doorways, the tiles in front of them, and next to the exit,
+        //and off any tile every route would have to cross.
+        private bool CanHoldMovingEvent(Vector2Int cell, MapEventType type)
+        {
+            if (map.IsDoorway(cell) || map.IsExit(cell)) return false;
+            foreach (Vector2Int step in new[] { Vector2Int.right, Vector2Int.up, Vector2Int.left, Vector2Int.down })
+                if (map.IsDoorway(cell + step) || map.IsExit(cell + step)) return false;
+            if (!checkMovingEventPaths) return true;
+            events.Add(cell, type);
+            bool connected = map.AllWalkableTilesConnected(HasMovingEvent);
+            events.Remove(cell);
+            return connected;
         }
 
         //Keeps events off players, obstacles, exits, and other events.

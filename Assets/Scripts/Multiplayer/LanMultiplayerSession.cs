@@ -337,7 +337,7 @@ namespace Escape4Now.Multiplayer
             PlayerCharacter player = local.Participants[slot];
             if (turns.CurrentPlayerIndex != slot || message.turn != slot || message.round != turns.TurnNumber
                 || player.HasReachedExit || player.IsMoving) return;
-            var battle = FindFirstObjectByType<Escape4Now.Battle.KeyStealBattleController>();
+            var battle = FindFirstObjectByType<Escape4Now.GameModes.Race_Gamemode>();
             if (message.action == "battleClose")
             {
                 battle?.FinishNetworkBattle(player);
