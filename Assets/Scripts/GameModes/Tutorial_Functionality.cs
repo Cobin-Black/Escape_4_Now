@@ -127,8 +127,7 @@ namespace Escape4Now.GameModes
         //Gives the section's starting item once the inventory is ready, then announces the section.
         private void Start()
         {
-            //In the tutorial the exit is open, so no key is needed to leave.
-            if (player != null) player.SetExitNeedsKey(false);
+            //The tutorial has no gamemode script, so the exit is open and no key is needed to leave.
             if (currentSection == TutorialSection.Exit && startWithKey) GiveTutorialKey();
             if (currentSection == TutorialSection.Items)
             {
