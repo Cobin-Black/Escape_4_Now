@@ -124,6 +124,7 @@ namespace Escape4Now.Player
         public PlayerEventState EventState => eventState;
         private bool isUsingItem;
         private bool isInMenu;
+        private bool isBotControlled;
         public PlayerInventory Inventory => inventory;
         public bool HasReachedExit => hasReachedExit;
         public bool HasRolled => hasRolled;
@@ -174,6 +175,7 @@ namespace Escape4Now.Player
         {
             if (Escape4Now.Multiplayer.LanMultiplayerSession.Active) return;
             if (Time.timeScale <= 0f || Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused) return;
+            if (isBotControlled) return;
             if (!CanReadTurnInput) return;
             if (hasReachedExit)
             {
@@ -1300,6 +1302,12 @@ private Texture2D MakeCircleTexture(int size)
                     $"Inventory: {inventory.name}, Has Key: {inventory.HasKey()}");
                 return;
             }
+        }
+
+        // Sets whether this player is controlled by a bot.
+        public void SetBotControlled(bool value)
+        {
+            isBotControlled = value;
         }
 
         //Releases the generated image and stops tracking this player on the map.

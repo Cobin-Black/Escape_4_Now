@@ -163,6 +163,30 @@ namespace Escape4Now.Items
             Debug.Log($"Custom Dice selection: {selectedNumber}");
         }
 
+
+        // Lets a bot use Custom Dice without opening the human selection controls.
+        public bool UseForBot(PlayerInventory inventory)
+        {
+            if (inventory == null
+                || !inventory.HasItem(this)
+                || inventory.Player == null
+                || !inventory.Player.CanUseItem()
+                || isSelecting)
+            {
+                return false;
+            }
+
+            int selectedNumber = 6;
+
+            inventory.Player.SetMovesFromItem(selectedNumber);
+            inventory.RemoveItem(this);
+
+            Debug.Log($"Bot used Custom Dice and selected {selectedNumber}.");
+
+            return true;
+        }
+
+
         // Displays the number-selection screen while using Custom Dice.
         private void OnGUI()
         {

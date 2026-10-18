@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Escape4Now.Bots;
 using Escape4Now.Items;
 using Escape4Now.Multiplayer;
 using Escape4Now.Obstacles;
@@ -62,12 +63,14 @@ namespace Escape4Now.GameModes
         private int challengerRoll;
         private int opponentRoll;
         private bool challengerLost;
+        private float botResultCloseTime;
         private GUIStyle headingStyle;
         //Toggle values already applied to the match, so a change made in the Inspector can be spotted.
         private readonly bool[] appliedKeyToggles = new bool[4];
 
         public override GameModeType Type => GameModeType.Race;
         public KeyItem KeyPrefab => keyItemPrefab;
+        public bool IsBattleActive => state != BattleState.None;
         public string NetworkMessage => state == BattleState.Result ? battleMessage : "";
 
         //The Race gamemode in the open scene, or null in other gamemodes.
@@ -200,18 +203,28 @@ namespace Escape4Now.GameModes
             SyncTestingKeys();
             if (LanMultiplayerSession.Active || Time.timeScale <= 0f
                 || LocalMultiplayerSession.GameplayPaused) return;
-            if (Keyboard.current == null)
-                return;
 
             if (state == BattleState.Result)
             {
-                if (Keyboard.current.enterKey.wasPressedThisFrame)
+                BotController bot = challenger != null
+                    ? challenger.GetComponent<BotController>()
+                    : null;
+
+                if (bot != null && bot.enabled)
+                {
+                    if (Time.time >= botResultCloseTime)
+                        CloseBattle();
+                }
+                else if (Keyboard.current != null
+                    && Keyboard.current.enterKey.wasPressedThisFrame)
+                {
                     CloseBattle();
+                }
 
                 return;
             }
 
-            if (state != BattleState.None)
+            if (Keyboard.current == null || state != BattleState.None)
                 return;
 
             if (!Keyboard.current.enterKey.wasPressedThisFrame)
@@ -349,6 +362,37 @@ namespace Escape4Now.GameModes
 
             challenger.SetInMenu(true);
             state = BattleState.Result;
+
+            BotController bot = challenger.GetComponent<BotController>();
+
+            if (bot != null && bot.enabled)
+                botResultCloseTime = Time.time + 2f;
+        }
+
+        // Allows a bot to challenge a key carrier on the same tile.
+        public bool TryBotBattle(PlayerCharacter bot, PlayerCharacter target)
+        {
+            if (LanMultiplayerSession.Active
+                || state != BattleState.None
+                || bot == null
+                || target == null
+                || bot == target
+                || !bot.IsCurrentTurn
+                || bot.IsMoving
+                || bot.HasReachedExit
+                || bot.Inventory == null
+                || bot.Inventory.HasKey()
+                || target.Inventory == null
+                || !target.Inventory.HasKey()
+                || bot.GridPosition != target.GridPosition
+                || !target.CanBeTargetedBy(bot))
+            {
+                return false;
+            }
+
+            challenger = bot;
+            StartBattle(target);
+            return state == BattleState.Result;
         }
 
         //The host checks the same rules for a connected player's battle request.
