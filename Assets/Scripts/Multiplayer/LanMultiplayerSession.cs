@@ -22,8 +22,9 @@ namespace Escape4Now.Multiplayer
         public static bool Active => Instance != null && Instance.active;
         public static bool IsClient => Active && !Instance.host;
         public bool Connecting => searching || connectTask != null;
-        public bool IsMyTurn => active && !failed && latest != null && latest.turn == localPlayer
+        public bool IsMyTurn => active && !failed && !MatchPaused && latest != null && latest.turn == localPlayer
             && !latest.players[localPlayer].won;
+        public bool MatchPaused { get; private set; }
         public string Status => status;
         public string RoomCode => roomCode;
         public int ConnectedPlayers => host ? 1 + peers.FindAll(peer => peer.slot > 0 && !peer.wire.Closed).Count : lobbyCount;
@@ -157,6 +158,7 @@ namespace Escape4Now.Multiplayer
             if (!active || !host || failed || ConnectedPlayers != capacity || local.MatchStarted) return false;
             if (!local.StartNetworkMatch(capacity)) { status = local.Status; return false; }
             status = "Starting match...";
+            MatchPaused = false;
             return true;
         }
 
@@ -302,9 +304,10 @@ namespace Escape4Now.Multiplayer
         //Binds every request to the turn visible when the button was pressed.
         public void Submit(string action, int x = 0, int y = 0, int value = 0)
         {
-            if (!IsMyTurn) return;
+            bool pauseAction = action == "pause" || action == "resume";
+            if (!pauseAction && !IsMyTurn) return;
             var message = new LanMessage { kind = "command", action = action, x = x, y = y, value = value,
-                sequence = ++sequence, turn = latest.turn, round = latest.round };
+                sequence = ++sequence, turn = latest != null ? latest.turn : 0, round = latest != null ? latest.round : 1 };
             if (host) Execute(0, message);
             else Send(server, message);
         }
@@ -312,12 +315,29 @@ namespace Escape4Now.Multiplayer
         //Checks ownership, turn, bounds, and busy state before calling the existing game rules.
         private void Execute(int slot, LanMessage message)
         {
-            if (!local.MatchStarted || failed || latest == null || slot < 0 || slot >= local.Participants.Count) return;
+            if (!local.MatchStarted || failed || slot < 0 || slot >= local.Participants.Count) return;
+            if (message.action == "pause")
+            {
+                MatchPaused = true;
+                local.ApplyNetworkPause(true, false);
+                nextPublish = 0f;
+                return;
+            }
+            if (message.action == "resume")
+            {
+                MatchPaused = false;
+                GameTimer timer = FindFirstObjectByType<GameTimer>();
+                bool matchFinished = MatchFinished || (timer != null && timer.TimeRemaining <= 0f);
+                local.ApplyNetworkPause(false, matchFinished);
+                nextPublish = 0f;
+                return;
+            }
+            if (MatchPaused || Time.timeScale <= 0f || latest == null) return;
             TurnSystemController turns = FindFirstObjectByType<TurnSystemController>();
             PlayerCharacter player = local.Participants[slot];
             if (turns.CurrentPlayerIndex != slot || message.turn != slot || message.round != turns.TurnNumber
                 || player.HasReachedExit || player.IsMoving) return;
-            var battle = FindFirstObjectByType<Escape4Now.Battle.KeyStealBattleController>();
+            var battle = FindFirstObjectByType<Escape4Now.GameModes.Race_Gamemode>();
             if (message.action == "battleClose")
             {
                 battle?.FinishNetworkBattle(player);
@@ -362,7 +382,7 @@ namespace Escape4Now.Multiplayer
         //Uses the same action bindings, plus mouse clicks on map tiles.
         private void ReadInput()
         {
-            if (!IsMyTurn || latest.players[localPlayer].moving) return;
+            if (MatchPaused || Time.timeScale <= 0f || !IsMyTurn || latest.players[localPlayer].moving) return;
             bool confirm = Keyboard.current != null && Keyboard.current.enterKey.wasPressedThisFrame;
             if (!string.IsNullOrEmpty(latest.battleMessage))
             {
@@ -458,6 +478,7 @@ namespace Escape4Now.Multiplayer
         //Shows local ownership and item controls while reusing the existing turn and dice display.
         private void OnGUI()
         {
+            if (LocalMultiplayerSession.MatchHasEnded) return;
             if (!active || !local.MatchStarted || !local.ShowTemporaryUI) return;
             if (failed)
             {

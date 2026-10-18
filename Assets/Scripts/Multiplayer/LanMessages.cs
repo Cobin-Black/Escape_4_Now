@@ -1,4 +1,5 @@
 using System;
+using Escape4Now.Map;
 
 namespace Escape4Now.Multiplayer
 {
@@ -6,8 +7,8 @@ namespace Escape4Now.Multiplayer
     [Serializable]
     public sealed class LanMessage
     {
-        //Older builds do not support shared tiles, keys, and battle results.
-        public const int Version = 15;
+        //Older builds do not share the host's randomized turn sequence.
+        public const int Version = 17;
         public int version = Version;
         public string kind;
         public string code;
@@ -20,10 +21,14 @@ namespace Escape4Now.Multiplayer
     public sealed class LanSnapshot
     {
         public int seed, exitX, exitY, turn, round, blackout;
+        public bool paused;
+        public SchoolMapGenerationSettings mapSettings;
+        public SchoolFurnitureSettings furnitureSettings;
         public string message;
         public string battleMessage = "";
         public float secondsRemaining;
         public LanPlayerState[] players;
+        public int[] turnOrder;
         public LanObjectState[] objects;
     }
 
@@ -39,6 +44,6 @@ namespace Escape4Now.Multiplayer
     public sealed class LanObjectState
     {
         public int id, kind, type, x, y, facing;
-        public bool interactable;
+        public bool interactable, containsKey;
     }
 }

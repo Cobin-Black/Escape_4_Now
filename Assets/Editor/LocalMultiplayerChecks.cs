@@ -104,12 +104,17 @@ public static class LocalMultiplayerChecks
         Require(!session.TryStartLocalMatch(5), "More than four players are rejected");
         Require(!session.TryStartLocalMatch(1), "At least two players are needed");
         Require(session.TryStartLocalMatch(count), "Selected player count can start");
+        Require(!LocalMultiplayerSession.MatchHasEnded, "An unstarted timer does not show a loss screen");
         Require(!session.TryStartLocalMatch(4), "A running match cannot duplicate players");
         for (int i = 0; i < 10; i++) yield return null;
         PlayerCharacter[] players = UnityEngine.Object.FindObjectsByType<PlayerCharacter>(FindObjectsSortMode.None);
         Array.Sort(players, (left, right) => string.CompareOrdinal(left.name, right.name));
         TurnSystemController turns = UnityEngine.Object.FindFirstObjectByType<TurnSystemController>();
+        CheckTimeoutResult();
         IsometricMapTemplate map = UnityEngine.Object.FindFirstObjectByType<IsometricMapTemplate>();
+        IEnumerator orderChecks = CheckRandomTurnOrder(map, players, turns);
+        while (orderChecks.MoveNext()) yield return orderChecks.Current;
+        CheckObstacleCatalog(map);
         Require(players.Length == count && map.Width == 25 && map.Height == 25, "Selected players on an 25 by 25 map");
         int doorCount = 0;
         int exitCount = 0;
@@ -137,6 +142,7 @@ public static class LocalMultiplayerChecks
         Require(doorCount >= 3, "Connected rooms have visible entrances");
         Require(exitCount == 1, "One working exit door is present");
         MapEventController events = UnityEngine.Object.FindFirstObjectByType<MapEventController>();
+        CheckEventCatalog(events);
         Require(events != null && events.isActiveAndEnabled && events.EventsPlaced,
             "Existing event spawner is active");
         int eventCount = UnityEngine.Object.FindObjectsByType<EventTileMarker>(FindObjectsSortMode.None).Length;
@@ -317,6 +323,7 @@ public static class LocalMultiplayerChecks
         for (int i = 1; i < count; i++)
         {
             Require(turns.CurrentPlayerIndex == i, "Next player's turn");
+            yield return null;
             players[i].SetMovesFromItem(1);
             turns.AdvanceTurn();
         }
@@ -342,8 +349,220 @@ public static class LocalMultiplayerChecks
         Require(players[0].MoveToGridPosition(exitCell), "Player can walk through the exit");
         while (players[0].IsMoving) yield return null;
         Require(players[0].GridPosition == exitCell && Time.timeScale == 0f, "Reaching the door pauses the match for the win");
+        Require(LocalMultiplayerSession.MatchHasEnded, "Escaping selects the match result screen");
+        typeof(PlayerCharacter).GetMethod("ReachExit", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+            .Invoke(players[1], null);
+        Require(!players[1].HasReachedExit, "Only the first player can escape");
         Time.timeScale = 1f;
         Debug.Log("SAME-DEVICE AND SCHOOL MAP CHECKS PASSED");
+    }
+
+    private static void CheckEventCatalog(MapEventController controller)
+    {
+        int typeCount = Enum.GetValues(typeof(MapEventType)).Length;
+        var configuration = new SerializedObject(controller);
+        Require(configuration.FindProperty("eventPrefabs").arraySize == typeCount,
+            "The event Inspector includes every event prefab");
+        var templates = new EventTileMarker[typeCount];
+        for (int type = 0; type < typeCount; type++)
+        {
+            templates[type] = controller.GetNetworkPrefab(type);
+            Require(templates[type] != null && (int)templates[type].EventType == type,
+                "Event prefab lookup preserves its type: " + (MapEventType)type);
+        }
+
+        var testObject = new GameObject("Event catalog check");
+        testObject.SetActive(false);
+        try
+        {
+            var migratedController = testObject.AddComponent<MapEventController>();
+            var migratedConfiguration = new SerializedObject(migratedController);
+            var catalog = migratedConfiguration.FindProperty("eventPrefabs");
+            catalog.arraySize = 5;
+            for (int type = 0; type < 5; type++) catalog.GetArrayElementAtIndex(type).objectReferenceValue = templates[type];
+            migratedConfiguration.ApplyModifiedPropertiesWithoutUndo();
+            Require(migratedController.GetNetworkPrefab(typeCount - 1) != null,
+                "The old five-event configuration migrates to the complete event list");
+            migratedConfiguration.Update();
+            Require(catalog.arraySize == typeCount, "Migrated event references are exposed in the Inspector");
+
+            var replacement = UnityEngine.Object.Instantiate(templates[0], testObject.transform);
+            catalog.GetArrayElementAtIndex(0).objectReferenceValue = replacement;
+            migratedConfiguration.ApplyModifiedPropertiesWithoutUndo();
+            const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+            typeof(MapEventController).GetMethod("OnValidate", flags).Invoke(migratedController, null);
+            Require(migratedController.GetNetworkPrefab(0) == replacement, "An Inspector-assigned event prefab overrides the default");
+
+            catalog.arraySize = 0;
+            migratedConfiguration.ApplyModifiedPropertiesWithoutUndo();
+            typeof(MapEventController).GetMethod("OnValidate", flags).Invoke(migratedController, null);
+            Require(migratedController.GetNetworkPrefab(0) == null && migratedController.GetNetworkPrefab(typeCount - 1) == null,
+                "Removing events does not silently restore them from Resources");
+            catalog.arraySize = 1;
+            catalog.GetArrayElementAtIndex(0).objectReferenceValue = replacement;
+            var chances = migratedConfiguration.FindProperty("spawnChances");
+            chances.arraySize = 1;
+            chances.GetArrayElementAtIndex(0).FindPropertyRelative("eventType").intValue = 0;
+            chances.GetArrayElementAtIndex(0).FindPropertyRelative("chance").floatValue = 0f;
+            migratedConfiguration.ApplyModifiedPropertiesWithoutUndo();
+            var getChance = typeof(MapEventController).GetMethod("GetSpawnChance", flags);
+            Require((float)getChance.Invoke(migratedController, new object[] { MapEventType.Warp }) == 0f,
+                "Inspector chance zero disables an included event");
+            chances.GetArrayElementAtIndex(0).FindPropertyRelative("chance").floatValue = 1f;
+            migratedConfiguration.ApplyModifiedPropertiesWithoutUndo();
+            Require((float)getChance.Invoke(migratedController, new object[] { MapEventType.Warp }) == 1f,
+                "Inspector chance one guarantees an included event");
+        }
+        finally { UnityEngine.Object.Destroy(testObject); }
+    }
+
+    private static void CheckObstacleCatalog(IsometricMapTemplate map)
+    {
+        var spawner = map.GetComponent<ObstacleSpawner>();
+        var furniture = new List<SchoolFurniture>(spawner.GetSchoolPrefabs());
+        var kinds = new HashSet<SchoolFurnitureKind>();
+        foreach (SchoolFurniture prefab in furniture)
+        {
+            Require(prefab.IsValidTemplate(), "Obstacle catalog has a valid furniture prefab: " + prefab.name);
+            kinds.Add(prefab.Kind);
+        }
+        Require(kinds.Count == Enum.GetValues(typeof(SchoolFurnitureKind)).Length,
+            "The spawner sections contain every school furniture kind");
+        foreach (SchoolRoomType room in Enum.GetValues(typeof(SchoolRoomType)))
+        {
+            var roomKinds = new HashSet<SchoolFurnitureKind>();
+            foreach (SchoolFurniture prefab in spawner.GetRoomPrefabs(room)) roomKinds.Add(prefab.Kind);
+            foreach (SchoolFurnitureKind kind in SchoolFurniturePlan.Pool(room))
+                Require(roomKinds.Contains(kind), $"The {room} section has its {kind} prefab");
+        }
+        Require(spawner.GetNetworkPrefab() != null, "The hallway section contains the hallway locker prefab");
+
+        var migrationObject = new GameObject("Obstacle catalog check");
+        migrationObject.SetActive(false);
+        try
+        {
+            var migratedSpawner = migrationObject.AddComponent<ObstacleSpawner>();
+            var migratedConfiguration = new SerializedObject(migratedSpawner);
+            var legacyCatalog = migratedConfiguration.FindProperty("obstaclePrefabs");
+            legacyCatalog.arraySize = 1;
+            legacyCatalog.GetArrayElementAtIndex(0).objectReferenceValue = spawner.GetNetworkPrefab();
+            migratedConfiguration.ApplyModifiedPropertiesWithoutUndo();
+            Require(new List<SchoolFurniture>(migratedSpawner.GetSchoolPrefabs()).Count == furniture.Count,
+                "A saved locker-only configuration migrates to the complete room sections");
+            Require(migratedSpawner.GetNetworkPrefab() == spawner.GetNetworkPrefab(),
+                "Migration moves the existing locker prefab into the hallway section");
+            migratedConfiguration.Update();
+            var library = migratedConfiguration.FindProperty("libraryPrefabs");
+            library.arraySize = 0;
+            migratedConfiguration.ApplyModifiedPropertiesWithoutUndo();
+            Require(new List<SchoolFurniture>(migratedSpawner.GetRoomPrefabs(SchoolRoomType.Library)).Count == 0,
+                "Later Inspector edits are preserved instead of silently refilling a section");
+        }
+        finally { UnityEngine.Object.Destroy(migrationObject); }
+    }
+
+    private static void CheckTimeoutResult()
+    {
+        GameTimer timer = UnityEngine.Object.FindFirstObjectByType<GameTimer>();
+        const System.Reflection.BindingFlags flags = System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic;
+        var remaining = typeof(GameTimer).GetField("timeRemaining", flags);
+        var running = typeof(GameTimer).GetField("timerRunning", flags);
+        float previousRemaining = timer.TimeRemaining;
+        object previousRunning = running.GetValue(timer);
+        float previousScale = Time.timeScale;
+        try
+        {
+            remaining.SetValue(timer, 0.000001f);
+            typeof(GameTimer).GetMethod("Update", flags).Invoke(timer, null);
+            Require(timer.HasExpired && timer.TimeRemaining == 0f, "Timer reports actual expiry");
+            Require(LocalMultiplayerSession.MatchHasEnded && Time.timeScale == 0f,
+                "Timeout selects the result screen and stops gameplay");
+            PlayerCharacter player = UnityEngine.Object.FindFirstObjectByType<PlayerCharacter>();
+            typeof(PlayerCharacter).GetMethod("ReachExit", flags).Invoke(player, null);
+            Require(!player.HasReachedExit, "Nobody can escape after time expires");
+        }
+        finally
+        {
+            remaining.SetValue(timer, previousRemaining);
+            running.SetValue(timer, previousRunning);
+            Time.timeScale = previousScale;
+        }
+        Require(!LocalMultiplayerSession.MatchHasEnded, "An unfinished match keeps the gameplay screen");
+    }
+
+    private static IEnumerator CheckRandomTurnOrder(IsometricMapTemplate map, PlayerCharacter[] players,
+        TurnSystemController turns)
+    {
+        var names = Array.ConvertAll(players, player => player.name);
+        var inventories = Array.ConvertAll(players, player => player.Inventory);
+        var positions = Array.ConvertAll(players, player => player.GridPosition);
+        var colors = Array.ConvertAll(players, player => new SerializedObject(player).FindProperty("playerColor").colorValue);
+        int[] order = turns.CopyTurnOrder();
+        Require(new HashSet<int>(order).Count == players.Length, "Shuffled sequence contains every identity once");
+        UnityEngine.Random.State randomBefore = UnityEngine.Random.state;
+        turns.SetPlayers(players, map.LayoutSeed);
+        turns.RestartTurnCycle();
+        Require(string.Join(",", order) == string.Join(",", turns.CopyTurnOrder()), "Map seed reproduces the starting sequence");
+        Require(JsonUtility.ToJson(randomBefore) == JsonUtility.ToJson(UnityEngine.Random.state),
+            "Turn shuffling does not consume dice or event randomness");
+        for (int round = 1; round <= 3; round++)
+        for (int position = 0; position < order.Length; position++)
+        {
+            int slot = order[position];
+            Require(turns.CurrentPlayerIndex == slot && turns.TurnNumber == round,
+                "The same shuffled sequence repeats with the correct round counter");
+            Require(turns.CurrentTurnName == names[slot] && turns.IsPlayersTurn(players[slot]),
+                "HUD identity and turn ownership use the active participant, not their turn position");
+            for (int i = 0; i < players.Length; i++)
+                Require(turns.IsPlayersTurn(players[i]) == (i == slot), "Exactly one player owns the turn");
+            yield return null;
+            players[slot].SetMovesFromItem(1);
+            turns.AdvanceTurn();
+        }
+        Require(turns.CurrentPlayerIndex == order[0] && turns.TurnNumber == 4,
+            "Three full rounds return to the original shuffled first player");
+        Time.timeScale = 0f;
+        turns.AdvanceTurn();
+        Require(turns.CurrentPlayerIndex == order[0] && turns.TurnNumber == 4, "Pause blocks shuffled turn advancement");
+        Time.timeScale = 1f;
+        players[order[0]].EventState.GiveFreeze();
+        turns.RestartTurnCycle();
+        Require(turns.CurrentPlayerIndex == order[1] && turns.TurnNumber == 1,
+            "Freeze skips to the next chosen player without reshuffling");
+        Require(string.Join(",", order) == string.Join(",", turns.CopyTurnOrder()), "Restarts and skips preserve match order");
+
+        LanSnapshot snapshot = new LanWorldView(UnityEngine.Object.FindFirstObjectByType<LocalMultiplayerSession>()).Capture();
+        snapshot = JsonUtility.FromJson<LanSnapshot>(JsonUtility.ToJson(snapshot));
+        Require(LanWorldView.IsValid(snapshot), "Shuffled match produces a valid host snapshot");
+        var replicaObject = new GameObject("Turn order test replica");
+        var replica = replicaObject.AddComponent<TurnSystemController>();
+        replica.enabled = false;
+        replica.SetPlayers(players, int.MinValue);
+        Require(replica.ApplyNetworkTurn(snapshot.turn, snapshot.round, snapshot.turnOrder)
+            && replica.CurrentPlayerIndex == order[1] && replica.CurrentTurnName == names[order[1]],
+            "Clients follow host identity slots and order even with a different local seed");
+        int[] changedOrder = (int[])order.Clone();
+        int saved = changedOrder[0]; changedOrder[0] = changedOrder[1]; changedOrder[1] = saved;
+        Require(!replica.ApplyNetworkTurn(snapshot.turn, snapshot.round, changedOrder),
+            "Clients reject an order change during the match");
+        snapshot.turnOrder = new int[players.Length];
+        Require(!LanWorldView.IsValid(snapshot), "Network rejects repeated identities in the sequence");
+        UnityEngine.Object.Destroy(replicaObject);
+        for (int i = 0; i < players.Length; i++)
+        {
+            Require(players[i].name == names[i] && players[i].Inventory == inventories[i]
+                && players[i].GridPosition == positions[i]
+                && new SerializedObject(players[i]).FindProperty("playerColor").colorValue == colors[i],
+                "Turn order never changes names, colors, inventories, or map positions");
+            players[i].BeginEventTurn();
+        }
+        //The existing gameplay scenarios use identity-ordered fixtures, not a first-player assumption in the game.
+        var settings = new SerializedObject(turns);
+        settings.FindProperty("randomizeStartingOrder").boolValue = false;
+        settings.ApplyModifiedPropertiesWithoutUndo();
+        turns.SetPlayers(players, map.LayoutSeed);
+        turns.RestartTurnCycle();
+        yield return null;
     }
 
     //Checks the new key rules together with storage, protection, and shared player tiles.
@@ -373,7 +592,7 @@ public static class LocalMultiplayerChecks
         players[1].Inventory.GiveKey(key);
         players[1].SetGridPosition(players[0].GridPosition);
         players[1].EventState.BeginTurn();
-        var battle = UnityEngine.Object.FindFirstObjectByType<Escape4Now.Battle.KeyStealBattleController>();
+        var battle = UnityEngine.Object.FindFirstObjectByType<Escape4Now.GameModes.Race_Gamemode>();
         Require(battle != null && battle.isActiveAndEnabled, "The merged scene contains the key battle controller");
         UnityEngine.Random.State savedRandom = UnityEngine.Random.state;
         for (int attempt = 0; attempt < 2; attempt++)
@@ -427,67 +646,52 @@ public static class LocalMultiplayerChecks
     private static void ConfigureItemPlacementChecks(string[] arguments)
     {
         var spawner = UnityEngine.Object.FindFirstObjectByType<ObstacleSpawner>();
-        var items = spawner.GetComponent<Escape4Now.Items.ItemSpawner>();
         var settings = new SerializedObject(spawner);
         if (Array.IndexOf(arguments, "-emptyStorage") >= 0) settings.FindProperty("interactableChance").floatValue = 0f;
         if (Array.IndexOf(arguments, "-fullStorage") >= 0) settings.FindProperty("interactableChance").floatValue = 1f;
-        //Repeated and missing Inspector entries must never create extra copies.
-        SerializedProperty options = settings.FindProperty("possibleItems");
-        options.arraySize = 7;
-        for (int i = 0; i < 6; i++) options.GetArrayElementAtIndex(i).objectReferenceValue = items.GetNetworkPrefab(i % 3 + 1);
-        options.GetArrayElementAtIndex(6).objectReferenceValue = null;
         settings.ApplyModifiedPropertiesWithoutUndo();
     }
 
-    //Count floor pickups and container contents together, before interaction tests add test items.
+    //Items now come only from obstacles, using the current gamemode's list. The Race key is placed once by the gamemode.
     private static void CheckUniqueItems(IsometricMapTemplate map)
     {
         var spawner = map.GetComponent<Escape4Now.Items.ItemSpawner>();
         var obstacles = map.GetComponent<ObstacleSpawner>();
         Require(spawner.HasReservedSpecialRoomItems && spawner.HasSpawnedItems && obstacles.HasSpawnedObstacles,
             "Item and obstacle placement finishes without waiting on each other");
-        var types = new HashSet<Type>();
-        var floors = UnityEngine.Object.FindObjectsByType<Escape4Now.Items.Item>(FindObjectsSortMode.None);
+        var allowed = new HashSet<Type>();
+        foreach (var option in spawner.GetItemOptions(spawner.CurrentGameMode))
+            if (option != null && option.Prefab != null && option.SpawnChance > 0f) allowed.Add(option.Prefab.GetType());
+        Require(!allowed.Contains(typeof(Escape4Now.Items.KeyItem)), "The key is not part of any item list");
         var containers = map.GetComponentsInChildren<ObstacleStorage>();
-        var floorCells = new HashSet<Vector2Int>();
-        foreach (var item in floors)
-        {
-            Vector2Int cell = map.WorldToGrid(item.transform.position);
-            Require(types.Add(item.GetType()), "No repeated floor item type");
-            Require(floorCells.Add(cell) && map.IsWalkable(cell) && !map.IsOccupied(cell)
-                && !map.IsExit(cell) && !map.GetComponent<MapEventController>().HasEvent(cell), "Floor item uses its own safe tile");
-        }
+        int keys = 0, stored = 0;
         var specialStorageCounts = new Dictionary<SchoolSpaceType, int>();
         foreach (ObstacleStorage storage in containers)
             if (storage.HasItem)
             {
-                Require(types.Add(storage.StoredItemPrefab.GetType()), "No repeated type across floor items and containers");
+                stored++;
                 SchoolSpaceType roomType = map.GetSpaceType(storage.GridPosition);
                 if (storage.StoredItemPrefab is Escape4Now.Items.KeyItem)
+                {
+                    keys++;
                     Require(roomType == SchoolSpaceType.None, "The key stays out of every special room");
+                }
+                else Require(allowed.Contains(storage.StoredItemPrefab.GetType()), "Stored items come from the gamemode's list");
                 if (roomType != SchoolSpaceType.None)
                 {
                     specialStorageCounts.TryGetValue(roomType, out int count);
                     specialStorageCounts[roomType] = count + 1;
                 }
             }
-        Require(types.Count == 4 && types.Contains(typeof(Escape4Now.Items.KeyItem)),
-            "One copy of each of the three usable items and the guaranteed key per match");
-        var snapshot = new LanWorldView(UnityEngine.Object.FindFirstObjectByType<LocalMultiplayerSession>()).Capture();
-        Require(Array.FindAll(snapshot.objects, item => item.kind == 2).Length == floors.Length,
-            "Every floor pickup is sent to guests, including prefabs with a child sprite");
+        bool race = spawner.CurrentGameMode == Escape4Now.GameModes.GameModeType.Race;
+        Require(keys == (race ? 1 : 0), "The Race gamemode hides exactly one key; other gamemodes hide none");
         Require(map.SpecialItemCells.Count == map.SecondarySpaces.Count, "Every small room reserves a clear tile beside its furniture");
         foreach (SchoolSecondarySpace room in map.SecondarySpaces)
         {
             specialStorageCounts.TryGetValue(room.Type, out int storedRewards);
             Require(storedRewards == 1, "Each special room has one item inside an obstacle");
-            foreach (var item in floors)
-                Require(map.GetSpaceType(map.WorldToGrid(item.transform.position)) != room.Type,
-                    "Special-room items are not on the floor");
         }
-        var allowed = new[] { spawner.GetNetworkPrefab(1), spawner.GetNetworkPrefab(2), spawner.GetNetworkPrefab(1), null };
-        Require(!spawner.TryTakeStorageItem(allowed, out _) && !spawner.TryTakeStorageItem(null, out _),
-            "Finished placement cannot produce another copy or refill used items");
+        Require(!spawner.TryTakeStorageItem(out _), "Finished placement cannot refill used obstacles");
         foreach (ObstacleStorage storage in containers)
         {
             var saved = storage.StoredItemPrefab;
@@ -495,11 +699,10 @@ public static class LocalMultiplayerChecks
             Require(storage.StoredItemPrefab == saved, "Repeating a fill leaves finished contents unchanged");
         }
         string[] arguments = Environment.GetCommandLineArgs();
+        int special = map.SecondarySpaces.Count;
         if (Array.IndexOf(arguments, "-emptyStorage") >= 0)
-            Require(floors.Length == 3 - map.SecondarySpaces.Count, "Unstored items fall back to clear floor");
-        if (Array.IndexOf(arguments, "-fullStorage") >= 0)
-            Require(floors.Length == 0, "All items fit into their guaranteed or random obstacles");
-        Debug.Log("UNIQUE ITEM AND SPECIAL ROOM CHECKS PASSED");
+            Require(stored == special + keys, "With no random chance only special rooms and the key hold items");
+        Debug.Log("ITEM SPAWN AND SPECIAL ROOM CHECKS PASSED");
     }
 
     //Checks the shared-tile rule from main without bringing back the old two-step crossing rule.

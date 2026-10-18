@@ -93,6 +93,8 @@ namespace Escape4Now.Items
                 return;
             }
 
+            if (!inventory.Player.CanUseItem()) return;
+
             int firstRoll = Random.Range(1, 7);
             int secondRoll = Random.Range(1, 7);
             int totalRoll = firstRoll + secondRoll;

@@ -32,6 +32,10 @@ namespace Escape4Now.Multiplayer
             bool host = role == "host";
             if (host)
             {
+                //The scripted battle and location-switch fixtures require an explicit identity order.
+                typeof(Escape4Now.TurnSystem.TurnSystemController).GetField("randomizeStartingOrder",
+                    System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)
+                    .SetValue(FindFirstObjectByType<Escape4Now.TurnSystem.TurnSystemController>(), false);
                 //Use a repeatable Storage room when checking its reward across computers.
                 if (Array.IndexOf(args, "-specialRoom") >= 0)
                     FindFirstObjectByType<IsometricMapTemplate>().UseNetworkLayout(17);

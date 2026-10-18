@@ -4,7 +4,7 @@ using Escape4Now.Map;
 using Escape4Now.Player;
 using Escape4Now.Items;
 using Escape4Now.Obstacles;
-using Escape4Now.Battle;
+using Escape4Now.GameModes;
 using UnityEngine;
 using Escape4Now.TurnSystem;
 
@@ -15,7 +15,8 @@ namespace Escape4Now.Bots
         private PlayerCharacter player;
         private IsometricMapTemplate map;
         private Coroutine turnRoutine;
-        private KeyStealBattleController battleController;
+        // Key-steal battles live in the Race gamemode; null in other gamemodes.
+        private Race_Gamemode battleController => Race_Gamemode.Current;
 
         private readonly HashSet<ObstacleStorage> searchedObjects =
             new HashSet<ObstacleStorage>();
@@ -24,7 +25,6 @@ namespace Escape4Now.Bots
         {
             player = GetComponent<PlayerCharacter>();
             map = FindFirstObjectByType<IsometricMapTemplate>();
-            battleController = FindFirstObjectByType<KeyStealBattleController>();
         }
 
         public void ResetSearchMemory()

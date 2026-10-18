@@ -10,6 +10,21 @@ namespace Escape4Now.Obstacles
     {
         //Item prefab stored inside. Empty means nothing is left in the obstacle.
         [SerializeField] private Item storedItemPrefab;
+        [Header("Location Assist Markers")]
+        [SerializeField] private Texture2D itemIndicatorIcon;
+        [SerializeField] private Texture2D keyIndicatorIcon;
+        [SerializeField] private Vector3 locationMarkerOffset = new Vector3(0f, 1.1f, 0f);
+        [SerializeField] private Vector2 locationMarkerSize = new Vector2(104f, 26f);
+        [SerializeField] private Color itemIndicatorColor = new Color(0.35f, 0.85f, 1f, 1f);
+        [SerializeField] private Color keyIndicatorColor = new Color(1f, 0.78f, 0.2f, 1f);
+        [SerializeField, Range(8, 24)] private int locationMarkerFontSize = 12;
+        [Header("Obstacle Menu")]
+        [SerializeField, Min(200f)] private float menuWidth = 360f;
+        [SerializeField, Min(120f)] private float menuHeight = 180f;
+        [SerializeField, Range(10, 36)] private int menuFontSize = 18;
+        [SerializeField] private Color menuTextColor = Color.white;
+        [SerializeField, Min(0f)] private float menuContentPadding = 16f;
+        [SerializeField, Min(0f)] private float menuTitleOffset = 32f;
 
         //Only one obstacle menu can be open at a time, even if a player stands next to several.
         private static ObstacleStorage openStorage;
@@ -21,11 +36,15 @@ namespace Escape4Now.Obstacles
         private PlayerCharacter viewingPlayer;
         private InputAction interactAction;
         private GUIStyle menuTextStyle;
+        private GUIStyle debugMarkerStyle;
         private bool networkHasItem;
+        private bool networkContainsKey;
 
         //Read-only contents for other scripts.
         public Item StoredItemPrefab => storedItemPrefab;
         public bool HasItem => Escape4Now.Multiplayer.LanMultiplayerSession.IsClient ? networkHasItem : storedItemPrefab != null;
+        public bool ContainsKey => Escape4Now.Multiplayer.LanMultiplayerSession.IsClient
+            ? networkContainsKey : storedItemPrefab is KeyItem;
         public bool IsMenuOpen => openStorage == this;
         public Vector2Int GridPosition => gridControl != null ? gridControl.GridPosition : furniture != null ? furniture.Cell : new Vector2Int(-1, -1);
         public bool CanInteract => gridControl != null ? gridControl.IsInteractable : furniture != null;
@@ -35,6 +54,19 @@ namespace Escape4Now.Obstacles
 
         // Read-only search status shared by all bots.
         public bool HasBeenSearched => hasBeenSearched;
+
+        private void OnValidate()
+        {
+            locationMarkerSize.x = Mathf.Clamp(locationMarkerSize.x, 16f, 240f);
+            locationMarkerSize.y = Mathf.Clamp(locationMarkerSize.y, 16f, 120f);
+            locationMarkerFontSize = Mathf.Clamp(locationMarkerFontSize, 8, 24);
+            menuWidth = Mathf.Clamp(menuWidth, 200f, 900f);
+            menuHeight = Mathf.Clamp(menuHeight, 120f, 700f);
+            menuFontSize = Mathf.Clamp(menuFontSize, 10, 36);
+            menuContentPadding = Mathf.Clamp(menuContentPadding, 0f, 80f);
+            menuTitleOffset = Mathf.Clamp(menuTitleOffset, 0f, 160f);
+            menuTextStyle = null;
+        }
 
         //Clears the shared menu state when Play mode starts, even if the editor skips reloading scripts.
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
@@ -84,15 +116,20 @@ namespace Escape4Now.Obstacles
         }
 
         //Guests see whether storage is empty; only the host gives out real items.
-        public void ApplyNetworkContents(bool hasItem)
+        public void ApplyNetworkContents(bool hasItem, bool containsKey = false)
         {
-            if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) networkHasItem = hasItem;
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient)
+            {
+                networkHasItem = hasItem;
+                networkContainsKey = containsKey;
+            }
         }
 
         //Opens, takes from, or closes the menu on the Interact action.
         private void Update()
         {
-            if (Escape4Now.Multiplayer.LanMultiplayerSession.Active) return;
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.Active || Time.timeScale <= 0f
+                || Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused) return;
             if (IsMenuOpen && !CanKeepMenuOpen())
             {
                 CloseMenu();
@@ -297,6 +334,37 @@ namespace Escape4Now.Obstacles
         //Draws a plain placeholder menu in the middle of the screen.
         private void OnGUI()
         {
+            if (Escape4Now.Multiplayer.LocalMultiplayerSession.MatchHasEnded) return;
+            bool keyVisible = Escape4Now.Multiplayer.LocalMultiplayerSession.ShowKeyLocation && ContainsKey;
+            bool itemVisible = Escape4Now.Multiplayer.LocalMultiplayerSession.ShowItemObstacles && HasItem;
+            if (keyVisible || itemVisible)
+            {
+                Camera viewCamera = Camera.main;
+                if (viewCamera != null)
+                {
+                    Vector3 screenPoint = viewCamera.WorldToScreenPoint(transform.position + locationMarkerOffset);
+                    if (screenPoint.z > 0f)
+                    {
+                        string label = keyVisible ? "KEY LOCATION" : "ITEM";
+                        Rect marker = new Rect(screenPoint.x - locationMarkerSize.x * 0.5f,
+                            Screen.height - screenPoint.y - locationMarkerSize.y * 0.5f,
+                            locationMarkerSize.x, locationMarkerSize.y);
+                        Texture2D icon = keyVisible ? keyIndicatorIcon : itemIndicatorIcon;
+                        debugMarkerStyle ??= new GUIStyle(GUI.skin.box)
+                        {
+                            alignment = TextAnchor.MiddleCenter,
+                            fontSize = locationMarkerFontSize,
+                            fontStyle = FontStyle.Bold
+                        };
+                        Color oldColor = GUI.color;
+                        GUI.color = keyVisible ? keyIndicatorColor : itemIndicatorColor;
+                        if (icon != null) GUI.DrawTexture(marker, icon, ScaleMode.ScaleToFit, true);
+                        else GUI.Box(marker, label, debugMarkerStyle);
+                        GUI.color = oldColor;
+                    }
+                }
+            }
+
             if (!IsMenuOpen)
             {
                 return;
@@ -306,15 +374,13 @@ namespace Escape4Now.Obstacles
             {
                 menuTextStyle = new GUIStyle(GUI.skin.label)
                 {
-                    fontSize = 18,
+                    fontSize = menuFontSize,
                     wordWrap = true,
                     alignment = TextAnchor.UpperCenter
                 };
-                menuTextStyle.normal.textColor = Color.white;
+                menuTextStyle.normal.textColor = menuTextColor;
             }
 
-            const float menuWidth = 360f;
-            const float menuHeight = 180f;
             Rect menuRect = new Rect((Screen.width - menuWidth) * 0.5f, (Screen.height - menuHeight) * 0.5f, menuWidth, menuHeight);
             GUI.Box(menuRect, name);
 
@@ -336,7 +402,8 @@ namespace Escape4Now.Obstacles
                 body = $"Inside: {storedItemPrefab.ItemName}{description}\n\n{action}";
             }
 
-            GUI.Label(new Rect(menuRect.x + 16f, menuRect.y + 32f, menuWidth - 32f, menuHeight - 40f), body, menuTextStyle);
+            GUI.Label(new Rect(menuRect.x + menuContentPadding, menuRect.y + menuTitleOffset,
+                menuWidth - menuContentPadding * 2f, menuHeight - menuTitleOffset - menuContentPadding), body, menuTextStyle);
         }
     }
 }

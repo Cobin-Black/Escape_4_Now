@@ -7,6 +7,77 @@ namespace Escape4Now.Map
     public enum SchoolRoomType { None, Library, ComputerLab, Classroom, ScienceLab }
     public enum SchoolSpaceType { None, Bathroom, Storage, JanitorCloset, StudyArea, Office, LockerArea }
 
+    [Serializable]
+    public sealed class SchoolMapGenerationSettings
+    {
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Header("Layout Validation")]
+        [UnityEngine.Range(128, 512)]
+        [UnityEngine.Tooltip("Maximum layout attempts before using the deterministic fallback seed.")]
+#endif
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.SerializeField]
+#endif
+        private int generationAttempts = 128;
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Header("Optional Secondary Room")]
+        [UnityEngine.Range(0f, 1f)]
+        [UnityEngine.Tooltip("Chance that a generated map includes one optional small school room.")]
+#endif
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.SerializeField]
+#endif
+        private float secondaryRoomChance = 0.5f;
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Range(1, 1000)]
+        [UnityEngine.Tooltip("Placement attempts for fitting the optional room into a valid map.")]
+#endif
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.SerializeField]
+#endif
+        private int secondaryRoomPlacementAttempts = 160;
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Header("Main Room Size")]
+        [UnityEngine.Range(6, 9)]
+        [UnityEngine.Tooltip("Smallest starting width and height for each major room, before room growth.")]
+        [UnityEngine.SerializeField]
+#endif
+        private int mainRoomMinimumSize = 6;
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Range(7, 9)]
+        [UnityEngine.Tooltip("Largest starting width and height for each major room, before room growth.")]
+        [UnityEngine.SerializeField]
+#endif
+        private int mainRoomMaximumSize = 9;
+
+        public int GenerationAttempts { get => generationAttempts; set => generationAttempts = value; }
+        public float SecondaryRoomChance { get => secondaryRoomChance; set => secondaryRoomChance = value; }
+        public int SecondaryRoomPlacementAttempts { get => secondaryRoomPlacementAttempts; set => secondaryRoomPlacementAttempts = value; }
+        public int MainRoomMinimumSize { get => mainRoomMinimumSize; set => mainRoomMinimumSize = value; }
+        public int MainRoomMaximumSize { get => mainRoomMaximumSize; set => mainRoomMaximumSize = value; }
+
+        public SchoolMapGenerationSettings Copy()
+        {
+            return new SchoolMapGenerationSettings
+            {
+                GenerationAttempts = Math.Max(128, Math.Min(512, generationAttempts)),
+                SecondaryRoomChance = float.IsNaN(secondaryRoomChance) ? 0.5f
+                    : Math.Max(0f, Math.Min(1f, secondaryRoomChance)),
+                SecondaryRoomPlacementAttempts = Math.Max(1, Math.Min(1000, secondaryRoomPlacementAttempts)),
+                MainRoomMinimumSize = Math.Max(6, Math.Min(9, mainRoomMinimumSize)),
+                MainRoomMaximumSize = Math.Max(Math.Max(7, Math.Min(9, mainRoomMinimumSize)),
+                    Math.Max(6, Math.Min(9, mainRoomMaximumSize)))
+            };
+        }
+
+        public bool IsValid => generationAttempts >= 128 && generationAttempts <= 512
+            && !float.IsNaN(secondaryRoomChance) && !float.IsInfinity(secondaryRoomChance)
+            && secondaryRoomChance >= 0f && secondaryRoomChance <= 1f
+            && secondaryRoomPlacementAttempts >= 1 && secondaryRoomPlacementAttempts <= 1000
+            && mainRoomMinimumSize >= 6 && mainRoomMinimumSize <= mainRoomMaximumSize
+            && mainRoomMaximumSize >= 7 && mainRoomMaximumSize <= 9;
+    }
+
     //A small optional school space, separate from the four main rooms.
     public sealed class SchoolSecondarySpace
     {
@@ -76,23 +147,25 @@ namespace Escape4Now.Map
         private readonly List<SchoolSecondarySpace> secondarySpaces = new List<SchoolSecondarySpace>();
         private readonly List<SchoolRoom> rooms = new List<SchoolRoom>();
         private readonly Random random;
+        private readonly SchoolMapGenerationSettings settings;
         public IReadOnlyList<SchoolRoom> Rooms => rooms.AsReadOnly();
         public IReadOnlyList<SchoolSecondarySpace> SecondarySpaces => secondarySpaces.AsReadOnly();
         public int Seed { get; }
 
         //A seed makes a layout repeatable when testing a reported problem.
-        public SchoolMapLayout(int seed)
+        public SchoolMapLayout(int seed, SchoolMapGenerationSettings generationSettings = null)
         {
             Seed = seed;
             random = new Random(seed);
+            settings = generationSettings != null ? generationSettings.Copy() : new SchoolMapGenerationSettings();
             //Retry positions and shapes instead of accepting a crowded or mostly empty map.
-            for (int attempt = 0; attempt < 128; attempt++)
+            for (int attempt = 0; attempt < settings.GenerationAttempts; attempt++)
             {
                 if (TryBuildLayout()) return;
             }
             //A repeatable backup still has to pass every rule. Never return a bad layout.
             random = new Random(0);
-            for (int attempt = 0; attempt < 128; attempt++)
+            for (int attempt = 0; attempt < settings.GenerationAttempts; attempt++)
                 if (TryBuildLayout()) return;
             throw new InvalidOperationException("Could not build a valid school floor plan.");
         }
@@ -156,8 +229,13 @@ namespace Escape4Now.Map
         //Occasionally uses a spare pocket beside a hallway for one small school space.
         private void AddSecondarySpace()
         {
-            if (random.Next(2) == 0) return;
-            for (int attempt = 0; attempt < 160; attempt++)
+            bool skipSecondaryRoom = settings.SecondaryRoomChance <= 0f
+                || (settings.SecondaryRoomChance < 1f
+                    && (settings.SecondaryRoomChance == 0.5f
+                        ? random.Next(2) == 0
+                        : random.NextDouble() >= settings.SecondaryRoomChance));
+            if (skipSecondaryRoom) return;
+            for (int attempt = 0; attempt < settings.SecondaryRoomPlacementAttempts; attempt++)
             {
                 int width = random.Next(2, 4), height = random.Next(2, 4);
                 if (width * height < 6) continue;
@@ -341,8 +419,8 @@ namespace Escape4Now.Map
             }
             for (int attempt = 0; attempt < 500 && rooms.Count < 4; attempt++)
             {
-                int width = random.Next(6, 10);
-                int height = random.Next(6, 10);
+                int width = random.Next(settings.MainRoomMinimumSize, settings.MainRoomMaximumSize + 1);
+                int height = random.Next(settings.MainRoomMinimumSize, settings.MainRoomMaximumSize + 1);
                 int x = random.Next(1, Size - width);
                 int y = random.Next(1, Size - height);
                 //Keep floor beside an outside wall for systems that need a boundary entrance.

@@ -1,9 +1,153 @@
 using System;
 using System.Collections.Generic;
 using Escape4Now.Obstacles;
+#if UNITY_5_3_OR_NEWER
+using UnitySerializeField = UnityEngine.SerializeField;
+#else
+using UnitySerializeField = System.NonSerializedAttribute;
+#endif
 
 namespace Escape4Now.Map
 {
+    [Serializable]
+    public sealed class SchoolFurnitureSettings
+    {
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Header("Library")]
+        [UnityEngine.Range(2, 3)]
+        [UnityEngine.Tooltip("Required number range for library bookshelves.")]
+#endif
+        [UnitySerializeField] private int libraryShelvesMinimum = 2;
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Range(2, 3)]
+#endif
+        [UnitySerializeField] private int libraryShelvesMaximum = 3;
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Range(0, 2)]
+#endif
+        [UnitySerializeField] private int libraryTablesMaximum = 2;
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Range(0, 1)]
+#endif
+        [UnitySerializeField] private int libraryCartsMaximum = 1;
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Header("Computer Lab")]
+        [UnityEngine.Range(2, 4)]
+#endif
+        [UnitySerializeField] private int computerDesksMinimum = 2;
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Range(2, 4)]
+#endif
+        [UnitySerializeField] private int computerDesksMaximum = 4;
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Range(0, 1)]
+#endif
+        [UnitySerializeField] private int printersMaximum = 1;
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Header("Classroom")]
+        [UnityEngine.Range(3, 5)]
+#endif
+        [UnitySerializeField] private int classroomDesksMinimum = 3;
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Range(3, 5)]
+#endif
+        [UnitySerializeField] private int classroomDesksMaximum = 5;
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Range(0, 1)]
+#endif
+        [UnitySerializeField] private int teacherDesksMaximum = 1;
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Header("Science Lab")]
+        [UnityEngine.Range(2, 4)]
+#endif
+        [UnitySerializeField] private int scienceTablesMinimum = 2;
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Range(2, 4)]
+#endif
+        [UnitySerializeField] private int scienceTablesMaximum = 4;
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Range(0, 1)]
+#endif
+        [UnitySerializeField] private int scienceCabinetsMaximum = 1;
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Range(0, 1)]
+#endif
+        [UnitySerializeField] private int scienceSinksMaximum = 1;
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Header("Hallways")]
+        [UnityEngine.Range(1, 2)]
+#endif
+        [UnitySerializeField] private int hallwayObjectsMinimum = 1;
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Range(1, 2)]
+#endif
+        [UnitySerializeField] private int hallwayObjectsMaximum = 2;
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Header("Occasional Special Rooms")]
+        [UnityEngine.Range(0, 1)]
+#endif
+        [UnitySerializeField] private int specialRoomExtraObjectsMaximum = 1;
+
+        public int LibraryShelvesMinimum { get => libraryShelvesMinimum; set => libraryShelvesMinimum = value; }
+        public int LibraryShelvesMaximum { get => libraryShelvesMaximum; set => libraryShelvesMaximum = value; }
+        public int LibraryTablesMaximum { get => libraryTablesMaximum; set => libraryTablesMaximum = value; }
+        public int LibraryCartsMaximum { get => libraryCartsMaximum; set => libraryCartsMaximum = value; }
+        public int ComputerDesksMinimum { get => computerDesksMinimum; set => computerDesksMinimum = value; }
+        public int ComputerDesksMaximum { get => computerDesksMaximum; set => computerDesksMaximum = value; }
+        public int PrintersMaximum { get => printersMaximum; set => printersMaximum = value; }
+        public int ClassroomDesksMinimum { get => classroomDesksMinimum; set => classroomDesksMinimum = value; }
+        public int ClassroomDesksMaximum { get => classroomDesksMaximum; set => classroomDesksMaximum = value; }
+        public int TeacherDesksMaximum { get => teacherDesksMaximum; set => teacherDesksMaximum = value; }
+        public int ScienceTablesMinimum { get => scienceTablesMinimum; set => scienceTablesMinimum = value; }
+        public int ScienceTablesMaximum { get => scienceTablesMaximum; set => scienceTablesMaximum = value; }
+        public int ScienceCabinetsMaximum { get => scienceCabinetsMaximum; set => scienceCabinetsMaximum = value; }
+        public int ScienceSinksMaximum { get => scienceSinksMaximum; set => scienceSinksMaximum = value; }
+        public int HallwayObjectsMinimum { get => hallwayObjectsMinimum; set => hallwayObjectsMinimum = value; }
+        public int HallwayObjectsMaximum { get => hallwayObjectsMaximum; set => hallwayObjectsMaximum = value; }
+        public int SpecialRoomExtraObjectsMaximum { get => specialRoomExtraObjectsMaximum; set => specialRoomExtraObjectsMaximum = value; }
+
+        public SchoolFurnitureSettings Copy()
+        {
+            return new SchoolFurnitureSettings
+            {
+                LibraryShelvesMinimum = Clamp(libraryShelvesMinimum, 2, 3),
+                LibraryShelvesMaximum = Math.Max(Clamp(libraryShelvesMinimum, 2, 3), Clamp(libraryShelvesMaximum, 2, 3)),
+                LibraryTablesMaximum = Clamp(libraryTablesMaximum, 0, 2),
+                LibraryCartsMaximum = Clamp(libraryCartsMaximum, 0, 1),
+                ComputerDesksMinimum = Clamp(computerDesksMinimum, 2, 4),
+                ComputerDesksMaximum = Math.Max(Clamp(computerDesksMinimum, 2, 4), Clamp(computerDesksMaximum, 2, 4)),
+                PrintersMaximum = Clamp(printersMaximum, 0, 1),
+                ClassroomDesksMinimum = Clamp(classroomDesksMinimum, 3, 5),
+                ClassroomDesksMaximum = Math.Max(Clamp(classroomDesksMinimum, 3, 5), Clamp(classroomDesksMaximum, 3, 5)),
+                TeacherDesksMaximum = Clamp(teacherDesksMaximum, 0, 1),
+                ScienceTablesMinimum = Clamp(scienceTablesMinimum, 2, 4),
+                ScienceTablesMaximum = Math.Max(Clamp(scienceTablesMinimum, 2, 4), Clamp(scienceTablesMaximum, 2, 4)),
+                ScienceCabinetsMaximum = Clamp(scienceCabinetsMaximum, 0, 1),
+                ScienceSinksMaximum = Clamp(scienceSinksMaximum, 0, 1),
+                HallwayObjectsMinimum = Clamp(hallwayObjectsMinimum, 1, 2),
+                HallwayObjectsMaximum = Math.Max(Clamp(hallwayObjectsMinimum, 1, 2), Clamp(hallwayObjectsMaximum, 1, 2)),
+                SpecialRoomExtraObjectsMaximum = Clamp(specialRoomExtraObjectsMaximum, 0, 1)
+            };
+        }
+
+        public bool IsValid => libraryShelvesMinimum >= 2 && libraryShelvesMinimum <= libraryShelvesMaximum && libraryShelvesMaximum <= 3
+            && libraryTablesMaximum >= 0 && libraryTablesMaximum <= 2 && libraryCartsMaximum >= 0 && libraryCartsMaximum <= 1
+            && computerDesksMinimum >= 2 && computerDesksMinimum <= computerDesksMaximum && computerDesksMaximum <= 4
+            && printersMaximum >= 0 && printersMaximum <= 1
+            && classroomDesksMinimum >= 3 && classroomDesksMinimum <= classroomDesksMaximum && classroomDesksMaximum <= 5
+            && teacherDesksMaximum >= 0 && teacherDesksMaximum <= 1
+            && scienceTablesMinimum >= 2 && scienceTablesMinimum <= scienceTablesMaximum && scienceTablesMaximum <= 4
+            && scienceCabinetsMaximum >= 0 && scienceCabinetsMaximum <= 1
+            && scienceSinksMaximum >= 0 && scienceSinksMaximum <= 1
+            && hallwayObjectsMinimum >= 1 && hallwayObjectsMinimum <= hallwayObjectsMaximum && hallwayObjectsMaximum <= 2
+            && specialRoomExtraObjectsMaximum >= 0 && specialRoomExtraObjectsMaximum <= 1;
+
+        private static int Clamp(int value, int minimum, int maximum)
+        {
+            return Math.Max(minimum, Math.Min(maximum, value));
+        }
+    }
+
     public enum SchoolFurnitureKind
     {
         Bookshelf, ReadingTable, BookCart, ComputerDesk, Printer,
@@ -26,6 +170,7 @@ namespace Escape4Now.Map
     public sealed class SchoolFurniturePlan
     {
         private readonly SchoolMapLayout map;
+        private readonly SchoolFurnitureSettings settings;
         private readonly Random random;
         private readonly List<int> spawns = new List<int>();
         private readonly List<SchoolFurniturePlacement> furniture = new List<SchoolFurniturePlacement>();
@@ -38,9 +183,10 @@ namespace Escape4Now.Map
         public IReadOnlyList<int> SpecialItems => specialItems.AsReadOnly();
 
         //Finish furniture first, then choose a clear start in each shuffled room.
-        public SchoolFurniturePlan(SchoolMapLayout layout)
+        public SchoolFurniturePlan(SchoolMapLayout layout, SchoolFurnitureSettings furnitureSettings = null)
         {
             map = layout ?? throw new ArgumentNullException(nameof(layout));
+            settings = furnitureSettings != null ? furnitureSettings.Copy() : new SchoolFurnitureSettings();
             random = new Random(unchecked(layout.Seed ^ 0x51A43C7));
             foreach (SchoolRoom room in map.Rooms)
             {
@@ -48,23 +194,23 @@ namespace Escape4Now.Map
                 switch (room.Type)
                 {
                     case SchoolRoomType.Library:
-                        Required(cells, SchoolFurnitureKind.Bookshelf, 2, 3);
-                        Place(cells, new[] { SchoolFurnitureKind.ReadingTable }, random.Next(3));
-                        Place(cells, new[] { SchoolFurnitureKind.BookCart }, random.Next(2));
+                        Required(cells, SchoolFurnitureKind.Bookshelf, settings.LibraryShelvesMinimum, settings.LibraryShelvesMaximum);
+                        Place(cells, new[] { SchoolFurnitureKind.ReadingTable }, random.Next(settings.LibraryTablesMaximum + 1));
+                        Place(cells, new[] { SchoolFurnitureKind.BookCart }, random.Next(settings.LibraryCartsMaximum + 1));
                         break;
                     case SchoolRoomType.ComputerLab:
-                        Required(cells, SchoolFurnitureKind.ComputerDesk, 2, 4);
-                        Place(cells, new[] { SchoolFurnitureKind.Printer }, random.Next(2));
+                        Required(cells, SchoolFurnitureKind.ComputerDesk, settings.ComputerDesksMinimum, settings.ComputerDesksMaximum);
+                        Place(cells, new[] { SchoolFurnitureKind.Printer }, random.Next(settings.PrintersMaximum + 1));
                         break;
                     case SchoolRoomType.Classroom:
                         Required(cells, SchoolFurnitureKind.Whiteboard, 1, 1);
-                        Required(cells, SchoolFurnitureKind.StudentDesk, 3, 5);
-                        Place(cells, new[] { SchoolFurnitureKind.TeacherDesk }, random.Next(2));
+                        Required(cells, SchoolFurnitureKind.StudentDesk, settings.ClassroomDesksMinimum, settings.ClassroomDesksMaximum);
+                        Place(cells, new[] { SchoolFurnitureKind.TeacherDesk }, random.Next(settings.TeacherDesksMaximum + 1));
                         break;
                     case SchoolRoomType.ScienceLab:
-                        Required(cells, SchoolFurnitureKind.LabTable, 2, 4);
-                        Place(cells, new[] { SchoolFurnitureKind.Cabinet }, random.Next(2));
-                        Place(cells, new[] { SchoolFurnitureKind.LabSink }, random.Next(2));
+                        Required(cells, SchoolFurnitureKind.LabTable, settings.ScienceTablesMinimum, settings.ScienceTablesMaximum);
+                        Place(cells, new[] { SchoolFurnitureKind.Cabinet }, random.Next(settings.ScienceCabinetsMaximum + 1));
+                        Place(cells, new[] { SchoolFurnitureKind.LabSink }, random.Next(settings.ScienceSinksMaximum + 1));
                         break;
                 }
             }
@@ -73,7 +219,7 @@ namespace Escape4Now.Map
             for (int y = 1; y < SchoolMapLayout.Size - 1; y++)
                 for (int x = 1; x < SchoolMapLayout.Size - 1; x++)
                     if (map.IsHallway(x, y) && ClearOfDoors(x, y) && BesideWall(x, y)) hallways.Add(y * SchoolMapLayout.Size + x);
-            Place(hallways, Pool(SchoolRoomType.None), random.Next(1, 3));
+            Place(hallways, Pool(SchoolRoomType.None), random.Next(settings.HallwayObjectsMinimum, settings.HallwayObjectsMaximum + 1));
             var rooms = new List<SchoolRoom>(map.Rooms);
             Shuffle(rooms);
             foreach (SchoolRoom room in rooms)
@@ -122,7 +268,7 @@ namespace Escape4Now.Map
                     }
                 //Start with an object that shows the room's purpose without a floor label.
                 Place(corners, space.Type == SchoolSpaceType.Storage ? pool : new[] { pool[0] }, 1);
-                Place(corners, pool, random.Next(2));
+                Place(corners, pool, random.Next(settings.SpecialRoomExtraObjectsMaximum + 1));
                 //Keep one tile clear beside the obstacle that will hold the room's item.
                 cells.RemoveAll(cell => blocked.Contains(cell));
                 if (cells.Count == 0) throw new InvalidOperationException("A special room has no space for its item.");

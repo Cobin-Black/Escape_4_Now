@@ -1,37 +1,123 @@
 using System.Collections;
 using System.Collections.Generic;
+using Escape4Now.GameModes;
 using Escape4Now.Map;
 using Escape4Now.Obstacles;
 using UnityEngine;
 
 namespace Escape4Now.Items
 {
+    //One item an obstacle can hold, and how often it is picked compared to the other items in the list.
+    [System.Serializable]
+    public sealed class ItemSpawnOption
+    {
+        [SerializeField] private Item prefab;
+        [SerializeField, Range(0f, 100f), Tooltip("How often this item is picked when an obstacle holds an item. "
+            + "Higher numbers show up more often than lower ones in the same list. 0 never spawns.")]
+        private float spawnChance = 50f;
+
+        public Item Prefab => prefab;
+        public float SpawnChance => spawnChance;
+
+        public ItemSpawnOption() { }
+        public ItemSpawnOption(Item prefab, float spawnChance) { this.prefab = prefab; this.spawnChance = spawnChance; }
+
+        public void Validate() { spawnChance = float.IsNaN(spawnChance) ? 0f : Mathf.Clamp(spawnChance, 0f, 100f); }
+    }
+
+    //Fills searchable obstacles with items. Each gamemode has its own list, so an item like the
+    //Key Stealer can exist in one gamemode only. The Race key is placed by the Race_Gamemode, not this list.
     public sealed class ItemSpawner : MonoBehaviour
     {
+        [Header("Map")]
         [SerializeField] private IsometricMapTemplate map;
-        [SerializeField] private DoubleDiceItem doubleDicePrefab;
-        [SerializeField] private CustomDiceItem customDicePrefab;
-        [SerializeField] private KeyStealerItem keyStealerPrefab;
-        [SerializeField] private KeyItem keyItemPrefab;
-        private readonly List<Item> remainingItems = new List<Item>();
+        [Header("Race Gamemode Items")]
+        [SerializeField] private ItemSpawnOption[] raceItems;
+        [Header("Monster Gamemode Items")]
+        [SerializeField] private ItemSpawnOption[] monsterItems;
+        [Header("Free-for-All Gamemode Items")]
+        [SerializeField] private ItemSpawnOption[] freeForAllItems;
+        [Header("Untitled Gamemode Items")]
+        [SerializeField] private ItemSpawnOption[] untitledItems;
+        [Header("Testing")]
+        [SerializeField, Tooltip("Item list used when the scene has no gamemode script.")]
+        private GameModeType gameModeWithoutScript = GameModeType.Race;
 
         //Lets other spawners wait until item locations are reserved.
         public bool HasSpawnedItems { get; private set; }
         //Obstacles can be placed after special-room item locations are chosen.
         public bool HasReservedSpecialRoomItems { get; private set; }
-        public KeyItem KeyPrefab => keyItemPrefab;
+
+        //The gamemode the open scene is playing.
+        public GameModeType CurrentGameMode
+        {
+            get
+            {
+                GameMode mode = GameMode.Current;
+                return mode != null ? mode.Type : gameModeWithoutScript;
+            }
+        }
+
+        private void OnValidate()
+        {
+            ValidateList(raceItems, GameModeType.Race);
+            ValidateList(monsterItems, GameModeType.Monster);
+            ValidateList(freeForAllItems, GameModeType.FreeForAll);
+            ValidateList(untitledItems, GameModeType.Untitled);
+        }
+
+        //The key belongs to the Race_Gamemode and the Key Stealer only works in Race, so neither can be added elsewhere.
+        private void ValidateList(ItemSpawnOption[] options, GameModeType mode)
+        {
+            if (options == null) return;
+            foreach (ItemSpawnOption option in options)
+            {
+                if (option == null) continue;
+                option.Validate();
+                if (option.Prefab is KeyItem)
+                {
+                    Debug.LogWarning($"[Item System] The key is set on the Race_Gamemode, not in the {mode} item list. It will be ignored.", this);
+                }
+                else if (option.Prefab is KeyStealerItem && mode != GameModeType.Race)
+                {
+                    Debug.LogWarning($"[Item System] The Key Stealer only works in the Race gamemode. It will be ignored in the {mode} item list.", this);
+                }
+            }
+        }
+
+        public ItemSpawnOption[] GetItemOptions(GameModeType mode)
+        {
+            switch (mode)
+            {
+                case GameModeType.Monster: return monsterItems;
+                case GameModeType.FreeForAll: return freeForAllItems;
+                case GameModeType.Untitled: return untitledItems;
+                default: return raceItems;
+            }
+        }
 
         //Shares the existing templates with the network view.
-        public Item GetNetworkPrefab(int type) => type == 1 ? doubleDicePrefab : type == 2 ? customDicePrefab
-            : type == 3 ? keyStealerPrefab : type == 4 ? keyItemPrefab : null;
+        public Item GetNetworkPrefab(int type)
+        {
+            if (type == 4) return Race_Gamemode.Current != null ? Race_Gamemode.Current.KeyPrefab : null;
+            foreach (GameModeType mode in System.Enum.GetValues(typeof(GameModeType)))
+                foreach (ItemSpawnOption option in GetItemOptions(mode) ?? System.Array.Empty<ItemSpawnOption>())
+                {
+                    Item prefab = option?.Prefab;
+                    if (prefab == null) continue;
+                    if ((type == 1 && prefab is DoubleDiceItem) || (type == 2 && prefab is CustomDiceItem)
+                        || (type == 3 && prefab is KeyStealerItem)) return prefab;
+                }
+            return null;
+        }
 
-        //Each new match creates a new spawner and a fresh item pool.
+        //Each new match creates a new spawner.
         private void Start()
         {
             StartCoroutine(SpawnItems());
         }
 
-        //Special-room items go inside furniture, then other items go in obstacles or on the floor.
+        //Special rooms get one item each, then the gamemode places its own items, then the remaining obstacles roll for an item.
         private IEnumerator SpawnItems()
         {
             if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) yield break;
@@ -48,12 +134,6 @@ namespace Escape4Now.Items
 
             MapEventController events = map.GetComponent<MapEventController>();
             yield return new WaitUntil(() => events == null || !events.isActiveAndEnabled || events.EventsPlaced);
-            //One entry per type covers floor pickups and every searchable obstacle.
-            AddItemType(doubleDicePrefab);
-            AddItemType(customDicePrefab);
-            AddItemType(keyStealerPrefab);
-            if (remainingItems.Count < map.SecondarySpaces.Count)
-                throw new System.InvalidOperationException("Each special room needs a different item type. Assign more item prefabs.");
             //Tell the obstacle spawner the special rooms are ready for item placement.
             HasReservedSpecialRoomItems = true;
             ObstacleSpawner obstacles = map.GetComponent<ObstacleSpawner>();
@@ -66,27 +146,17 @@ namespace Escape4Now.Items
                 foreach (SchoolSecondarySpace room in map.SecondarySpaces)
                 {
                     var roomChoices = containers.FindAll(storage => IsAvailableStorage(storage, room.Type));
-                    if (roomChoices.Count == 0 || remainingItems.Count == 0)
+                    if (roomChoices.Count == 0)
                         throw new System.InvalidOperationException("A special room needs an empty obstacle for its item.");
+                    if (!TryPickItem(out Item roomItem)) break;
                     ObstacleStorage roomStorage = roomChoices[Random.Range(0, roomChoices.Count)];
-                    int itemIndex = Random.Range(0, remainingItems.Count);
-                    if (!roomStorage.TryStoreItem(remainingItems[itemIndex]))
+                    if (!roomStorage.TryStoreItem(roomItem))
                         throw new System.InvalidOperationException("A special-room item could not be stored.");
-                    remainingItems.RemoveAt(itemIndex);
                 }
 
-                //Choose one empty obstacle for the key before ordinary items are assigned.
-                var keyChoices = containers.FindAll(storage => IsAvailableStorage(storage, SchoolSpaceType.None));
-                if (keyItemPrefab != null && keyChoices.Count > 0)
-                {
-                    ObstacleStorage keyStorage = keyChoices[Random.Range(0, keyChoices.Count)];
-                    if (!keyStorage.TryStoreItem(keyItemPrefab))
-                        Debug.LogError("[Item System] The key could not be stored.");
-                }
-                else
-                {
-                    Debug.LogError("[Item System] No empty obstacle was available for the key.");
-                }
+                //Gamemode items, such as the Race key, go in before ordinary items are assigned.
+                GameMode mode = GameMode.Current;
+                if (mode != null) mode.PlaceGuaranteedItems(this);
 
                 //Shuffle containers so items do not always go to the same obstacles.
                 while (containers.Count > 0)
@@ -96,26 +166,17 @@ namespace Escape4Now.Items
                     containers.RemoveAt(index);
                 }
             }
-            List<Vector2Int> emptyTiles = new List<Vector2Int>();
-
-            for (int y = 0; y < map.Height; y++)
-            {
-                for (int x = 0; x < map.Width; x++)
-                {
-                    Vector2Int cell = new Vector2Int(x, y);
-
-                    SchoolSpaceType space = map.GetSpaceType(cell);
-                    if (IsValidItemTile(cell) && space == SchoolSpaceType.None
-                        && (events == null || !events.HasEvent(cell)))
-                    {
-                        emptyTiles.Add(cell);
-                    }
-                }
-            }
-
-            foreach (Item prefab in remainingItems) SpawnItem(prefab, emptyTiles);
-            remainingItems.Clear();
             HasSpawnedItems = true;
+        }
+
+        //Stores an item in a random empty obstacle outside the special rooms. Used by gamemodes for their own items.
+        public bool TryStoreInRandomObstacle(Item prefab)
+        {
+            if (prefab == null || map == null) return false;
+            var choices = new List<ObstacleStorage>(map.GetComponentsInChildren<ObstacleStorage>())
+                .FindAll(storage => IsAvailableStorage(storage, SchoolSpaceType.None));
+            if (choices.Count == 0) return false;
+            return choices[Random.Range(0, choices.Count)].TryStoreItem(prefab);
         }
 
         private bool IsAvailableStorage(ObstacleStorage storage, SchoolSpaceType roomType)
@@ -129,85 +190,42 @@ namespace Escape4Now.Items
                     || map.IsWalkable(storage.GridPosition + Vector2Int.right));
         }
 
-        //Duplicate references or variants of the same item type use just one slot.
-        private void AddItemType(Item prefab)
-        {
-            if (prefab == null || remainingItems.Exists(item => item.GetType() == prefab.GetType())) return;
-            remainingItems.Add(prefab);
-        }
-
-        //Removing the chosen type prevents another container or floor tile from receiving it.
-        public bool TryTakeStorageItem(Item[] allowedItems, out Item prefab)
+        //Picks the item for one obstacle while placement is running. Finished matches never refill obstacles.
+        public bool TryTakeStorageItem(out Item prefab)
         {
             prefab = null;
-            if (!HasReservedSpecialRoomItems || HasSpawnedItems || allowedItems == null
+            if (!HasReservedSpecialRoomItems || HasSpawnedItems
                 || Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) return false;
-            var choices = new List<int>();
-            for (int i = 0; i < remainingItems.Count; i++)
-            {
-                //The Key Stealer can use any searchable obstacle, even if it is not in the Inspector list.
-                if (remainingItems[i] is KeyStealerItem)
-                {
-                    choices.Add(i);
-                    continue;
-                }
+            return TryPickItem(out prefab);
+        }
 
-                foreach (Item allowed in allowedItems)
-                    if (allowed != null && allowed.GetType() == remainingItems[i].GetType())
-                    { choices.Add(i); break; }
+        //Weighted pick from the current gamemode's list, using each item's spawn chance.
+        private bool TryPickItem(out Item prefab)
+        {
+            prefab = null;
+            GameModeType mode = CurrentGameMode;
+            var choices = new List<ItemSpawnOption>();
+            float total = 0f;
+            foreach (ItemSpawnOption option in GetItemOptions(mode) ?? System.Array.Empty<ItemSpawnOption>())
+            {
+                if (option == null || option.Prefab == null || option.SpawnChance <= 0f || option.Prefab is KeyItem
+                    || (option.Prefab is KeyStealerItem && mode != GameModeType.Race)) continue;
+                choices.Add(option);
+                total += option.SpawnChance;
             }
             if (choices.Count == 0) return false;
-            int index = choices[Random.Range(0, choices.Count)];
-            prefab = remainingItems[index];
-            remainingItems.RemoveAt(index);
+            float roll = Random.Range(0f, total);
+            foreach (ItemSpawnOption option in choices)
+            {
+                roll -= option.SpawnChance;
+                if (roll < 0f)
+                {
+                    prefab = option.Prefab;
+                    return true;
+                }
+            }
+            prefab = choices[choices.Count - 1].Prefab;
             return true;
-        }
-
-        //Rewards must stay on clear floor, away from players and the exit.
-        private bool IsValidItemTile(Vector2Int cell)
-        {
-            return map.IsWalkable(cell)
-                && !map.IsExit(cell)
-                && !map.IsDoorway(cell)
-                && !map.IsOccupied(cell);
-        }
-
-        //Places one pickup and removes its tile from this batch's available positions.
-        private void SpawnItem(Item prefab, List<Vector2Int> emptyTiles)
-        {
-            if (prefab == null || emptyTiles.Count == 0)
-            {
-                return;
-            }
-
-            int index = Random.Range(0, emptyTiles.Count);
-            Vector2Int cell = emptyTiles[index];
-
-            Item spawnedItem = Instantiate(
-                prefab,
-                map.GridToWorld(cell),
-                Quaternion.identity,
-                transform
-            );
-
-            if (spawnedItem is DoubleDiceItem doubleDice)
-            {
-                doubleDice.SetSpawnPosition(map, cell);
-            }
-            else if (spawnedItem is CustomDiceItem customDice)
-            {
-                customDice.SetSpawnPosition(map, cell);
-            }
-            else if (spawnedItem is KeyStealerItem keyStealer)
-            {
-                keyStealer.SetSpawnPosition(map, cell);
-            }
-
-            emptyTiles.RemoveAt(index);
-
-            Debug.Log(
-                $"[Item System] Spawned {spawnedItem.ItemName} at {cell}."
-            );
         }
     }
 }
