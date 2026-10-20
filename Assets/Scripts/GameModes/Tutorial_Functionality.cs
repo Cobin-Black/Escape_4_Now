@@ -107,7 +107,8 @@ namespace Escape4Now.GameModes
             //Reaching the exit pauses the game, so undo that from any earlier section.
             Time.timeScale = 1f;
             currentSection = pendingSection ?? startingSection;
-            interactAction = InputSystem.actions != null ? InputSystem.actions.FindAction("Player/Interact") : null;
+            interactAction = Escape4Now.Input.GameplayInputContext.Current != null
+                ? Escape4Now.Input.GameplayInputContext.Current.Interact : null;
             if (interactAction == null) Debug.LogWarning($"{name}: Input action 'Player/Interact' was not found.");
             FindSceneReferences();
             ApplySectionRules();

@@ -118,7 +118,7 @@ namespace Escape4Now.Items
         private void Awake()
         {
             useItemAction = player != null && player.InputBindings != null ? player.InputBindings.UseItem
-                : InputSystem.actions != null ? InputSystem.actions.FindAction("Player/Use Item") : null;
+                : null;
 
             if (useItemAction == null)
             {
@@ -145,8 +145,10 @@ namespace Escape4Now.Items
         }
 
         //Uses the first item currently stored in the inventory.
-        private void UseFirstItem()
+        public void UseFirstItem()
         {
+            if (player == null || player.IsBotControlled || !player.CanReadTurnInput
+                || Escape4Now.Multiplayer.LocalMultiplayerSession.MatchHasEnded) return;
             if (items.Count == 0)
             {
                 Debug.Log("Inventory is empty.");

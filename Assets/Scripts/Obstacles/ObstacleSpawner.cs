@@ -18,12 +18,20 @@ namespace Escape4Now.Obstacles
         private Component[] computerLabPrefabs;
         [SerializeField, Tooltip("Obstacles that only spawn in the Classroom.")]
         private Component[] classroomPrefabs;
-        [SerializeField, Tooltip("Obstacles that only spawn in hallways, including the searchable hallway locker (ObstacleGridControl). Special rooms off the hallway check this list first.")]
+        [SerializeField, Tooltip("Hallway furniture and searchable hallway lockers (ObstacleGridControl). Special rooms use their own sections below.")]
         private Component[] hallwayPrefabs;
         [SerializeField, Tooltip("Obstacles that only spawn in the Library.")]
         private Component[] libraryPrefabs;
         [SerializeField, Tooltip("Obstacles that only spawn in the Science Lab.")]
         private Component[] scienceLabPrefabs;
+        [Header("Special Room Obstacle Prefabs")]
+        [SerializeField] private Component[] bathroomPrefabs;
+        [SerializeField] private Component[] storageRoomPrefabs;
+        [SerializeField] private Component[] janitorClosetPrefabs;
+        [SerializeField] private Component[] studyAreaPrefabs;
+        [SerializeField] private Component[] officePrefabs;
+        [SerializeField] private Component[] lockerAreaPrefabs;
+        [SerializeField, HideInInspector] private bool specialSectionsInitialized;
         //Older scenes kept every obstacle in one list. They are sorted into rooms once.
         [SerializeField, HideInInspector] private Component[] obstaclePrefabs;
         [SerializeField, HideInInspector, FormerlySerializedAs("schoolObstaclePrefabs")]
@@ -63,7 +71,7 @@ namespace Escape4Now.Obstacles
             maximumObstacleCount = Mathf.Clamp(maximumObstacleCount, minimumObstacleCount, 10);
             interactableChance = float.IsNaN(interactableChance) ? 0.5f : Mathf.Clamp01(interactableChance);
 #if UNITY_EDITOR
-            if (!roomSectionsInitialized && !catalogInitializationQueued)
+            if ((!roomSectionsInitialized || !specialSectionsInitialized) && !catalogInitializationQueued)
             {
                 catalogInitializationQueued = true;
                 UnityEditor.EditorApplication.delayCall += InitializeCatalogInEditor;
@@ -74,7 +82,11 @@ namespace Escape4Now.Obstacles
         //Migrate existing scenes once, then preserve the team's Inspector edits.
         private void InitializeObstacleCatalog()
         {
-            if (roomSectionsInitialized) return;
+            if (roomSectionsInitialized)
+            {
+                InitializeSpecialSections();
+                return;
+            }
             var catalog = new List<Component>();
             var furnitureKinds = new HashSet<SchoolFurnitureKind>();
             void Add(Component prefab)
@@ -94,6 +106,61 @@ namespace Escape4Now.Obstacles
             previousSchoolPrefabs = null;
             obstacleCatalogInitialized = true;
             roomSectionsInitialized = true;
+            InitializeSpecialSections();
+        }
+
+        private void InitializeSpecialSections()
+        {
+            if (specialSectionsInitialized) return;
+            var catalog = new List<SchoolFurniture>();
+            foreach (SchoolRoomType room in RoomSections)
+                foreach (Component entry in GetSection(room) ?? System.Array.Empty<Component>())
+                    if (entry != null && entry.TryGetComponent(out SchoolFurniture furniture) && !catalog.Contains(furniture))
+                        catalog.Add(furniture);
+            foreach (SchoolSpaceType space in System.Enum.GetValues(typeof(SchoolSpaceType)))
+            {
+                if (space == SchoolSpaceType.None) continue;
+                var section = new List<Component>(GetSpecialSection(space) ?? System.Array.Empty<Component>());
+                foreach (SchoolFurniture prefab in catalog)
+                    if (System.Array.IndexOf(SchoolFurniturePlan.SpecialPool(space), prefab.Kind) >= 0 && !section.Contains(prefab))
+                        section.Add(prefab);
+                SetSpecialSection(space, section.ToArray());
+            }
+            specialSectionsInitialized = true;
+        }
+
+        private Component[] GetSpecialSection(SchoolSpaceType space)
+        {
+            switch (space)
+            {
+                case SchoolSpaceType.Bathroom: return bathroomPrefabs;
+                case SchoolSpaceType.Storage: return storageRoomPrefabs;
+                case SchoolSpaceType.JanitorCloset: return janitorClosetPrefabs;
+                case SchoolSpaceType.StudyArea: return studyAreaPrefabs;
+                case SchoolSpaceType.Office: return officePrefabs;
+                case SchoolSpaceType.LockerArea: return lockerAreaPrefabs;
+                default: return System.Array.Empty<Component>();
+            }
+        }
+
+        private void SetSpecialSection(SchoolSpaceType space, Component[] prefabs)
+        {
+            switch (space)
+            {
+                case SchoolSpaceType.Bathroom: bathroomPrefabs = prefabs; break;
+                case SchoolSpaceType.Storage: storageRoomPrefabs = prefabs; break;
+                case SchoolSpaceType.JanitorCloset: janitorClosetPrefabs = prefabs; break;
+                case SchoolSpaceType.StudyArea: studyAreaPrefabs = prefabs; break;
+                case SchoolSpaceType.Office: officePrefabs = prefabs; break;
+                case SchoolSpaceType.LockerArea: lockerAreaPrefabs = prefabs; break;
+            }
+        }
+
+        public IEnumerable<SchoolFurniture> GetSpecialRoomPrefabs(SchoolSpaceType space)
+        {
+            InitializeObstacleCatalog();
+            foreach (Component entry in GetSpecialSection(space) ?? System.Array.Empty<Component>())
+                if (entry != null && entry.TryGetComponent(out SchoolFurniture prefab)) yield return prefab;
         }
 
         //A furniture kind goes in every room whose layout uses it. Anything else belongs to the hallway.
@@ -151,12 +218,15 @@ namespace Escape4Now.Obstacles
             }
         }
 
-        //Every furniture prefab from all five sections.
+        //Every furniture prefab from the main rooms, hallways, and special rooms.
         public IEnumerable<SchoolFurniture> GetSchoolPrefabs()
         {
             var seen = new HashSet<SchoolFurniture>();
             foreach (SchoolRoomType room in RoomSections)
                 foreach (SchoolFurniture prefab in GetRoomPrefabs(room))
+                    if (seen.Add(prefab)) yield return prefab;
+            foreach (SchoolSpaceType space in System.Enum.GetValues(typeof(SchoolSpaceType)))
+                foreach (SchoolFurniture prefab in GetSpecialRoomPrefabs(space))
                     if (seen.Add(prefab)) yield return prefab;
         }
 
@@ -180,7 +250,7 @@ namespace Escape4Now.Obstacles
         private void InitializeCatalogInEditor()
         {
             catalogInitializationQueued = false;
-            if (this == null || roomSectionsInitialized) return;
+            if (this == null || (roomSectionsInitialized && specialSectionsInitialized)) return;
             bool persistChanges = !Application.IsPlaying(gameObject);
             if (persistChanges) UnityEditor.Undo.RecordObject(this, "Initialize obstacle prefabs");
             InitializeObstacleCatalog();
@@ -196,6 +266,7 @@ namespace Escape4Now.Obstacles
             UnityEditor.Undo.RecordObject(this, "Populate obstacle prefabs");
             obstacleCatalogInitialized = false;
             roomSectionsInitialized = false;
+            specialSectionsInitialized = false;
             InitializeCatalogInEditor();
         }
 #endif

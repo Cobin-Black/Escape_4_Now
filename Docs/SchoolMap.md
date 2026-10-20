@@ -40,7 +40,7 @@ Positions and types come from the map seed, so all computers draw the same envir
 
 The Item Spawner has separate weighted prefab lists for Race, Monster, Free-for-All, and Untitled modes.
 Small-room rewards are chosen first, then ordinary main-room/hallway containers use the obstacle's item chance and the current mode's item weights.
-Ordinary item types may repeat. Each small room still gets exactly one filled container, using the same search system.
+Ordinary item types may repeat. **Item Spawner > Ordinary Item Budget > Maximum Ordinary Items** limits ordinary filled containers to four by default. The one Race key and the one reward per generated small room are separate from this cap. Each small room still gets exactly one filled container, using the same search system.
 Race's default usable items are Double Dice, Custom Dice, and Key Stealer. Its one separate key is assigned on Race_Gamemode and placed in a searchable main-room or hallway container.
 Taking or using an item does not refill the container. A new match creates fresh contents.
 
@@ -50,7 +50,7 @@ away from doorways. Future decorations must fit within those tiles and must not 
 ## Obstacles and Player Starts
 
 The reusable room-object prefabs are in `Assets/Prefabs/Obstacles/Resources/SchoolObstacles`.
-The Obstacle Spawner exposes separate Computer Lab, Classroom, Hallway, Library, and Science Lab prefab sections. Edit each section in Unity to control which prefabs a room can use.
+The Obstacle Spawner exposes separate Computer Lab, Classroom, Hallway, Library, and Science Lab prefab sections. **Special Room Obstacle Prefabs** adds Bathroom, Storage Room, Janitor Closet, Study Area, Office, and Locker Area lists. Edit each section in Unity to control which prefabs that room can use. Special rooms no longer borrow from unrelated sections. A missing required kind reports the specific room and prefab kind rather than silently substituting another room's catalog.
 Furniture counts as an obstacle. Each piece blocks its tile and uses the same one-item storage as lockers.
 Their small colored parts are simple placeholders drawn in the same style as the map.
 Each prefab fits inside one tile. Its `Parts` fields control its shape and colors.
@@ -73,7 +73,7 @@ Whiteboards and teacher desks prefer the selected front wall. Printers, cabinets
 
 Door-to-center walking routes are reserved before any furniture is placed. Center Aisle patterns additionally reserve the configured aisle stripe. Placement preserves these routes, doorway clearance, a safe player start, a reachable same-area approach to every container, and connectivity of all remaining floor. With **Prevent New Dead Ends** enabled, main-room and hallway furniture cannot create a new one-tile leaf. Small optional rooms retain their compact one- or two-object layout.
 
-On **Blank Isometric Map Template > Furniture Settings**, edit:
+On **Race Indoor Map > Furniture Settings**, edit:
 
 - Per-room minimum/maximum counts and classroom whiteboard count.
 - **Room Layout Patterns:** weights, row spacing, aisle width, group spacing, wall preference, randomized orientation, or a fixed front wall.

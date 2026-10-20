@@ -25,15 +25,20 @@ public static class SurvivalMapChecks
             var spawner = map.GetComponent<SurvivalObstacleSpawner>();
             Require(spawner != null && spawner.enabled && spawner.Map == map, "Map has its own enabled obstacle spawner");
             var serializedSpawner = new SerializedObject(spawner);
-            SerializedProperty catalog = serializedSpawner.FindProperty("obstaclePrefabs");
-            Require(catalog.arraySize == Enum.GetValues(typeof(OutdoorPropKind)).Length, "Every outdoor prefab kind is assigned in the obstacle spawner");
             var kinds = new System.Collections.Generic.HashSet<OutdoorPropKind>();
-            for (int i = 0; i < catalog.arraySize; i++)
+            foreach (SurvivalPropVisual prefab in spawner.GetAllPrefabs())
             {
-                var prefab = catalog.GetArrayElementAtIndex(i).objectReferenceValue as SurvivalPropVisual;
                 Require(prefab != null && kinds.Add(prefab.Kind), "Each obstacle kind has a valid distinct prefab reference");
                 if (prefab.Kind == OutdoorPropKind.BasketballHoop) CheckMaterialOverride(prefab, map);
             }
+            Require(kinds.Count == Enum.GetValues(typeof(OutdoorPropKind)).Length, "All outdoor kinds are assigned in the area and boundary sections");
+            foreach (OutdoorPropRule rule in spawner.PlacementSettings.Rules)
+                foreach (OutdoorAreaKind area in rule.AllowedAreas)
+                {
+                    bool found = false;
+                    foreach (SurvivalPropVisual prefab in spawner.GetAreaPrefabs(area)) found |= prefab != null && prefab.Kind == rule.Prop;
+                    Require(found, $"The {area} section contains {rule.Prop}");
+                }
             Require(spawner.HasSpawnedObstacles && spawner.SpawnedObstacleCount == map.Layout.Props.Count,
                 "The obstacle component spawns the validated placements");
             spawner.enabled = false;
@@ -41,6 +46,12 @@ public static class SurvivalMapChecks
             spawner.enabled = true;
             Require(map.GenerateWithSeed(42) && map.Layout.Props.Count > 0, "Re-enabling the component restores seeded placement");
             string original = EditorJsonUtility.ToJson(spawner);
+            serializedSpawner.Update();
+            serializedSpawner.FindProperty("gardenPrefabs").ClearArray();
+            serializedSpawner.ApplyModifiedPropertiesWithoutUndo();
+            Require(spawner.GetAreaPrefabs(OutdoorAreaKind.Garden).Count == 0,
+                "An intentionally empty area section is not refilled or replaced by another area's prefabs");
+            EditorJsonUtility.FromJsonOverwrite(original, spawner);
             serializedSpawner.Update();
             serializedSpawner.FindProperty("placement.rules").ClearArray();
             serializedSpawner.ApplyModifiedPropertiesWithoutUndo();

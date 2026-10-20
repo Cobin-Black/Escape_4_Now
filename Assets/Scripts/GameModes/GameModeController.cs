@@ -26,7 +26,7 @@ namespace Escape4Now.GameModes
         [SerializeField] private PlayerCharacter playerTemplate;
         [SerializeField] private GameplayInputBindings inputBindings;
         [Header("Match Startup")]
-        [SerializeField, Tooltip("Enabled gameplay components to hold until Start Match. Include the map, spawners, HUD, player, inventory, turns and timer.")]
+        [SerializeField, Tooltip("Gameplay components held until Start Match: map, spawners, player, inventory, turns, timer, and mode-specific systems. UI views manage their own visibility.")]
         private MonoBehaviour[] gameplayComponents = new MonoBehaviour[0];
         private readonly List<InputAction> enabledActions = new List<InputAction>();
 

@@ -16,13 +16,6 @@ namespace Escape4Now.Items
 
         //Currently selected movement value.
         [SerializeField] private int selectedNumber = 1;
-        [Header("Selection Window")]
-        [SerializeField, Min(220f)] private float selectionWindowWidth = 320f;
-        [SerializeField, Min(160f)] private float selectionWindowHeight = 220f;
-        [SerializeField, Min(0f)] private float selectionWindowPadding = 20f;
-        [SerializeField, Min(0f)] private float selectionContentSpacing = 15f;
-        [SerializeField, Range(20, 80)] private int selectionNumberFontSize = 48;
-
         //Whether the player is currently choosing a number.
         private bool isSelecting;
 
@@ -31,17 +24,6 @@ namespace Escape4Now.Items
 
         private bool hasBeenCollected;
         private bool ignoreConfirmInput;
-        private GUIStyle numberStyle;
-
-        private void OnValidate()
-        {
-            selectionWindowWidth = Mathf.Clamp(selectionWindowWidth, 220f, 900f);
-            selectionWindowHeight = Mathf.Clamp(selectionWindowHeight, 160f, 700f);
-            selectionWindowPadding = Mathf.Clamp(selectionWindowPadding, 0f, 100f);
-            selectionContentSpacing = Mathf.Clamp(selectionContentSpacing, 0f, 80f);
-            selectionNumberFontSize = Mathf.Clamp(selectionNumberFontSize, 20, 80);
-            numberStyle = null;
-        }
 
         //Actions from the project-wide Input System asset used while choosing a number.
         private InputAction optionSelectAction;
@@ -50,24 +32,14 @@ namespace Escape4Now.Items
         //Finds the Item Option Select and Use Item actions in the project-wide Input System asset.
         private void Awake()
         {
-            var bindings = Escape4Now.Multiplayer.LocalMultiplayerSession.InputBindings;
+            var bindings = Escape4Now.Input.GameplayInputContext.Current;
             if (bindings != null)
             {
                 optionSelectAction = bindings.ItemOptionSelect;
                 useItemAction = bindings.UseItem;
                 return;
             }
-            InputActionAsset actions = InputSystem.actions;
-            if (actions == null)
-            {
-                Debug.LogWarning($"{name}: No project-wide Input Actions asset is set, so Custom Dice cannot be controlled.");
-                return;
-            }
-
-            optionSelectAction = actions.FindAction("Player/Item Option Select");
-            useItemAction = actions.FindAction("Player/Use Item");
-            if (optionSelectAction == null) Debug.LogWarning($"{name}: Input action 'Player/Item Option Select' was not found.");
-            if (useItemAction == null) Debug.LogWarning($"{name}: Input action 'Player/Use Item' was not found.");
+            Debug.LogError("Assign GameplayInputBindings through the scene's GameplayInputContext.", this);
         }
 
         //Places the item on its assigned map tile.
@@ -194,48 +166,15 @@ namespace Escape4Now.Items
         }
 
 
-        // Displays the number-selection screen while using Custom Dice.
-        private void OnGUI()
+        public bool IsSelecting => isSelecting;
+        public int SelectedNumber => selectedNumber;
+        public PlayerInventory SelectingInventory => currentInventory;
+
+        public void SelectNumber(int value)
         {
-            if (Escape4Now.Multiplayer.LocalMultiplayerSession.MatchHasEnded) return;
-            if (!isSelecting)
-                return;
-
-            Rect panel = new Rect(
-                (Screen.width - selectionWindowWidth) / 2f,
-                (Screen.height - selectionWindowHeight) / 2f,
-                selectionWindowWidth,
-                selectionWindowHeight);
-
-            GUI.Box(panel, "");
-
-            GUILayout.BeginArea(new Rect(
-                panel.x + selectionWindowPadding,
-                panel.y + selectionWindowPadding,
-                panel.width - selectionWindowPadding * 2f,
-                panel.height - selectionWindowPadding * 2f));
-
-            GUILayout.Label("CUSTOM DICE");
-            GUILayout.Space(selectionContentSpacing);
-            GUILayout.Label("Choose your number:");
-
-            if (numberStyle == null)
-            {
-                numberStyle = new GUIStyle(GUI.skin.label)
-                {
-                    fontSize = selectionNumberFontSize,
-                    alignment = TextAnchor.MiddleCenter,
-                    fontStyle = FontStyle.Bold
-                };
-            }
-
-            GUILayout.Label(selectedNumber.ToString(), numberStyle);
-
-            GUILayout.Space(selectionContentSpacing * 2f / 3f);
-            GUILayout.Label("Use Left/Right to change the number.");
-            GUILayout.Label("Press E to confirm.");
-
-            GUILayout.EndArea();
+            if (isSelecting && Time.timeScale > 0f
+                && !Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused)
+                selectedNumber = Mathf.Clamp(value, 1, 6);
         }
 
         //Handles Item Option Select (left/right) and Use Item input while the player is choosing a number.
@@ -298,8 +237,9 @@ namespace Escape4Now.Items
         }
 
         //Confirms the selected number and gives the player that many moves.
-        private void ConfirmSelection()
+        public void ConfirmSelection()
         {
+            if (!isSelecting) return;
             if (currentInventory == null || currentInventory.Player == null)
             {
                 CancelSelection();
@@ -325,7 +265,7 @@ namespace Escape4Now.Items
         }
 
         //Ends the current number-selection process.
-        private void CancelSelection()
+        public void CancelSelection()
         {
             if (currentInventory != null && currentInventory.Player != null)
             {

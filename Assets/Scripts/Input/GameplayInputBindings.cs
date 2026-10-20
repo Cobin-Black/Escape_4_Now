@@ -13,6 +13,8 @@ namespace Escape4Now.Input
         [SerializeField] private InputActionReference useItem;
         [SerializeField] private InputActionReference interact;
         [SerializeField] private InputActionReference itemOptionSelect;
+        [SerializeField, Tooltip("The team's existing shared Player/Pause action.")]
+        private InputActionReference pause;
         [Header("Race Key Battle")]
         [SerializeField] private InputActionReference keyBattle;
         [Header("Map Pointer")]
@@ -27,14 +29,15 @@ namespace Escape4Now.Input
         public InputAction KeyBattle => keyBattle != null ? keyBattle.action : null;
         public InputAction Point => point != null ? point.action : null;
         public InputAction Click => click != null ? click.action : null;
+        public InputAction Pause => pause != null ? pause.action : null;
         public bool IsConfigured => Move != null && RollDice != null && UseItem != null
-            && Interact != null && ItemOptionSelect != null && KeyBattle != null && Point != null && Click != null;
+            && Interact != null && ItemOptionSelect != null && KeyBattle != null && Point != null && Click != null && Pause != null;
         public IEnumerable<InputAction> Actions
         {
             get
             {
                 yield return Move; yield return RollDice; yield return UseItem; yield return Interact;
-                yield return ItemOptionSelect; yield return KeyBattle; yield return Point; yield return Click;
+                yield return ItemOptionSelect; yield return KeyBattle; yield return Point; yield return Click; yield return Pause;
             }
         }
     }

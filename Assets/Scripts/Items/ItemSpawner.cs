@@ -39,6 +39,10 @@ namespace Escape4Now.Items
         [SerializeField] private ItemSpawnOption[] freeForAllItems;
         [Header("Untitled Gamemode Items")]
         [SerializeField] private ItemSpawnOption[] untitledItems;
+        [Header("Ordinary Item Budget")]
+        [SerializeField, Min(0), Tooltip("Maximum ordinary item-filled containers per match. The mode's guaranteed key and each special-room reward are separate. Zero disables ordinary items.")]
+        private int maximumOrdinaryItems = 4;
+        public int MaximumOrdinaryItems => maximumOrdinaryItems;
         [Header("Testing")]
         [SerializeField, Tooltip("Item list used when the scene has no gamemode script.")]
         private GameModeType gameModeWithoutScript = GameModeType.Race;
@@ -60,6 +64,7 @@ namespace Escape4Now.Items
 
         private void OnValidate()
         {
+            maximumOrdinaryItems = Mathf.Max(0, maximumOrdinaryItems);
             ValidateList(raceItems, GameModeType.Race);
             ValidateList(monsterItems, GameModeType.Monster);
             ValidateList(freeForAllItems, GameModeType.FreeForAll);
@@ -159,11 +164,15 @@ namespace Escape4Now.Items
                 if (mode != null) mode.PlaceGuaranteedItems(this);
 
                 //Shuffle containers so items do not always go to the same obstacles.
-                while (containers.Count > 0)
+                int ordinaryItems = 0;
+                while (containers.Count > 0 && ordinaryItems < maximumOrdinaryItems)
                 {
                     int index = Random.Range(0, containers.Count);
-                    obstacles.FillStorage(containers[index]);
+                    ObstacleStorage storage = containers[index];
                     containers.RemoveAt(index);
+                    if (!IsAvailableStorage(storage, SchoolSpaceType.None)) continue;
+                    obstacles.FillStorage(storage);
+                    if (storage.HasItem) ordinaryItems++;
                 }
             }
             HasSpawnedItems = true;

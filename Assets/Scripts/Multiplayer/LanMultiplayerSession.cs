@@ -62,7 +62,7 @@ namespace Escape4Now.Multiplayer
             public float lastSeen, rateWindow, joined;
         }
 
-        //Created by the existing setup component, so no scene edits are needed.
+        //Assigned on the Race session in Unity and initialized before its lobby is used.
         public void Initialize(LocalMultiplayerSession owner)
         {
             Instance = this;
@@ -382,7 +382,8 @@ namespace Escape4Now.Multiplayer
         //Uses the same action bindings, plus mouse clicks on map tiles.
         private void ReadInput()
         {
-            if (MatchPaused || Time.timeScale <= 0f || !IsMyTurn || latest.players[localPlayer].moving) return;
+            if (!IsMyTurn) { choosingNumber = false; return; }
+            if (MatchPaused || Time.timeScale <= 0f || latest.players[localPlayer].moving) return;
             var bindings = LocalMultiplayerSession.InputBindings;
             if (bindings == null) return;
             bool confirm = bindings.KeyBattle?.WasPressedThisFrame() == true;
@@ -416,8 +417,7 @@ namespace Escape4Now.Multiplayer
             }
             if (bindings.Click?.WasPressedThisFrame() != true || bindings.Point == null || Camera.main == null) return;
             Vector2 position = bindings.Point.ReadValue<Vector2>();
-            float top = Screen.height - position.y;
-            if ((position.x < 440 && top < 330) || position.y < 190 || top < 65 || choosingNumber) return;
+            if (Escape4Now.UI.UiPointer.IsOverUI(position) || choosingNumber) return;
             IsometricMapTemplate map = FindFirstObjectByType<IsometricMapTemplate>();
             if (map.TryGetGridPosition(Camera.main.ScreenToWorldPoint(position), out Vector2Int cell))
             {
@@ -428,92 +428,33 @@ namespace Escape4Now.Multiplayer
         }
 
         //Custom Dice keeps the player's choice, while the host checks its valid range.
-        private void UseItem()
+        public void UseItem()
         {
-            if (!IsMyTurn || latest.players[localPlayer].rolled) return;
+            if (!IsMyTurn || MatchPaused || latest.players[localPlayer].rolled) return;
             if (latest.players[localPlayer].item == 2) choosingNumber = true;
             else Submit("item");
         }
 
         //The host also checks adjacency, so remote coordinates cannot take distant items.
-        private void TakeNearbyItem()
+        public void TakeNearbyItem()
         {
-            if (!IsMyTurn) return;
+            if (!IsMyTurn || MatchPaused) return;
             LanPlayerState player = latest.players[localPlayer];
             foreach (LanObjectState item in latest.objects)
                 if ((item.kind == 1 || item.kind == 3) && item.interactable && Math.Abs(item.x - player.x) + Math.Abs(item.y - player.y) == 1)
                 { Submit("take", item.x, item.y); return; }
         }
 
-        //Simple temporary setup controls can be replaced by the team's final UI.
-        public void DrawSetup(float width, GUIStyle label, GUIStyle small, GUIStyle button, GUIStyle selected)
-        {
-            if (!active && !Connecting)
-            {
-                GUI.Label(new Rect(0, 108, width, 26), "Players", label);
-                capacity = GUI.Toolbar(new Rect(0, 140, width, 36), capacity - 2, new[] { "2", "3", "4" }) + 2;
-                if (GUI.Button(new Rect(0, 192, width, 42), "Host Match", selected)) StartHost(capacity);
-                GUI.Label(new Rect(0, 270, width, 24), "Room code", label);
-                roomCode = GUI.TextField(new Rect(0, 304, width, 36), roomCode, 6);
-                if (GUI.Button(new Rect(0, 364, width, 42), "Join Match", button)) Join(roomCode);
-            }
-            else
-            {
-                GUI.Label(new Rect(0, 108, width, 30), host ? "Hosting Wi-Fi match" : "Join Wi-Fi match", label);
-                if (host)
-                {
-                    GUI.Label(new Rect(0, 170, width, 30), "Room code: " + roomCode, label);
-                }
-                GUI.Label(new Rect(0, 260, width, 30), ConnectedPlayers + " / " + capacity + " connected", label);
-                GUI.enabled = host && ConnectedPlayers == capacity && !failed;
-                if (GUI.Button(new Rect(0, 310, width, 42), "Start Match", selected)) StartHostedMatch();
-                GUI.enabled = true;
-                if (GUI.Button(new Rect(0, 370, width, 42), "Cancel", button)) Disconnect();
-            }
-            GUI.Label(new Rect(0, 458, width, 60), status, new GUIStyle(small) { wordWrap = true });
-        }
+        public bool Failed => failed;
+        public bool IsHost => host;
+        public int Capacity => capacity;
+        public bool ChoosingNumber => choosingNumber;
 
-        //Shows local ownership and item controls while reusing the existing turn and dice display.
-        private void OnGUI()
+        public void ChooseNumber(int value)
         {
-            if (LocalMultiplayerSession.MatchHasEnded) return;
-            if (!active || !local.MatchStarted || !local.ShowTemporaryUI) return;
-            if (failed)
-            {
-                GUI.Box(new Rect((Screen.width - 440) / 2f, Screen.height / 2f - 55, 440, 110), status);
-                return;
-            }
-            if (latest == null || localPlayer < 0) return;
-            GUI.Label(new Rect(Screen.width - 270, 65, 250, 30), "You are Player " + (localPlayer + 1));
-            LanPlayerState player = latest.players[localPlayer];
-            if (!IsMyTurn) choosingNumber = false;
-            if (!string.IsNullOrEmpty(latest.battleMessage))
-            {
-                Rect panel = new Rect((Screen.width - 360f) / 2f, (Screen.height - 200f) / 2f, 360f, 200f);
-                GUI.Box(panel, "KEY-STEALING BATTLE");
-                GUI.Label(new Rect(panel.x + 16f, panel.y + 40f, 328f, 90f), latest.battleMessage);
-                GUI.enabled = IsMyTurn;
-                if (GUI.Button(new Rect(panel.x + 16f, panel.y + 145f, 328f, 36f), "Continue")) Submit("battleClose");
-                GUI.enabled = true;
-                return;
-            }
-            float width = Mathf.Min(440, Screen.width - 32);
-            float left = (Screen.width - width) / 2f;
-            float top = Screen.height - 170;
-            GUI.Box(new Rect(left, top, width, 154), "Your item: " + (player.item == 1 ? "Double Dice" : player.item == 2 ? "Custom Dice" : player.item == 3 ? "Key Stealer" : "None")
-                + (player.hasKey ? " | Key collected" : ""));
-            GUI.enabled = IsMyTurn && !player.moving;
-            if (GUI.Button(new Rect(left + 12, top + 35, (width - 36) / 2, 32), "Roll Dice")) Submit("roll");
-            if (GUI.Button(new Rect(left + width / 2 + 6, top + 35, (width - 36) / 2, 32), "Take Item")) TakeNearbyItem();
-            if (choosingNumber)
-            {
-                float step = (width - 24) / 6;
-                for (int i = 1; i <= 6; i++)
-                    if (GUI.Button(new Rect(left + 12 + (i - 1) * step, top + 85, step - 4, 36), i.ToString()))
-                    { Submit("item", value: i); choosingNumber = false; }
-            }
-            else if (GUI.Button(new Rect(left + 12, top + 85, width - 24, 36), "Use Item")) UseItem();
-            GUI.enabled = true;
+            if (!choosingNumber || !IsMyTurn || MatchPaused || value < 1 || value > 6) return;
+            Submit("item", value: value);
+            choosingNumber = false;
         }
 
         private static void Send(LanConnection wire, LanMessage message) => wire.Send(LanMessageCodec.Serialize(message));

@@ -64,6 +64,12 @@ public static class LocalMultiplayerChecks
                 map.FindProperty("fixedSeed").intValue = seed;
                 map.ApplyModifiedPropertiesWithoutUndo();
             }
+            else if (arguments[i] == "-itemBudget" && int.TryParse(arguments[i + 1], out int budget))
+            {
+                var items = new SerializedObject(UnityEngine.Object.FindFirstObjectByType<Escape4Now.Items.ItemSpawner>());
+                items.FindProperty("maximumOrdinaryItems").intValue = budget;
+                items.ApplyModifiedPropertiesWithoutUndo();
+            }
         EditorApplication.isPlaying = true;
     }
 
@@ -126,6 +132,7 @@ public static class LocalMultiplayerChecks
         Require(!LocalMultiplayerSession.MatchHasEnded, "An unstarted timer does not show a loss screen");
         Require(!session.TryStartLocalMatch(4), "A running match cannot duplicate players");
         for (int i = 0; i < 10; i++) yield return null;
+        NativeUiChecks.CheckPlayerBodies(session);
         PlayerCharacter[] players = UnityEngine.Object.FindObjectsByType<PlayerCharacter>(FindObjectsSortMode.None);
         Array.Sort(players, (left, right) => string.CompareOrdinal(left.name, right.name));
         TurnSystemController turns = UnityEngine.Object.FindFirstObjectByType<TurnSystemController>();
@@ -469,6 +476,14 @@ public static class LocalMultiplayerChecks
                 Require(roomKinds.Contains(kind), $"The {room} section has its {kind} prefab");
         }
         Require(spawner.GetNetworkPrefab() != null, "The hallway section contains the hallway locker prefab");
+        foreach (SchoolSpaceType space in Enum.GetValues(typeof(SchoolSpaceType)))
+        {
+            if (space == SchoolSpaceType.None) continue;
+            var specialKinds = new HashSet<SchoolFurnitureKind>();
+            foreach (SchoolFurniture prefab in spawner.GetSpecialRoomPrefabs(space)) specialKinds.Add(prefab.Kind);
+            foreach (SchoolFurnitureKind kind in SchoolFurniturePlan.SpecialPool(space))
+                Require(specialKinds.Contains(kind), $"The dedicated {space} section contains {kind}");
+        }
 
         var migrationObject = new GameObject("Obstacle catalog check");
         migrationObject.SetActive(false);
@@ -490,6 +505,11 @@ public static class LocalMultiplayerChecks
             migratedConfiguration.ApplyModifiedPropertiesWithoutUndo();
             Require(new List<SchoolFurniture>(migratedSpawner.GetRoomPrefabs(SchoolRoomType.Library)).Count == 0,
                 "Later Inspector edits are preserved instead of silently refilling a section");
+            migratedConfiguration.Update();
+            migratedConfiguration.FindProperty("officePrefabs").ClearArray();
+            migratedConfiguration.ApplyModifiedPropertiesWithoutUndo();
+            Require(new List<SchoolFurniture>(migratedSpawner.GetSpecialRoomPrefabs(SchoolSpaceType.Office)).Count == 0,
+                "Clearing a special-room section does not borrow hallway or main-room prefabs");
         }
         finally { UnityEngine.Object.Destroy(migrationObject); }
     }
@@ -735,6 +755,10 @@ public static class LocalMultiplayerChecks
             specialStorageCounts.TryGetValue(room.Type, out int storedRewards);
             Require(storedRewards == 1, "Each special room has one item inside an obstacle");
         }
+        Require(stored - keys - map.SecondarySpaces.Count <= spawner.MaximumOrdinaryItems,
+            "Ordinary items respect the Inspector budget without counting the key or special-room rewards");
+        if (spawner.MaximumOrdinaryItems == 0)
+            Require(stored == keys + map.SecondarySpaces.Count, "A zero ordinary-item budget preserves the key and special-room reward only");
         Require(!spawner.TryTakeStorageItem(out _), "Finished placement cannot refill used obstacles");
         foreach (ObstacleStorage storage in containers)
         {

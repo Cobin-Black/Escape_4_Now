@@ -77,7 +77,7 @@ namespace Escape4Now.Map
         private SchoolFurniturePlan furniturePlan;
         //Each room only draws furniture from its own obstacle spawner section. None is the hallway.
         private readonly Dictionary<SchoolRoomType, List<SchoolFurniture>> roomFurniturePrefabs = new Dictionary<SchoolRoomType, List<SchoolFurniture>>();
-        private readonly List<SchoolFurniture> allFurniturePrefabs = new List<SchoolFurniture>();
+        private readonly Dictionary<SchoolSpaceType, List<SchoolFurniture>> specialFurniturePrefabs = new Dictionary<SchoolSpaceType, List<SchoolFurniture>>();
         private Escape4Now.Obstacles.ObstacleSpawner obstacleSpawnerSource;
 
         //Generated tiles by grid address and which addresses currently hold a player.
@@ -159,7 +159,7 @@ namespace Escape4Now.Map
                     blockedPositions.Remove(new Vector2Int(item.Cell % Width, item.Cell / Width));
             furniturePlan = null;
             roomFurniturePrefabs.Clear();
-            allFurniturePrefabs.Clear();
+            specialFurniturePrefabs.Clear();
             if (!useSchoolLayout) return;
             var obstacleSpawner = obstacleSpawnerSource != null
                 ? obstacleSpawnerSource : GetComponent<Escape4Now.Obstacles.ObstacleSpawner>();
@@ -172,9 +172,20 @@ namespace Escape4Now.Map
                     if (prefab == null || !prefab.IsValidTemplate())
                         throw new System.InvalidOperationException("A school furniture prefab is invalid.");
                     section.Add(prefab);
-                    if (!allFurniturePrefabs.Contains(prefab)) allFurniturePrefabs.Add(prefab);
                 }
                 roomFurniturePrefabs[room] = section;
+            }
+            foreach (SchoolSpaceType space in System.Enum.GetValues(typeof(SchoolSpaceType)))
+            {
+                if (space == SchoolSpaceType.None) continue;
+                var section = new List<SchoolFurniture>();
+                foreach (SchoolFurniture prefab in obstacleSpawner != null ? obstacleSpawner.GetSpecialRoomPrefabs(space) : fallback)
+                {
+                    if (prefab == null || !prefab.IsValidTemplate())
+                        throw new System.InvalidOperationException("A special-room furniture prefab is invalid.");
+                    section.Add(prefab);
+                }
+                specialFurniturePrefabs[space] = section;
             }
             foreach (SchoolFurniture prefab in furniturePrefabOverrides ?? System.Array.Empty<SchoolFurniture>())
                 if (prefab == null || !prefab.IsValidTemplate())
@@ -184,7 +195,9 @@ namespace Escape4Now.Map
                 if (GetFurniturePrefab(item) == null)
                 {
                     SchoolRoomType room = layout.GetRoomType(item.Cell % Width, item.Cell / Width);
-                    string section = room == SchoolRoomType.None ? "Hallway" : room.ToString();
+                    SchoolSpaceType space = layout.GetSpaceType(item.Cell % Width, item.Cell / Width);
+                    string section = space != SchoolSpaceType.None ? space.ToString()
+                        : room == SchoolRoomType.None ? "Hallway" : room.ToString();
                     throw new System.InvalidOperationException($"The {section} obstacle section needs a {item.Kind} prefab.");
                 }
             furniturePlan = plan;
@@ -192,7 +205,7 @@ namespace Escape4Now.Map
                 blockedPositions.Add(new Vector2Int(item.Cell % Width, item.Cell / Width));
         }
 
-        //Picks a prefab from the room's own section. Special rooms try the hallway first, then any room.
+        //Picks a prefab only from this room's own Inspector section.
         //Several prefabs of one kind in a section are variants, chosen by tile so every computer agrees.
         private SchoolFurniture GetFurniturePrefab(SchoolFurniturePlacement item)
         {
@@ -200,10 +213,11 @@ namespace Escape4Now.Map
                 if (prefab != null && prefab.Kind == item.Kind) return prefab;
             int x = item.Cell % Width, y = item.Cell / Width;
             SchoolRoomType room = layout.GetRoomType(x, y);
-            var choices = roomFurniturePrefabs.TryGetValue(room, out List<SchoolFurniture> section)
-                ? section.FindAll(prefab => prefab.Kind == item.Kind) : new List<SchoolFurniture>();
-            if (choices.Count == 0 && layout.GetSpaceType(x, y) != SchoolSpaceType.None)
-                choices = allFurniturePrefabs.FindAll(prefab => prefab.Kind == item.Kind);
+            SchoolSpaceType space = layout.GetSpaceType(x, y);
+            List<SchoolFurniture> section;
+            if (space == SchoolSpaceType.None) roomFurniturePrefabs.TryGetValue(room, out section);
+            else specialFurniturePrefabs.TryGetValue(space, out section);
+            var choices = section != null ? section.FindAll(prefab => prefab.Kind == item.Kind) : new List<SchoolFurniture>();
             return choices.Count == 0 ? null : choices[item.Cell % choices.Count];
         }
 

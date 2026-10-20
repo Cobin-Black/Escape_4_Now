@@ -105,6 +105,7 @@ public static class SurvivalGameplayChecks
         Require(session.TryStartLocalMatch(count), "Survival starts: " + session.Status);
         Require(!session.TryStartLocalMatch(count), "Starting twice cannot duplicate participants");
         for (int i = 0; i < 10; i++) yield return null;
+        NativeUiChecks.CheckPlayerBodies(session);
         Require(session.Participants.Count == count && map.LayoutSeed == 42, "Chosen player count and fixed seed are respected");
         float timeLimit = new SerializedObject(timer).FindProperty("timeLimit").floatValue;
         Require(timer.enabled && timer.ExpirationIsWin && timer.TimeRemaining > 0f && timer.TimeRemaining < timeLimit,
@@ -123,7 +124,7 @@ public static class SurvivalGameplayChecks
         var spawner = map.GetComponent<SurvivalObstacleSpawner>();
         Require(spawner.HasSpawnedObstacles && spawner.SpawnedObstacleCount == map.Layout.Props.Count && spawner.SpawnedObstacleCount > 0,
             "Dedicated obstacle spawner survives Play Mode reload and creates every planned prop");
-        Require(new SerializedObject(spawner).FindProperty("obstaclePrefabs").arraySize == Enum.GetValues(typeof(OutdoorPropKind)).Length,
+        Require(new List<SurvivalPropVisual>(spawner.GetAllPrefabs()).Count == Enum.GetValues(typeof(OutdoorPropKind)).Length,
             "Play Mode reload preserves every outdoor prefab assignment");
         var cells = new HashSet<Vector2Int>();
         foreach (PlayerCharacter player in session.Participants)
@@ -167,6 +168,8 @@ public static class SurvivalGameplayChecks
         var item = itemObject.AddComponent<DoubleDiceItem>();
         Require(participants[0].Inventory.AddItem(item) && participants[0].Inventory.IsFull,
             "Existing inventory accepts an item and enforces capacity");
+        yield return null; yield return null;
+        NativeUiChecks.CheckInventoryLayout(UnityEngine.Object.FindFirstObjectByType<MatchUIContext>());
         Require(!participants[1].Inventory.HasItem(item), "Items stay with their owning player");
         Require(participants[0].Inventory.RemoveItem(item) && !participants[0].Inventory.IsFull, "Existing inventory removes items");
         UnityEngine.Object.Destroy(itemObject);
@@ -203,6 +206,7 @@ public static class SurvivalGameplayChecks
         yield return new WaitForSecondsRealtime(1.1f);
         turns.AdvanceTurn();
         yield return null; yield return null;
+        NativeUiChecks.CheckPlayerBodies(session);
         turns.RestartTurnCycle();
         yield return null; yield return null;
         for (int turn = 0; turn < count * 2; turn++)

@@ -10,7 +10,7 @@ namespace Escape4Now.TurnSystem
         Enemy
     }
 
-    //Tracks whose turn it is and shows the turn controls.
+    //Tracks identity slots, the match's fixed turn sequence, and round transitions.
     public sealed class TurnSystemController : MonoBehaviour
     {
         //Player order, optional enemy turn, and current turn details.
@@ -20,22 +20,11 @@ namespace Escape4Now.TurnSystem
         private bool randomizeStartingOrder = true;
         [SerializeField] private bool includeEnemyTurn = false;
         [SerializeField] private string enemyTurnName = "Enemy";
-        [SerializeField] private bool showTurnDisplay = true;
-        [SerializeField] private bool showEndTurnButton = false;
-        [Header("Turn Display")]
-        [SerializeField] private Vector2 turnDisplayPosition = new Vector2(16f, 16f);
-        [SerializeField, Min(120f)] private float turnDisplayWidth = 420f;
-        [SerializeField, Min(24f)] private float turnDisplayHeight = 40f;
-        [SerializeField, Range(10, 40)] private int turnDisplayFontSize = 24;
-        [SerializeField] private Color turnDisplayColor = Color.white;
-        [SerializeField] private Vector2 endTurnButtonOffset = new Vector2(0f, 42f);
-        [SerializeField] private Vector2 endTurnButtonSize = new Vector2(120f, 32f);
         [SerializeField] private TurnOwner currentTurnOwner = TurnOwner.Player;
         [SerializeField] private int currentPlayerIndex;
         [SerializeField] private int turnNumber = 1;
         [SerializeField] private string currentTurnName = "Player One";
        
-        private GUIStyle turnDisplayStyle;
         private int turnStartedFrame;
         private int[] turnOrder;
         private bool hasNetworkTurnOrder;
@@ -126,44 +115,7 @@ namespace Escape4Now.TurnSystem
         {
             currentPlayerIndex = Mathf.Clamp(currentPlayerIndex, 0, Mathf.Max(0, GetPlayerCount() - 1));
             turnNumber = Mathf.Max(1, turnNumber);
-            turnDisplayWidth = Mathf.Clamp(turnDisplayWidth, 120f, 1200f);
-            turnDisplayHeight = Mathf.Clamp(turnDisplayHeight, 24f, 160f);
-            endTurnButtonOffset = new Vector2(Mathf.Clamp(endTurnButtonOffset.x, -500f, 500f),
-                Mathf.Clamp(endTurnButtonOffset.y, -500f, 500f));
-            endTurnButtonSize = new Vector2(Mathf.Clamp(endTurnButtonSize.x, 60f, 500f),
-                Mathf.Clamp(endTurnButtonSize.y, 24f, 160f));
-            turnDisplayStyle = null;
             RefreshCurrentTurnName();
-        }
-
-        //Draws the current turn label and End Turn button.
-        private void OnGUI()
-        {
-            if (!showTurnDisplay || Escape4Now.Multiplayer.LocalMultiplayerSession.MatchIsRunning)
-            {
-                return;
-            }
-
-            if (turnDisplayStyle == null)
-            {
-                turnDisplayStyle = new GUIStyle(GUI.skin.label);
-                turnDisplayStyle.fontSize = turnDisplayFontSize;
-                turnDisplayStyle.fontStyle = FontStyle.Bold;
-                turnDisplayStyle.normal.textColor = turnDisplayColor;
-            }
-
-            GUI.Label(new Rect(turnDisplayPosition.x, turnDisplayPosition.y,
-                turnDisplayWidth, turnDisplayHeight), $"Turn {turnNumber}: {currentTurnName}", turnDisplayStyle);
-
-            if (showEndTurnButton && Escape4Now.Multiplayer.LocalMultiplayerSession.AllowTurnButtons
-                && GUI.Button(new Rect(turnDisplayPosition.x + endTurnButtonOffset.x,
-                    turnDisplayPosition.y + endTurnButtonOffset.y,
-                    endTurnButtonSize.x, endTurnButtonSize.y), "End Turn"))
-            {
-                if (Escape4Now.Multiplayer.LanMultiplayerSession.Active)
-                    Escape4Now.Multiplayer.LanMultiplayerSession.Instance.Submit("end");
-                else AdvanceTurn();
-            }
         }
 
         public void EndTurnAfterBattleLoss(PlayerCharacter player)
