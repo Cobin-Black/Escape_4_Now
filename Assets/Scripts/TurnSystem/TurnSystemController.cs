@@ -15,6 +15,7 @@ namespace Escape4Now.TurnSystem
     {
         //Player order, optional enemy turn, and current turn details.
         [SerializeField] private PlayerCharacter[] players = new PlayerCharacter[0];
+        [SerializeField] private Escape4Now.GameModes.GameModeController gameMode;
         [SerializeField, Tooltip("Shuffle once at match start using the map seed. The chosen order repeats for the entire match without changing player identities.")]
         private bool randomizeStartingOrder = true;
         [SerializeField] private bool includeEnemyTurn = false;
@@ -107,8 +108,11 @@ namespace Escape4Now.TurnSystem
 
         private int GetMatchSeed()
         {
+            if (gameMode != null && gameMode.GridMap != null) return gameMode.GridMap.LayoutSeed;
+            //Standalone tutorials predate match mode components.
             var map = FindFirstObjectByType<Escape4Now.Map.IsometricMapTemplate>();
-            return map != null ? map.LayoutSeed : System.Guid.NewGuid().GetHashCode();
+            if (map != null) return map.LayoutSeed;
+            return System.Guid.NewGuid().GetHashCode();
         }
 
         private void EnsureTurnOrder()

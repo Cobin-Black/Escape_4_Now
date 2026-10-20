@@ -337,7 +337,7 @@ namespace Escape4Now.Multiplayer
             PlayerCharacter player = local.Participants[slot];
             if (turns.CurrentPlayerIndex != slot || message.turn != slot || message.round != turns.TurnNumber
                 || player.HasReachedExit || player.IsMoving) return;
-            var battle = FindFirstObjectByType<Escape4Now.Battle.KeyStealBattleController>();
+            var battle = FindFirstObjectByType<Escape4Now.GameModes.Race_Gamemode>();
             if (message.action == "battleClose")
             {
                 battle?.FinishNetworkBattle(player);
@@ -383,7 +383,9 @@ namespace Escape4Now.Multiplayer
         private void ReadInput()
         {
             if (MatchPaused || Time.timeScale <= 0f || !IsMyTurn || latest.players[localPlayer].moving) return;
-            bool confirm = Keyboard.current != null && Keyboard.current.enterKey.wasPressedThisFrame;
+            var bindings = LocalMultiplayerSession.InputBindings;
+            if (bindings == null) return;
+            bool confirm = bindings.KeyBattle?.WasPressedThisFrame() == true;
             if (!string.IsNullOrEmpty(latest.battleMessage))
             {
                 if (confirm) Submit("battleClose");
@@ -400,12 +402,10 @@ namespace Escape4Now.Multiplayer
                     { Submit("battle", value: i); return; }
                 }
             }
-            InputActionAsset actions = InputSystem.actions;
-            if (actions == null) return;
-            if (Pressed(actions, "Player/Roll Dice")) Submit("roll");
-            if (Pressed(actions, "Player/Use Item")) UseItem();
-            if (Pressed(actions, "Player/Interact")) TakeNearbyItem();
-            InputAction move = actions.FindAction("Player/Move");
+            if (bindings.RollDice?.WasPressedThisFrame() == true) Submit("roll");
+            if (bindings.UseItem?.WasPressedThisFrame() == true) UseItem();
+            if (bindings.Interact?.WasPressedThisFrame() == true) TakeNearbyItem();
+            InputAction move = bindings.Move;
             if (!choosingNumber && move != null && move.WasPressedThisFrame())
             {
                 Vector2 input = move.ReadValue<Vector2>();
@@ -414,8 +414,8 @@ namespace Escape4Now.Multiplayer
                 LanPlayerState player = latest.players[localPlayer];
                 Submit("move", player.x + direction.x, player.y + direction.y);
             }
-            if (Mouse.current == null || !Mouse.current.leftButton.wasPressedThisFrame || Camera.main == null) return;
-            Vector2 position = Mouse.current.position.ReadValue();
+            if (bindings.Click?.WasPressedThisFrame() != true || bindings.Point == null || Camera.main == null) return;
+            Vector2 position = bindings.Point.ReadValue<Vector2>();
             float top = Screen.height - position.y;
             if ((position.x < 440 && top < 330) || position.y < 190 || top < 65 || choosingNumber) return;
             IsometricMapTemplate map = FindFirstObjectByType<IsometricMapTemplate>();
@@ -426,8 +426,6 @@ namespace Escape4Now.Multiplayer
                 Submit("move", cell.x, cell.y);
             }
         }
-
-        private static bool Pressed(InputActionAsset actions, string name) => actions.FindAction(name)?.WasPressedThisFrame() == true;
 
         //Custom Dice keeps the player's choice, while the host checks its valid range.
         private void UseItem()
@@ -518,7 +516,7 @@ namespace Escape4Now.Multiplayer
             GUI.enabled = true;
         }
 
-        private static void Send(LanConnection wire, LanMessage message) => wire.Send(JsonUtility.ToJson(message));
+        private static void Send(LanConnection wire, LanMessage message) => wire.Send(LanMessageCodec.Serialize(message));
 
         //Keeps all controls stopped after a disconnect until the player leaves the match.
         private void Fail(string message)

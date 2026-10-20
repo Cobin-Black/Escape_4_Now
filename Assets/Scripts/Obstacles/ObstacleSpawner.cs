@@ -13,24 +13,36 @@ namespace Escape4Now.Obstacles
     {
         [Header("Map")]
         [SerializeField] private IsometricMapTemplate map;
-        [Header("Obstacle Placement")]
-        [SerializeField, Tooltip("All school and hallway obstacle prefabs. Assign SchoolFurniture or ObstacleGridControl components. School layouts require one furniture prefab for each kind.")]
-        private Component[] obstaclePrefabs;
+        [Header("Room Obstacle Prefabs")]
+        [SerializeField, Tooltip("Obstacles that only spawn in the Computer Lab. Add more SchoolFurniture prefabs here to give the room variety.")]
+        private Component[] computerLabPrefabs;
+        [SerializeField, Tooltip("Obstacles that only spawn in the Classroom.")]
+        private Component[] classroomPrefabs;
+        [SerializeField, Tooltip("Obstacles that only spawn in hallways, including the searchable hallway locker (ObstacleGridControl). Special rooms off the hallway check this list first.")]
+        private Component[] hallwayPrefabs;
+        [SerializeField, Tooltip("Obstacles that only spawn in the Library.")]
+        private Component[] libraryPrefabs;
+        [SerializeField, Tooltip("Obstacles that only spawn in the Science Lab.")]
+        private Component[] scienceLabPrefabs;
+        //Older scenes kept every obstacle in one list. They are sorted into rooms once.
+        [SerializeField, HideInInspector] private Component[] obstaclePrefabs;
         [SerializeField, HideInInspector, FormerlySerializedAs("schoolObstaclePrefabs")]
         private SchoolFurniture[] previousSchoolPrefabs;
         [SerializeField, HideInInspector] private bool obstacleCatalogInitialized;
+        [SerializeField, HideInInspector] private bool roomSectionsInitialized;
         [Header("Additional Hallway Obstacles")]
         [SerializeField, Range(0, 10), InspectorName("Minimum Hallway Obstacles")] private int minimumObstacleCount = 2;
         [SerializeField, Range(0, 10), InspectorName("Maximum Hallway Obstacles")] private int maximumObstacleCount = 3;
         [Header("Stored Items")]
-        [SerializeField, Range(0f, 1f)] private float interactableChance = 0.5f;
-        [SerializeField] private Item[] possibleItems;
+        [SerializeField, Range(0f, 1f), Tooltip("Chance that each obstacle holds an item. Which item is set per gamemode on the Item Spawner.")]
+        private float interactableChance = 0.5f;
         [Header("Spawner References")]
         [SerializeField] private MapEventController mapEvents;
         [SerializeField] private ItemSpawner itemSpawner;
         private int? forcedObstacleCount;
         private float? forcedInteractableChance;
         private Vector2Int? forcedObstacleCell;
+        private SchoolFurnitureSettings placementSettings;
         //Item placement waits until all searchable obstacles have been created.
         public bool HasSpawnedObstacles { get; private set; }
 
@@ -42,8 +54,7 @@ namespace Escape4Now.Obstacles
         {
             if (map == null) map = FindFirstObjectByType<IsometricMapTemplate>();
             InitializeObstacleCatalog();
-            if (map != null && map.GetComponent<ObstacleSpawner>() != this)
-                map.SetFurniturePrefabOverrides(new List<SchoolFurniture>(GetSchoolPrefabs()).ToArray());
+            if (map != null && map.GetComponent<ObstacleSpawner>() != this) map.SetObstacleSpawner(this);
         }
 
         private void OnValidate()
@@ -52,7 +63,7 @@ namespace Escape4Now.Obstacles
             maximumObstacleCount = Mathf.Clamp(maximumObstacleCount, minimumObstacleCount, 10);
             interactableChance = float.IsNaN(interactableChance) ? 0.5f : Mathf.Clamp01(interactableChance);
 #if UNITY_EDITOR
-            if (!obstacleCatalogInitialized && !catalogInitializationQueued)
+            if (!roomSectionsInitialized && !catalogInitializationQueued)
             {
                 catalogInitializationQueued = true;
                 UnityEditor.EditorApplication.delayCall += InitializeCatalogInEditor;
@@ -63,7 +74,7 @@ namespace Escape4Now.Obstacles
         //Migrate existing scenes once, then preserve the team's Inspector edits.
         private void InitializeObstacleCatalog()
         {
-            if (obstacleCatalogInitialized) return;
+            if (roomSectionsInitialized) return;
             var catalog = new List<Component>();
             var furnitureKinds = new HashSet<SchoolFurnitureKind>();
             void Add(Component prefab)
@@ -75,19 +86,87 @@ namespace Escape4Now.Obstacles
             }
             foreach (Component prefab in obstaclePrefabs ?? System.Array.Empty<Component>()) Add(prefab);
             foreach (SchoolFurniture prefab in previousSchoolPrefabs ?? System.Array.Empty<SchoolFurniture>()) Add(prefab);
-            foreach (SchoolFurniture prefab in Resources.LoadAll<SchoolFurniture>("SchoolObstacles"))
-                if (prefab != null && !furnitureKinds.Contains(prefab.Kind)) Add(prefab);
-            obstaclePrefabs = catalog.ToArray();
+            if (!obstacleCatalogInitialized)
+                foreach (SchoolFurniture prefab in Resources.LoadAll<SchoolFurniture>("SchoolObstacles"))
+                    if (prefab != null && !furnitureKinds.Contains(prefab.Kind)) Add(prefab);
+            foreach (Component prefab in catalog) AddToDefaultSections(prefab);
+            obstaclePrefabs = null;
             previousSchoolPrefabs = null;
             obstacleCatalogInitialized = true;
+            roomSectionsInitialized = true;
         }
 
-        public IEnumerable<SchoolFurniture> GetSchoolPrefabs() => GetObstaclePrefabs<SchoolFurniture>();
+        //A furniture kind goes in every room whose layout uses it. Anything else belongs to the hallway.
+        private void AddToDefaultSections(Component prefab)
+        {
+            SchoolFurniture furniture = prefab.GetComponent<SchoolFurniture>();
+            bool added = false;
+            if (furniture != null)
+                foreach (SchoolRoomType room in RoomSections)
+                    if (room != SchoolRoomType.None && System.Array.IndexOf(SchoolFurniturePlan.Pool(room), furniture.Kind) >= 0)
+                    {
+                        AddToSection(room, prefab);
+                        added = true;
+                    }
+            if (!added) AddToSection(SchoolRoomType.None, prefab);
+        }
 
-        private IEnumerable<T> GetObstaclePrefabs<T>() where T : Component
+        private void AddToSection(SchoolRoomType room, Component prefab)
+        {
+            Component[] section = GetSection(room) ?? System.Array.Empty<Component>();
+            foreach (Component entry in section)
+                if (entry != null && entry.gameObject == prefab.gameObject) return;
+            var list = new List<Component>(section) { prefab };
+            SetSection(room, list.ToArray());
+        }
+
+        private static readonly SchoolRoomType[] RoomSections =
+        {
+            SchoolRoomType.ComputerLab, SchoolRoomType.Classroom, SchoolRoomType.None,
+            SchoolRoomType.Library, SchoolRoomType.ScienceLab
+        };
+
+        //SchoolRoomType.None is the hallway section.
+        private Component[] GetSection(SchoolRoomType room)
+        {
+            switch (room)
+            {
+                case SchoolRoomType.ComputerLab: return computerLabPrefabs;
+                case SchoolRoomType.Classroom: return classroomPrefabs;
+                case SchoolRoomType.Library: return libraryPrefabs;
+                case SchoolRoomType.ScienceLab: return scienceLabPrefabs;
+                default: return hallwayPrefabs;
+            }
+        }
+
+        private void SetSection(SchoolRoomType room, Component[] prefabs)
+        {
+            switch (room)
+            {
+                case SchoolRoomType.ComputerLab: computerLabPrefabs = prefabs; break;
+                case SchoolRoomType.Classroom: classroomPrefabs = prefabs; break;
+                case SchoolRoomType.Library: libraryPrefabs = prefabs; break;
+                case SchoolRoomType.ScienceLab: scienceLabPrefabs = prefabs; break;
+                default: hallwayPrefabs = prefabs; break;
+            }
+        }
+
+        //Every furniture prefab from all five sections.
+        public IEnumerable<SchoolFurniture> GetSchoolPrefabs()
+        {
+            var seen = new HashSet<SchoolFurniture>();
+            foreach (SchoolRoomType room in RoomSections)
+                foreach (SchoolFurniture prefab in GetRoomPrefabs(room))
+                    if (seen.Add(prefab)) yield return prefab;
+        }
+
+        //Furniture prefabs that may only spawn in one room. SchoolRoomType.None is the hallway.
+        public IEnumerable<SchoolFurniture> GetRoomPrefabs(SchoolRoomType room) => GetObstaclePrefabs<SchoolFurniture>(room);
+
+        private IEnumerable<T> GetObstaclePrefabs<T>(SchoolRoomType room) where T : Component
         {
             InitializeObstacleCatalog();
-            foreach (Component entry in obstaclePrefabs ?? System.Array.Empty<Component>())
+            foreach (Component entry in GetSection(room) ?? System.Array.Empty<Component>())
             {
                 if (entry == null) continue;
                 T prefab = entry.GetComponent<T>();
@@ -101,7 +180,7 @@ namespace Escape4Now.Obstacles
         private void InitializeCatalogInEditor()
         {
             catalogInitializationQueued = false;
-            if (this == null || obstacleCatalogInitialized) return;
+            if (this == null || roomSectionsInitialized) return;
             bool persistChanges = !Application.IsPlaying(gameObject);
             if (persistChanges) UnityEditor.Undo.RecordObject(this, "Initialize obstacle prefabs");
             InitializeObstacleCatalog();
@@ -116,6 +195,7 @@ namespace Escape4Now.Obstacles
         {
             UnityEditor.Undo.RecordObject(this, "Populate obstacle prefabs");
             obstacleCatalogInitialized = false;
+            roomSectionsInitialized = false;
             InitializeCatalogInEditor();
         }
 #endif
@@ -128,7 +208,7 @@ namespace Escape4Now.Obstacles
         //The current scene uses one obstacle template on every computer.
         public ObstacleGridControl GetNetworkPrefab()
         {
-            foreach (ObstacleGridControl prefab in GetObstaclePrefabs<ObstacleGridControl>()) return prefab;
+            foreach (ObstacleGridControl prefab in GetObstaclePrefabs<ObstacleGridControl>(SchoolRoomType.None)) return prefab;
             return null;
         }
 
@@ -147,6 +227,7 @@ namespace Escape4Now.Obstacles
 
             if (mapEvents == null) mapEvents = map.GetComponent<MapEventController>();
             if (itemSpawner == null) itemSpawner = map.GetComponent<ItemSpawner>();
+            placementSettings = map.FurnitureSettings;
 
             //Wait until events and special-room item spots are ready before placing obstacles.
             yield return new WaitUntil(() =>
@@ -192,7 +273,7 @@ namespace Escape4Now.Obstacles
                 emptyTiles.RemoveAt(index);
 
                 //Leave at least two tile steps between hallway objects to avoid clusters.
-                if (decorations.Exists(other => Mathf.Abs(other.x - cell.x) + Mathf.Abs(other.y - cell.y) <= 2)) continue;
+                if (decorations.Exists(other => Mathf.Abs(other.x - cell.x) + Mathf.Abs(other.y - cell.y) <= placementSettings.HallwaySpacing)) continue;
                 if (KeepsMapConnected(cell) && SpawnObstacle(cell))
                 {
                     placed++;
@@ -204,28 +285,22 @@ namespace Escape4Now.Obstacles
 
         private bool IsNearDoorway(Vector2Int cell)
         {
-            Vector2Int[] directions =
-            {
-        Vector2Int.right,
-        Vector2Int.up,
-        Vector2Int.left,
-        Vector2Int.down
-    };
-
-            foreach (Vector2Int direction in directions)
-            {
-                if (map.IsDoorway(cell + direction))
-                {
-                    return true;
-                }
-            }
-
+            placementSettings ??= map.FurnitureSettings;
+            int clearance = placementSettings.DoorClearance;
+            for (int y = cell.y - clearance; y <= cell.y + clearance; y++)
+                for (int x = cell.x - clearance; x <= cell.x + clearance; x++)
+                    if (Mathf.Abs(x - cell.x) + Mathf.Abs(y - cell.y) <= clearance && map.IsDoorway(new Vector2Int(x, y))) return true;
             return false;
         }
 
         //Keeps obstacles on open floor and off players, the exit, events, and items.
         private bool IsValidObstacleTile(Vector2Int cell)
         {
+            placementSettings ??= map.FurnitureSettings;
+            for (int y = cell.y - placementSettings.SpawnClearance; y <= cell.y + placementSettings.SpawnClearance; y++)
+                for (int x = cell.x - placementSettings.SpawnClearance; x <= cell.x + placementSettings.SpawnClearance; x++)
+                    if (Mathf.Abs(x - cell.x) + Mathf.Abs(y - cell.y) <= placementSettings.SpawnClearance
+                        && map.IsOccupied(new Vector2Int(x, y))) return false;
             return map.IsInteriorFloor(cell)
                 && map.IsLockerPosition(cell)
                 && map.IsWalkable(cell)
@@ -259,62 +334,42 @@ namespace Escape4Now.Obstacles
             }
 
             bool connected = AllWalkableTilesReachable();
+            if (connected && placementSettings != null && placementSettings.PreventNewDeadEnds)
+            {
+                Vector2Int[] steps = { Vector2Int.right, Vector2Int.up, Vector2Int.left, Vector2Int.down };
+                foreach (Vector2Int step in steps)
+                {
+                    Vector2Int neighbour = cell + step;
+                    if (!map.IsWalkable(neighbour) || map.GetSpaceType(neighbour) != SchoolSpaceType.None) continue;
+                    int exits = 0;
+                    foreach (Vector2Int direction in steps) if (map.IsWalkable(neighbour + direction)) exits++;
+                    if (exits == 1) { connected = false; break; }
+                }
+            }
+            if (connected)
+                foreach (ObstacleStorage storage in map.GetComponentsInChildren<ObstacleStorage>())
+                {
+                    bool accessible = false;
+                    foreach (Vector2Int step in new[] { Vector2Int.right, Vector2Int.up, Vector2Int.left, Vector2Int.down })
+                        accessible |= map.IsWalkable(storage.GridPosition + step);
+                    if (!accessible) { connected = false; break; }
+                }
             map.UnregisterBlockedPosition(cell);
             return connected;
         }
 
-        //Floods out from a player's tile, or any open tile, and compares the count against all open tiles.
+        //Every open tile, including the exit approach and every room, must be reachable without crossing an event that moves the player.
         private bool AllWalkableTilesReachable()
         {
-            int walkableCount = 0;
-            Vector2Int? start = null;
-            for (int y = 0; y < map.Height; y++)
-            {
-                for (int x = 0; x < map.Width; x++)
-                {
-                    Vector2Int cell = new Vector2Int(x, y);
-                    if (!map.IsWalkable(cell)) continue;
-                    walkableCount++;
-                    start ??= cell;
-                }
-            }
-
             PlayerCharacter player = FindFirstObjectByType<PlayerCharacter>();
-            if (player != null && map.IsWalkable(player.GridPosition))
-            {
-                start = player.GridPosition;
-            }
-
-            if (start == null)
-            {
-                return false;
-            }
-
-            HashSet<Vector2Int> reached = new HashSet<Vector2Int> { start.Value };
-            Queue<Vector2Int> pending = new Queue<Vector2Int>();
-            pending.Enqueue(start.Value);
-            Vector2Int[] steps = { Vector2Int.right, Vector2Int.up, Vector2Int.left, Vector2Int.down };
-
-            while (pending.Count > 0)
-            {
-                Vector2Int cell = pending.Dequeue();
-                foreach (Vector2Int step in steps)
-                {
-                    Vector2Int next = cell + step;
-                    if (map.IsWalkable(next) && reached.Add(next))
-                    {
-                        pending.Enqueue(next);
-                    }
-                }
-            }
-
-            return reached.Count == walkableCount;
+            return map.AllWalkableTilesConnected(cell => mapEvents != null && mapEvents.ProtectsPaths && mapEvents.HasMovingEvent(cell),
+                player != null ? player.GridPosition : (Vector2Int?)null);
         }
 
         //Creates an empty obstacle. The shared item pool fills containers afterward.
         private bool SpawnObstacle(Vector2Int cell)
         {
-            ObstacleGridControl prefab = PickRandom(new List<ObstacleGridControl>(GetObstaclePrefabs<ObstacleGridControl>()).ToArray());
+            ObstacleGridControl prefab = PickRandom(new List<ObstacleGridControl>(GetObstaclePrefabs<ObstacleGridControl>(SchoolRoomType.None)).ToArray());
             if (prefab == null)
             {
                 return false;
@@ -338,14 +393,14 @@ namespace Escape4Now.Obstacles
             return true;
         }
 
-        //Use the shared item pool in regular rooms and hallways.
+        //Rolls for an item from the current gamemode's list in regular rooms and hallways.
         public void FillStorage(ObstacleStorage storage)
         {
             if (map == null || storage == null || storage.HasItem || !storage.CanInteract
                 || !storage.transform.IsChildOf(map.transform)) return;
             if (itemSpawner == null) itemSpawner = map.GetComponent<ItemSpawner>();
             if (itemSpawner != null && Random.value < (forcedInteractableChance ?? interactableChance)
-                && itemSpawner.TryTakeStorageItem(possibleItems, out Item item)) storage.TryStoreItem(item);
+                && itemSpawner.TryTakeStorageItem(out Item item)) storage.TryStoreItem(item);
         }
 
         //Picks one entry from a list, skipping empty slots.

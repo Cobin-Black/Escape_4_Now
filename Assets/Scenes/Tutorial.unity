@@ -322,19 +322,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Obstacles.ObstacleSpawner
   map: {fileID: 69550738}
-  obstacleCatalogInitialized: 1
-  obstaclePrefabs:
-  - {fileID: 11400000, guid: e7c06474f71b480a9437000000000001, type: 3}
-  - {fileID: 11400000, guid: e7c06474f71b480a9437000000000002, type: 3}
-  - {fileID: 11400000, guid: e7c06474f71b480a9437000000000003, type: 3}
+  computerLabPrefabs:
   - {fileID: 11400000, guid: e7c06474f71b480a9437000000000004, type: 3}
   - {fileID: 11400000, guid: e7c06474f71b480a9437000000000005, type: 3}
+  classroomPrefabs:
   - {fileID: 11400000, guid: e7c06474f71b480a9437000000000006, type: 3}
   - {fileID: 11400000, guid: e7c06474f71b480a9437000000000007, type: 3}
   - {fileID: 11400000, guid: e7c06474f71b480a9437000000000008, type: 3}
-  - {fileID: 11400000, guid: e7c06474f71b480a9437000000000009, type: 3}
-  - {fileID: 11400000, guid: e7c06474f71b480a943700000000000a, type: 3}
-  - {fileID: 11400000, guid: e7c06474f71b480a943700000000000b, type: 3}
+  hallwayPrefabs:
   - {fileID: 11400000, guid: e7c06474f71b480a943700000000000c, type: 3}
   - {fileID: 11400000, guid: e7c06474f71b480a943700000000000d, type: 3}
   - {fileID: 11400000, guid: e7c06474f71b480a943700000000000e, type: 3}
@@ -347,12 +342,20 @@ MonoBehaviour:
   - {fileID: 11400000, guid: c67f9649028393368ce03f5a8bd65b32, type: 3}
   - {fileID: 11400000, guid: 6370f1c58a4ae5ffcda3f9796ea34f40, type: 3}
   - {fileID: 8008263496219192108, guid: d0329ec4a35ffd94f8f7d200ad63eb7c, type: 3}
+  libraryPrefabs:
+  - {fileID: 11400000, guid: e7c06474f71b480a9437000000000001, type: 3}
+  - {fileID: 11400000, guid: e7c06474f71b480a9437000000000002, type: 3}
+  - {fileID: 11400000, guid: e7c06474f71b480a9437000000000003, type: 3}
+  scienceLabPrefabs:
+  - {fileID: 11400000, guid: e7c06474f71b480a9437000000000009, type: 3}
+  - {fileID: 11400000, guid: e7c06474f71b480a943700000000000a, type: 3}
+  - {fileID: 11400000, guid: e7c06474f71b480a943700000000000b, type: 3}
+  obstaclePrefabs: []
+  obstacleCatalogInitialized: 1
+  roomSectionsInitialized: 1
   minimumObstacleCount: 2
   maximumObstacleCount: 3
   interactableChance: 0.5
-  possibleItems:
-  - {fileID: 1119616090794593453, guid: 798c830d404504ec993fb50111c722ba, type: 3}
-  - {fileID: 3571401913704896188, guid: 84be71822083a4daa93b2bdda4645980, type: 3}
   mapEvents: {fileID: 69550737}
   itemSpawner: {fileID: 69550736}
 --- !u!114 &69550736
@@ -368,8 +371,29 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Items.ItemSpawner
   map: {fileID: 69550738}
-  doubleDicePrefab: {fileID: 1119616090794593453, guid: 798c830d404504ec993fb50111c722ba, type: 3}
-  customDicePrefab: {fileID: 3571401913704896188, guid: 84be71822083a4daa93b2bdda4645980, type: 3}
+  raceItems:
+  - prefab: {fileID: 1119616090794593453, guid: 798c830d404504ec993fb50111c722ba, type: 3}
+    spawnChance: 50
+  - prefab: {fileID: 3571401913704896188, guid: 84be71822083a4daa93b2bdda4645980, type: 3}
+    spawnChance: 50
+  - prefab: {fileID: 2278332013471557169, guid: 5150566b7f0b6474e97489b4b70ea5a9, type: 3}
+    spawnChance: 50
+  monsterItems:
+  - prefab: {fileID: 1119616090794593453, guid: 798c830d404504ec993fb50111c722ba, type: 3}
+    spawnChance: 50
+  - prefab: {fileID: 3571401913704896188, guid: 84be71822083a4daa93b2bdda4645980, type: 3}
+    spawnChance: 50
+  freeForAllItems:
+  - prefab: {fileID: 1119616090794593453, guid: 798c830d404504ec993fb50111c722ba, type: 3}
+    spawnChance: 50
+  - prefab: {fileID: 3571401913704896188, guid: 84be71822083a4daa93b2bdda4645980, type: 3}
+    spawnChance: 50
+  untitledItems:
+  - prefab: {fileID: 1119616090794593453, guid: 798c830d404504ec993fb50111c722ba, type: 3}
+    spawnChance: 50
+  - prefab: {fileID: 3571401913704896188, guid: 84be71822083a4daa93b2bdda4645980, type: 3}
+    spawnChance: 50
+  gameModeWithoutScript: 0
 --- !u!114 &69550737
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -701,7 +725,7 @@ MonoBehaviour:
   exitPosition: {x: 6, y: 0}
   exitOnlyInFinalSection: 1
   disableFloorItems: 1
-  sceneAfterTutorial: SampleScene
+  sceneAfterTutorial: Race_Gamemode
 --- !u!1 &1700000020
 GameObject:
   m_ObjectHideFlags: 0

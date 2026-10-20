@@ -8,7 +8,7 @@ public static class LanBuildChecks
     {
         BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
         {
-            scenes = new[] { "Assets/Scenes/SampleScene.unity" },
+            scenes = new[] { "Assets/Scenes/Race_Gamemode.unity" },
             locationPathName = "Logs/LanPlayer/Escape4Now.exe",
             target = BuildTarget.StandaloneWindows64,
             options = BuildOptions.Development

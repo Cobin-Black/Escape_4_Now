@@ -89,7 +89,9 @@ namespace Escape4Now.UI
             {
                 lastItems[player] = new List<Item>();
             }
-            useItemAction = InputSystem.actions != null ? InputSystem.actions.FindAction("Player/Use Item") : null;
+            var bindings = Escape4Now.Multiplayer.LocalMultiplayerSession.InputBindings;
+            useItemAction = bindings != null ? bindings.UseItem
+                : InputSystem.actions != null ? InputSystem.actions.FindAction("Player/Use Item") : null;
         }
 
         //Compares each inventory with the last frame to announce new and used items.

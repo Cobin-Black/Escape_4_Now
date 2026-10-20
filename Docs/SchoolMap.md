@@ -11,7 +11,7 @@ Open doors mark room entrances. They are only visual and do not block movement o
 One green EXIT door appears on an outside wall beside clear floor, away from corners.
 The door replaces that wall block and sits at floor level.
 Reaching the EXIT door uses the existing win code. The match pauses and shows which player escaped.
-No keys are needed yet. The doors between rooms are still only visual.
+The current scene requires the key to use the exit. The doors between rooms are still only visual.
 
 ## How It Works
 
@@ -30,19 +30,19 @@ A map may have no secondary space, or one small 2 by 3, 3 by 2, or 3 by 3 space.
 It can be a bathroom, storage room, janitor closet, study area, office, or locker area.
 These spaces open onto hallways. The four main room types stay unchanged.
 Every small room gets one or two matching obstacles, with entrances and walking paths kept clear.
-Every generated small room also gets exactly one random floor item, including offices, bathrooms, study areas, locker areas, storage rooms, and janitor closets.
-The item uses a reserved, reachable tile. Events cannot use that tile.
+Every generated small room gets exactly one random item stored inside one of its obstacles, including offices, bathrooms, study areas, locker areas, storage rooms, and janitor closets.
+A reachable floor tile is also reserved by the furniture plan; events cannot use that tile.
 Storage uses shelves, boxes, cabinets, carts, or crates. Janitor Closets include cleaning equipment.
 Bathrooms start with a sink, study areas with a reading table, offices with a desk, and locker areas with lockers.
 An optional second object comes from that room's pool. These reuse the existing obstacle prefabs and item storage.
 No room has a large floor label.
 Positions and types come from the map seed, so all computers draw the same environment.
 
-Each item type appears only once per match, counting floor pickups and items inside obstacles together.
-Small-room rewards are chosen first. Remaining types can go into random containers or onto clear floor elsewhere.
-Small-room containers start empty so the room does not get a second item. They still use the same search system.
-The usable items are Double Dice, Custom Dice, and Key Stealer. One separate key starts in a locker.
-Taking or using an item does not create another copy. A new match starts a fresh item pool.
+The Item Spawner has separate weighted prefab lists for Race, Monster, Free-for-All, and Untitled modes.
+Small-room rewards are chosen first, then ordinary main-room/hallway containers use the obstacle's item chance and the current mode's item weights.
+Ordinary item types may repeat. Each small room still gets exactly one filled container, using the same search system.
+Race's default usable items are Double Dice, Custom Dice, and Key Stealer. Its one separate key is assigned on Race_Gamemode and placed in a searchable main-room or hallway container.
+Taking or using an item does not refill the container. A new match creates fresh contents.
 
 `GetHallwayDecorationWalls()` returns blocked wall tiles beside hallways,
 away from doorways. Future decorations must fit within those tiles and must not cover walking paths.
@@ -50,17 +50,40 @@ away from doorways. Future decorations must fit within those tiles and must not 
 ## Obstacles and Player Starts
 
 The reusable room-object prefabs are in `Assets/Prefabs/Obstacles/Resources/SchoolObstacles`.
+The Obstacle Spawner exposes separate Computer Lab, Classroom, Hallway, Library, and Science Lab prefab sections. Edit each section in Unity to control which prefabs a room can use.
 Furniture counts as an obstacle. Each piece blocks its tile and uses the same one-item storage as lockers.
 Their small colored parts are simple placeholders drawn in the same style as the map.
 Each prefab fits inside one tile. Its `Parts` fields control its shape and colors.
 
 Each main room has required furniture, then a few optional pieces:
 
-- Library: 2-3 bookshelves, 0-2 reading tables, and 0-1 book cart.
-- Computer Lab: 2-4 computer desks and 0-1 printer.
-- Classroom: 3-5 student desks, one whiteboard, and 0-1 teacher desk.
-- Science Lab: 2-4 lab tables, 0-1 cabinet, and 0-1 sink station.
+- Library: 2-5 bookshelves, 0-3 reading tables, and 0-1 book cart.
+- Computer Lab: 2-7 computer desks and 0-1 printer.
+- Classroom: 3-10 student desks, one whiteboard, and 0-1 teacher desk.
+- Science Lab: 2-6 lab tables, 0-1 cabinet, and 0-1 sink station.
 - Hallways: up to two wall-side decorations and up to three separate lockers, spaced apart.
+
+These are the saved Indoor scene ranges. Counts scale with the actual room floor area, including L-shaped cutouts, and seeded variation. A room does not have to reach its maximum. Optional pieces are skipped when they cannot fit safely; required pieces trigger another arrangement attempt rather than accepting an incomplete room.
+
+## Procedural Furniture Patterns
+
+The existing furniture planner now selects a weighted Rows, Perimeter, Groups, or Center Aisle arrangement for each room. Each room has its own weights; the Classroom disables Perimeter by default. Orientation and row phase also vary with the map seed. Incompatible patterns are excluded before selection. Disabling all compatible patterns produces a clear error, not a random-scatter fallback.
+
+Whiteboards and teacher desks prefer the selected front wall. Printers, cabinets, and sinks prefer room edges. Library perimeter layouts favor wall shelves, while reading tables prefer open central floor and book carts stay near shelves. Workstation and lab-table layouts use aligned rows, small groups, or flanking blocks around an aisle, clipped to the real room shape.
+
+Door-to-center walking routes are reserved before any furniture is placed. Center Aisle patterns additionally reserve the configured aisle stripe. Placement preserves these routes, doorway clearance, a safe player start, a reachable same-area approach to every container, and connectivity of all remaining floor. With **Prevent New Dead Ends** enabled, main-room and hallway furniture cannot create a new one-tile leaf. Small optional rooms retain their compact one- or two-object layout.
+
+On **Blank Isometric Map Template > Furniture Settings**, edit:
+
+- Per-room minimum/maximum counts and classroom whiteboard count.
+- **Room Layout Patterns:** weights, row spacing, aisle width, group spacing, wall preference, randomized orientation, or a fixed front wall.
+- **Spacing and Safe Access:** doorway, furniture, hallway, spawn, and center clearances, plus dead-end prevention.
+- **Room Size and Density:** sparse/full room area thresholds, count variation, and optional furniture chance.
+- **Placement Limits:** arrangement retries and candidate checks per object.
+
+Hallway widening, enclosed wall-island cleanup, second-entrance chance, and route length/bend weights are under **School Layout Rules**. Cleanup only removes tiny isolated wall components surrounded by hallways; room walls, doors, and the outer boundary are protected. Existing floor-coverage validation still applies afterward.
+
+**Wall Geometry**, **Door Appearance**, and **Rendering and Camera** expose wall heights/thickness, door colors, the shared material, checker contrast, camera reference/offset, and framing padding. The scene reuses the existing material and room color themes. No new obstacle types, controls, or pause actions were introduced.
 
 After furniture positions are final, the map shuffles the four rooms and picks a clear start in each.
 Two or three players use the first two or three rooms in that shuffled order.
@@ -118,7 +141,7 @@ Other scripts can use these methods on `IsometricMapTemplate`:
 Keep chosen tiles in a shared `reserved` set so other objects do not use the same spot.
 Check that any new obstacles do not block a hallway.
 
-The existing item, event, and obstacle spawners are active in `SampleScene`.
+The existing item, event, and obstacle spawners are active in `Race_Gamemode`.
 Blue lockers are placed along hallway walls, away from doors. Unsafe placements are skipped.
 Rooms have more themed furniture instead of large name labels. Every furniture object
 can hold one item, using the existing storage system. Some start empty.
@@ -133,10 +156,12 @@ The turquoise tile is labeled Switch. All 13 events have separate prefabs in
 `Assets/Prefabs/Event Tiles/Resources/EventTiles`.
 Event rules are listed in `Docs/Events.md`.
 
-The layout test checks 10,002 seeds. Run it from the project folder with the .NET 10 SDK:
+The layout test checks 10,002 seeds, 1,000 default furniture plans, and 256 denser scene-style plans. It independently checks protected aisles, wall-mounted whiteboards, newly created dead ends, accessible fronts, pattern variety/weights, density scaling, optional room themes, and repeatability. Run it from the project folder with the .NET 10 SDK:
 
 ```powershell
 dotnet run --project Tests/SchoolMapChecks/SchoolMapChecks.proj
 ```
 
 Also check the map in Unity. Start a new match to get a new layout.
+
+For isolated Unity validation, `LocalMultiplayerChecks.Run` accepts `-schoolPlayers 2`, `3`, or `4`, and `-schoolSeed 42` for a repeatable match. Add `-schoolRenderOnly` to validate the scene and save wide, standard, detail, and portrait map renders without running the later battle/input fixtures. PNGs go to `Logs/school-map-seed-<seed>-<size>.png`. These test overrides do not save changes to the real scene. Use a separate project copy when the main editor is open.

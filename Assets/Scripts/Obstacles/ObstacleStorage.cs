@@ -49,6 +49,12 @@ namespace Escape4Now.Obstacles
         public Vector2Int GridPosition => gridControl != null ? gridControl.GridPosition : furniture != null ? furniture.Cell : new Vector2Int(-1, -1);
         public bool CanInteract => gridControl != null ? gridControl.IsInteractable : furniture != null;
 
+        // Tracks whether any player has searched this obstacle.
+        private bool hasBeenSearched;
+
+        // Read-only search status shared by all bots.
+        public bool HasBeenSearched => hasBeenSearched;
+
         private void OnValidate()
         {
             locationMarkerSize.x = Mathf.Clamp(locationMarkerSize.x, 16f, 240f);
@@ -75,7 +81,9 @@ namespace Escape4Now.Obstacles
         {
             gridControl = GetComponent<ObstacleGridControl>();
             furniture = GetComponent<Escape4Now.Map.SchoolFurniture>();
-            interactAction = InputSystem.actions != null ? InputSystem.actions.FindAction("Player/Interact") : null;
+            var bindings = Escape4Now.Multiplayer.LocalMultiplayerSession.InputBindings;
+            interactAction = bindings != null ? bindings.Interact
+                : InputSystem.actions != null ? InputSystem.actions.FindAction("Player/Interact") : null;
 
             if (interactAction == null)
             {
@@ -169,7 +177,7 @@ namespace Escape4Now.Obstacles
 
             foreach (PlayerCharacter player in players)
             {
-                if (player == null || !player.isActiveAndEnabled || !player.IsCurrentTurn
+                if (player == null || player.IsBotControlled || !player.isActiveAndEnabled || !player.IsCurrentTurn
                     || player.IsMoving || player.HasReachedExit || player.IsUsingItem() || player.IsInMenu())
                 {
                     continue;
@@ -239,34 +247,90 @@ namespace Escape4Now.Obstacles
             viewingPlayer = null;
         }
 
-        //Moves the stored item into the player's inventory when there is room, then closes the menu.
+
+        // Moves the stored item into the player's inventory when possible.
         private void TakeItemOrClose()
         {
+            if (viewingPlayer == null)
+            {
+                CloseMenu();
+                return;
+            }
+
             PlayerInventory inventory = viewingPlayer.Inventory;
             bool isKey = storedItemPrefab is KeyItem;
 
-            if (HasItem && inventory != null && (isKey ? !inventory.HasKey() : !inventory.IsFull))
+            // An empty obstacle has already been searched.
+            if (!HasItem)
             {
-                //The obstacle only stores the prefab, so a real copy is made at the moment it is taken.
-                Item item = Instantiate(storedItemPrefab, transform.position, Quaternion.identity, transform.parent);
+                hasBeenSearched = true;
+            }
+            else if (inventory != null
+                && (isKey ? !inventory.HasKey() : !inventory.IsFull))
+            {
+                // Create a real copy of the stored item.
+                Item item = Instantiate(
+                    storedItemPrefab,
+                    transform.position,
+                    Quaternion.identity,
+                    transform.parent);
+
                 item.PickUp(inventory);
 
-
-                bool wasTaken = isKey ? inventory.HasKey() && inventory.KeyItems[0] == item : inventory.HasItem(item);
+                bool wasTaken = isKey
+                    ? inventory.HasKey()
+                        && inventory.KeyItems[0] == item
+                    : inventory.HasItem(item);
 
                 if (wasTaken)
                 {
-                    Debug.Log($"[Item System] {viewingPlayer.name} took {item.ItemName} from {name}.");
+                    Debug.Log(
+                        $"[Item System] {viewingPlayer.name} took {item.ItemName} from {name}.");
+
                     storedItemPrefab = null;
+                    hasBeenSearched = true;
                 }
                 else
                 {
                     Destroy(item.gameObject);
                 }
-
             }
 
             CloseMenu();
+        }
+
+        // Lets a bot search this object using the existing storage rules.
+        public bool SearchForBot(PlayerCharacter player)
+        {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.Active
+                || player == null
+                || !player.isActiveAndEnabled
+                || !player.IsCurrentTurn
+                || player.IsMoving
+                || player.HasReachedExit
+                || player.IsUsingItem()
+                || player.IsInMenu()
+                || !CanInteract
+                || !IsNextTo(player.GridPosition)
+                || player.Inventory == null)
+            {
+                return false;
+            }
+
+            if (HasItem)
+            {
+                bool isKey = StoredItemPrefab is KeyItem;
+
+                if (isKey && player.Inventory.HasKey())
+                    return false;
+
+                if (!isKey && player.Inventory.IsFull)
+                    return false;
+            }
+
+            OpenMenu(player);
+            TakeItemOrClose();
+            return true;
         }
 
         //Draws a plain placeholder menu in the middle of the screen.

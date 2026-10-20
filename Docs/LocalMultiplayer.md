@@ -5,8 +5,8 @@ Wi-Fi play is temporarily hidden in the setup screen.
 
 ## Start a Game
 
-1. Open `SampleScene` and press Play.
-2. Pick 2, 3, or 4 players, then press **Start Match**.
+1. Open `Race_Gamemode` and press Play.
+2. Pick 2, 3, or 4 players, choose **Human** or **Bot** beside each active slot, then press **Start Match**.
 3. Press Space to roll and use WASD or the arrow keys to move.
 4. Use **End Turn** to pass after rolling and finishing a move.
 5. **Leave Match** goes back to setup.
@@ -39,6 +39,7 @@ Use these methods on `LocalMultiplayerSession`:
 
 - `SetTemporaryUIVisible(false)` hides this setup UI.
 - `SetPlayerCount(count)` picks the number of players.
+- `SetBotPlayer(index, value)` sets a Race lobby slot to human or bot before starting.
 - `StartLocalMatch()` starts the game.
 - `ReturnToSetup()` goes back to setup.
 - `MatchStarted` and `Status` show whether the game started or something went wrong.

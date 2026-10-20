@@ -49,12 +49,33 @@ namespace Escape4Now.Map
         [UnityEngine.SerializeField]
 #endif
         private int mainRoomMaximumSize = 9;
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.Header("Hallway Refinement"), UnityEngine.SerializeField, UnityEngine.Range(1, 2)]
+#endif
+        private int hallwayWideningPasses = 1;
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.SerializeField, UnityEngine.Range(0, 4), UnityEngine.Tooltip("Remove tiny fully enclosed hallway wall islands without touching room boundaries.")]
+#endif
+        private int maximumHallwayWallIsland = 2;
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.SerializeField, UnityEngine.Range(0f, 1f)]
+#endif
+        private float secondEntranceChance = .5f;
+#if UNITY_5_3_OR_NEWER
+        [UnityEngine.SerializeField, UnityEngine.Min(1)]
+#endif
+        private int hallwayLengthWeight = 4, hallwayBendWeight = 6;
 
         public int GenerationAttempts { get => generationAttempts; set => generationAttempts = value; }
         public float SecondaryRoomChance { get => secondaryRoomChance; set => secondaryRoomChance = value; }
         public int SecondaryRoomPlacementAttempts { get => secondaryRoomPlacementAttempts; set => secondaryRoomPlacementAttempts = value; }
         public int MainRoomMinimumSize { get => mainRoomMinimumSize; set => mainRoomMinimumSize = value; }
         public int MainRoomMaximumSize { get => mainRoomMaximumSize; set => mainRoomMaximumSize = value; }
+        public int HallwayWideningPasses => hallwayWideningPasses;
+        public int MaximumHallwayWallIsland => maximumHallwayWallIsland;
+        public float SecondEntranceChance => secondEntranceChance;
+        public int HallwayLengthWeight => hallwayLengthWeight;
+        public int HallwayBendWeight => hallwayBendWeight;
 
         public SchoolMapGenerationSettings Copy()
         {
@@ -66,7 +87,12 @@ namespace Escape4Now.Map
                 SecondaryRoomPlacementAttempts = Math.Max(1, Math.Min(1000, secondaryRoomPlacementAttempts)),
                 MainRoomMinimumSize = Math.Max(6, Math.Min(9, mainRoomMinimumSize)),
                 MainRoomMaximumSize = Math.Max(Math.Max(7, Math.Min(9, mainRoomMinimumSize)),
-                    Math.Max(6, Math.Min(9, mainRoomMaximumSize)))
+                    Math.Max(6, Math.Min(9, mainRoomMaximumSize))),
+                hallwayWideningPasses = Math.Max(1, Math.Min(2, hallwayWideningPasses)),
+                maximumHallwayWallIsland = Math.Max(0, Math.Min(4, maximumHallwayWallIsland)),
+                secondEntranceChance = float.IsNaN(secondEntranceChance) ? .5f : Math.Max(0f, Math.Min(1f, secondEntranceChance)),
+                hallwayLengthWeight = Math.Max(1, Math.Min(100, hallwayLengthWeight)),
+                hallwayBendWeight = Math.Max(1, Math.Min(100, hallwayBendWeight))
             };
         }
 
@@ -75,7 +101,11 @@ namespace Escape4Now.Map
             && secondaryRoomChance >= 0f && secondaryRoomChance <= 1f
             && secondaryRoomPlacementAttempts >= 1 && secondaryRoomPlacementAttempts <= 1000
             && mainRoomMinimumSize >= 6 && mainRoomMinimumSize <= mainRoomMaximumSize
-            && mainRoomMaximumSize >= 7 && mainRoomMaximumSize <= 9;
+            && mainRoomMaximumSize >= 7 && mainRoomMaximumSize <= 9
+            && hallwayWideningPasses >= 1 && hallwayWideningPasses <= 2
+            && maximumHallwayWallIsland >= 0 && maximumHallwayWallIsland <= 4
+            && secondEntranceChance >= 0f && secondEntranceChance <= 1f
+            && hallwayLengthWeight >= 1 && hallwayLengthWeight <= 100 && hallwayBendWeight >= 1 && hallwayBendWeight <= 100;
     }
 
     //A small optional school space, separate from the four main rooms.
@@ -178,7 +208,8 @@ namespace Escape4Now.Map
             GrowRooms();
             ShapeRooms();
             if (!ConnectRooms()) return false;
-            WidenHallways();
+            for (int pass = 0; pass < settings.HallwayWideningPasses; pass++) WidenHallways();
+            ClearHallwayWallIslands();
             AddSecondarySpace();
             return AllFloorConnected() && HasGoodSpaceUsage();
         }
@@ -224,6 +255,37 @@ namespace Escape4Now.Map
                 }
             //Apply together so added tiles cannot keep expanding the hallway in this pass.
             foreach (int cell in additions) floor[cell % Size, cell / Size] = true;
+        }
+
+        private void ClearHallwayWallIslands()
+        {
+            if (settings.MaximumHallwayWallIsland == 0) return;
+            var seen = new HashSet<int>();
+            for (int y = 1; y < Size - 1; y++) for (int x = 1; x < Size - 1; x++)
+            {
+                int first = y * Size + x;
+                if (floor[x, y] || !seen.Add(first)) continue;
+                var island = new List<int>();
+                var pending = new Queue<int>();
+                pending.Enqueue(first);
+                bool removable = true;
+                while (pending.Count > 0)
+                {
+                    int cell = pending.Dequeue(), xx = cell % Size, yy = cell / Size;
+                    island.Add(cell);
+                    if (!ClearForHallway(xx, yy)) removable = false;
+                    for (int d = 0; d < StepX.Length; d++)
+                    {
+                        int nx = xx + StepX[d], ny = yy + StepY[d];
+                        if (nx <= 0 || ny <= 0 || nx >= Size - 1 || ny >= Size - 1) { removable = false; continue; }
+                        if (floor[nx, ny]) { if (!IsHallway(nx, ny)) removable = false; continue; }
+                        int next = ny * Size + nx;
+                        if (seen.Add(next)) pending.Enqueue(next);
+                    }
+                }
+                if (removable && island.Count <= settings.MaximumHallwayWallIsland)
+                    foreach (int cell in island) floor[cell % Size, cell / Size] = true;
+            }
         }
 
         //Occasionally uses a spare pocket beside a hallway for one small school space.
@@ -474,7 +536,8 @@ namespace Escape4Now.Map
             for (int i = 0; i < rooms.Count; i++)
                 if (!ConnectEntrance(rooms[i], i == 0)) return false;
             foreach (SchoolRoom room in rooms)
-                if (random.Next(2) == 0) ConnectEntrance(room, false);
+                if (settings.SecondEntranceChance == .5f ? random.Next(2) == 0 : random.NextDouble() < settings.SecondEntranceChance)
+                    ConnectEntrance(room, false);
             return true;
         }
 
@@ -570,7 +633,7 @@ namespace Escape4Now.Map
                     lastStep = step;
                     cursor = parent[cursor];
                 }
-                int score = length * 4 + bends * 6 + random.Next(4);
+                int score = length * settings.HallwayLengthWeight + bends * settings.HallwayBendWeight + random.Next(4);
                 if (score < bestScore) { best = i; bestScore = score; }
             }
             if (best < 0) return false;

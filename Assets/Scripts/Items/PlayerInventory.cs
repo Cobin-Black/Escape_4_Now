@@ -117,7 +117,8 @@ namespace Escape4Now.Items
         //Finds the Use Item action in the project-wide Input System asset (Assets/Settings/InputSystem_Actions).
         private void Awake()
         {
-            useItemAction = InputSystem.actions != null ? InputSystem.actions.FindAction("Player/Use Item") : null;
+            useItemAction = player != null && player.InputBindings != null ? player.InputBindings.UseItem
+                : InputSystem.actions != null ? InputSystem.actions.FindAction("Player/Use Item") : null;
 
             if (useItemAction == null)
             {
@@ -130,7 +131,7 @@ namespace Escape4Now.Items
         {
             if (Escape4Now.Multiplayer.LanMultiplayerSession.Active) return;
             //The shared keyboard belongs only to the player taking this turn.
-            if (player == null || !player.CanReadTurnInput) return;
+            if (player == null || player.IsBotControlled || !player.CanReadTurnInput) return;
             if (useItemAction == null)
             {
                 return;

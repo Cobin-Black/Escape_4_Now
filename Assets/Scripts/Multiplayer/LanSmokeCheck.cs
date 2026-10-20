@@ -64,12 +64,12 @@ namespace Escape4Now.Multiplayer
                 marker.Configure(initialMap.TileWidth, initialMap.TileHeight);
                 tiles.Add(cell, MapEventType.LocationSwitch);
             }
-            //The three usable items and one key stay unique across floor and storage.
+            //Ordinary items use per-mode weights; the Race key is the only unique reward.
             int floorItems = first.objects.Count(item => item.kind == 2);
             int storedItems = first.objects.Count(item => (item.kind == 1 || item.kind == 3) && item.interactable);
-            Require(floorItems + storedItems == 4, "Three unique items and one key synchronized across floors and containers");
-            Require(first.objects.Where(item => item.kind == 2).Select(item => item.type).Distinct().Count() == floorItems,
-                "Floor item types do not repeat");
+            Require(floorItems == 0 && storedItems > 0, "Inspector-weighted items synchronize inside containers");
+            Require(first.objects.Count(item => item.containsKey || (item.kind == 2 && item.type == 4))
+                + first.players.Count(player => player.hasKey) == 1, "Exactly one Race key is synchronized");
             if (Array.IndexOf(args, "-specialRoom") >= 0)
                 Require(initialMap.SpecialItemCells.Count == 1, "Special room exists in this test");
             foreach (SchoolSecondarySpace room in initialMap.SecondarySpaces)

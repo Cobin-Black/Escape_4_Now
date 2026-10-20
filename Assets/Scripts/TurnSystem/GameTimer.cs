@@ -2,11 +2,12 @@ using UnityEngine;
 
 namespace Escape4Now.TurnSystem
 {
-    //Counts down the amount of time the player has to escape.
+    //Counts down the shared match clock for either game mode.
     public sealed class GameTimer : MonoBehaviour
     {
         [Header("Match Settings")]
         [SerializeField, Min(1)] private float timeLimit = 300f;
+        [SerializeField] private Escape4Now.GameModes.GameModeController gameMode;
 
         private float timeRemaining;
 
@@ -14,6 +15,7 @@ namespace Escape4Now.TurnSystem
         //Read-only access to the remaining time.
         public float TimeRemaining => timeRemaining;
         public bool HasExpired => hasStarted && timeRemaining <= 0f;
+        public bool ExpirationIsWin => gameMode != null && gameMode.TimerExpirationIsWin;
         private bool timerRunning;
         private bool hasStarted;
 
@@ -42,7 +44,7 @@ namespace Escape4Now.TurnSystem
                 timeRemaining = 0f;
                 timerRunning = false;
 
-                Debug.Log("Time's up! You lose.");
+                Debug.Log("Match timer expired.");
                 Time.timeScale = 0f;
             }
         }

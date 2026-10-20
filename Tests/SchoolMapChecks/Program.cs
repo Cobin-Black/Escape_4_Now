@@ -23,6 +23,7 @@ internal static class Program
         var furnitureChoices = new HashSet<SchoolFurnitureKind>();
         var facingChoices = new HashSet<ObstacleFacing>();
         var furnishedSpaces = new HashSet<SchoolSpaceType>();
+        var patterns = new Dictionary<SchoolRoomType, HashSet<SchoolFurniturePattern>>();
         for (int seed = 0; seed < 10000; seed++)
         {
             SchoolMapLayout layout = CheckLayout(seed);
@@ -39,6 +40,12 @@ internal static class Program
                 assignments.Add(assignment.ToString());
                 foreach (SchoolFurniturePlacement item in plan.Furniture)
                 { furnitureChoices.Add(item.Kind); facingChoices.Add(item.Facing); }
+                foreach (SchoolRoomArrangement arrangement in plan.Arrangements)
+                {
+                    if (!patterns.TryGetValue(arrangement.Room, out var choices))
+                        patterns[arrangement.Room] = choices = new HashSet<SchoolFurniturePattern>();
+                    choices.Add(arrangement.Pattern);
+                }
             }
             if (layout.SecondarySpaces.Count > 0) withSecondary++;
             foreach (SchoolSecondarySpace space in layout.SecondarySpaces) spaceTypes.Add(space.Type);
@@ -80,6 +87,9 @@ internal static class Program
         }
         CheckLayout(int.MinValue);
         CheckLayout(int.MaxValue);
+        foreach (var roomPatterns in patterns)
+            Require(roomPatterns.Value.Count >= 3, "Each main room uses at least three seeded arrangement patterns");
+        CheckPatternConfiguration();
         Require(assignments.Count == 24 && spawnLocations.Count > 100 && furnitureChoices.Count == 22,
             "All player-room orders, varied spawn tiles, and all furniture kinds occur");
         Require(facingChoices.Count == 4, "Obstacles use all four grid directions across different maps");
@@ -273,10 +283,11 @@ internal static class Program
     }
 
     //Checks the final occupied board, including all reserved starts, with a separate flood fill.
-    private static SchoolFurniturePlan CheckFurniture(SchoolMapLayout layout)
+    private static SchoolFurniturePlan CheckFurniture(SchoolMapLayout layout, SchoolFurnitureSettings configuration = null)
     {
-        var plan = new SchoolFurniturePlan(layout);
-        var repeat = new SchoolFurniturePlan(layout);
+        configuration ??= new SchoolFurnitureSettings();
+        var plan = new SchoolFurniturePlan(layout, configuration);
+        var repeat = new SchoolFurniturePlan(layout, configuration);
         var starts = new HashSet<int>(plan.Spawns);
         var themes = new HashSet<SchoolRoomType>();
         var blocked = new HashSet<int>();
@@ -307,21 +318,68 @@ internal static class Program
                 "Host and guest get identical furniture");
         }
         CheckFacing(layout, plan, blocked);
+        Require(plan.Arrangements.Count == 4 && repeat.Arrangements.Count == 4, "Each room records its chosen layout");
+        for (int i = 0; i < plan.Arrangements.Count; i++)
+            Require(plan.Arrangements[i].Pattern == repeat.Arrangements[i].Pattern
+                && plan.Arrangements[i].FrontWall == repeat.Arrangements[i].FrontWall, "Pattern and orientation repeat with the seed");
+        foreach (int cell in plan.RoomRoutes)
+            Require(!blocked.Contains(cell), "Furniture never blocks a reserved door-to-center route or center aisle");
+        foreach (SchoolFurniturePlacement item in plan.Furniture)
+            if (item.Kind == SchoolFurnitureKind.Whiteboard)
+            {
+                bool wall = false;
+                foreach (var step in new[] { (1, 0), (-1, 0), (0, 1), (0, -1) })
+                    wall |= layout.GetTile(item.Cell % 25 + step.Item1, item.Cell / 25 + step.Item2) == SchoolTileType.Wall;
+                Require(wall, "Classroom whiteboard is placed against a wall");
+            }
+        foreach (SchoolRoomArrangement arrangement in plan.Arrangements)
+            if (arrangement.Pattern == SchoolFurniturePattern.CenterAisle)
+            {
+                SchoolRoom room = null;
+                foreach (SchoolRoom candidate in layout.Rooms) if (candidate.Type == arrangement.Room) room = candidate;
+                SchoolRoomPatternSettings profile = Array.Find(configuration.RoomPatterns, value => value.Room == arrangement.Room);
+                bool acrossX = arrangement.FrontWall == ObstacleFacing.North || arrangement.FrontWall == ObstacleFacing.South;
+                int start = ((acrossX ? room.Width : room.Height) - profile.AisleWidth) / 2;
+                foreach (int cell in blocked)
+                    if (layout.GetRoomType(cell % 25, cell / 25) == arrangement.Room)
+                    {
+                        int coordinate = acrossX ? cell % 25 - room.X : cell / 25 - room.Y;
+                        Require(coordinate < start || coordinate >= start + profile.AisleWidth, "The entire configured center aisle stays clear");
+                    }
+            }
+        for (int y = 1; y < 24; y++) for (int x = 1; x < 24; x++)
+        {
+            int cell = y * 25 + x;
+            if (layout.GetTile(x, y) != SchoolTileType.Floor || blocked.Contains(cell) || layout.GetSpaceType(x, y) != SchoolSpaceType.None) continue;
+            int original = 0, remaining = 0;
+            foreach (int next in new[] { cell - 1, cell + 1, cell - 25, cell + 25 })
+                if (layout.GetTile(next % 25, next / 25) == SchoolTileType.Floor)
+                { original++; if (!blocked.Contains(next)) remaining++; }
+            Require(!configuration.PreventNewDeadEnds || original <= 1 || remaining != 1, "Furniture creates no new one-tile dead-end traps");
+        }
         foreach (SchoolRoomType theme in themes)
         {
+            int maximum = theme == SchoolRoomType.Library ? configuration.LibraryShelvesMaximum + configuration.LibraryTablesMaximum + configuration.LibraryCartsMaximum
+                : theme == SchoolRoomType.ComputerLab ? configuration.ComputerDesksMaximum + configuration.PrintersMaximum
+                : theme == SchoolRoomType.Classroom ? configuration.ClassroomDesksMaximum + configuration.WhiteboardCount + configuration.TeacherDesksMaximum
+                : configuration.ScienceTablesMaximum + configuration.ScienceCabinetsMaximum + configuration.ScienceSinksMaximum;
             Require(counts.ContainsKey(theme) && counts[theme] >= (theme == SchoolRoomType.Classroom ? 4 : 2)
-                && counts[theme] <= (theme == SchoolRoomType.Classroom ? 7 : theme == SchoolRoomType.ComputerLab ? 5 : 6), "Required and optional room counts");
+                && counts[theme] <= maximum, "Required and optional room counts");
             var kinds = new Dictionary<SchoolFurnitureKind, int>();
             foreach (SchoolFurniturePlacement item in plan.Furniture)
                 if (layout.GetRoomType(item.Cell % 25, item.Cell / 25) == theme)
                 { kinds.TryGetValue(item.Kind, out int number); kinds[item.Kind] = number + 1; }
             int main = kinds[SchoolFurniturePlan.Pool(theme)[0]];
+            int mainMaximum = theme == SchoolRoomType.Library ? configuration.LibraryShelvesMaximum
+                : theme == SchoolRoomType.ComputerLab ? configuration.ComputerDesksMaximum
+                : theme == SchoolRoomType.Classroom ? configuration.ClassroomDesksMaximum : configuration.ScienceTablesMaximum;
             Require(main >= (theme == SchoolRoomType.Classroom ? 3 : 2)
-                && main <= (theme == SchoolRoomType.Library ? 3 : theme == SchoolRoomType.Classroom ? 5 : 4), "Required signature furniture counts");
-            if (theme == SchoolRoomType.Classroom) Require(kinds[SchoolFurnitureKind.Whiteboard] == 1, "Exactly one classroom whiteboard");
+                && main <= mainMaximum, "Required signature furniture counts");
+            if (theme == SchoolRoomType.Classroom) Require(kinds[SchoolFurnitureKind.Whiteboard] == configuration.WhiteboardCount, "Configured classroom whiteboards");
             foreach (var entry in kinds)
                 if (entry.Key != SchoolFurniturePlan.Pool(theme)[0])
-                    Require(entry.Value <= (entry.Key == SchoolFurnitureKind.ReadingTable ? 2 : 1), "Optional furniture stays sparse");
+                    Require(entry.Value <= (entry.Key == SchoolFurnitureKind.ReadingTable ? configuration.LibraryTablesMaximum
+                        : entry.Key == SchoolFurnitureKind.Whiteboard ? configuration.WhiteboardCount : 1), "Optional furniture stays sparse");
         }
         if (counts.TryGetValue(SchoolRoomType.None, out int hallwayCount)) Require(hallwayCount <= 2, "Sparse hallways");
         int specialCount = 0;
@@ -381,6 +439,55 @@ internal static class Program
                 if (layout.GetTile(x, y) == SchoolTileType.Floor && !blocked.Contains(y * 25 + x))
                     Require(seen.Contains(y * 25 + x), "All remaining floor stays reachable after furniture");
         return plan;
+    }
+
+    private static void CheckPatternConfiguration()
+    {
+        var dense = new SchoolFurnitureSettings
+        {
+            LibraryShelvesMaximum = 5, LibraryTablesMaximum = 3, ComputerDesksMaximum = 7,
+            ClassroomDesksMaximum = 10, ScienceTablesMaximum = 6
+        };
+        dense.RoomPatterns[2] = new SchoolRoomPatternSettings(SchoolRoomType.Classroom, 4, 0, 3, 3, aisleWidth: 2);
+        int smallestCount = int.MaxValue, largestCount = 0;
+        double smallTotal = 0, largeTotal = 0;
+        int smallRooms = 0, largeRooms = 0;
+        for (int seed = 0; seed < 256; seed++)
+        {
+            var layout = new SchoolMapLayout(seed);
+            SchoolFurniturePlan plan = CheckFurniture(layout, dense);
+            foreach (SchoolRoom room in layout.Rooms)
+            {
+                int count = 0;
+                foreach (SchoolFurniturePlacement item in plan.Furniture)
+                    if (layout.GetRoomType(item.Cell % 25, item.Cell / 25) == room.Type) count++;
+                int area = room.Width * room.Height - room.CutWidth * room.CutHeight;
+                if (area <= 65) { smallTotal += count; smallRooms++; }
+                if (area >= 95) { largeTotal += count; largeRooms++; }
+                if (room.Type == SchoolRoomType.Classroom) { smallestCount = Math.Min(smallestCount, count); largestCount = Math.Max(largestCount, count); }
+            }
+        }
+        Require(smallRooms > 0 && largeRooms > 0 && largeTotal / largeRooms > smallTotal / smallRooms,
+            "Larger rooms receive more furniture on average");
+        Require(largestCount - smallestCount >= 3, "Scene-density classroom counts vary meaningfully");
+        foreach (SchoolFurniturePattern pattern in Enum.GetValues(typeof(SchoolFurniturePattern)))
+        {
+            var forced = new SchoolFurnitureSettings();
+            for (int i = 0; i < forced.RoomPatterns.Length; i++)
+                forced.RoomPatterns[i] = new SchoolRoomPatternSettings(forced.RoomPatterns[i].Room,
+                    pattern == SchoolFurniturePattern.Rows ? 1 : 0, pattern == SchoolFurniturePattern.Perimeter ? 1 : 0,
+                    pattern == SchoolFurniturePattern.Groups ? 1 : 0, pattern == SchoolFurniturePattern.CenterAisle ? 1 : 0);
+            var plan = CheckFurniture(new SchoolMapLayout(42), forced);
+            foreach (SchoolRoomArrangement arrangement in plan.Arrangements)
+                Require(arrangement.Pattern == pattern, "Zero pattern weights are respected instead of silently re-enabled");
+        }
+        var invalid = new SchoolFurnitureSettings();
+        invalid.RoomPatterns[0] = new SchoolRoomPatternSettings(SchoolRoomType.Library, 0, 0, 0, 0);
+        bool rejected = false;
+        try { new SchoolFurniturePlan(new SchoolMapLayout(42), invalid); }
+        catch (InvalidOperationException) { rejected = true; }
+        Require(rejected, "An all-disabled room pattern is rejected clearly");
+        Console.WriteLine("PASS: weighted pattern variety, forced patterns, reserved routes, density scaling, 256 denser scene plans, and invalid Inspector settings.");
     }
 
     //Checks the chosen front against every clear direction on the finished board.

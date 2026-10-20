@@ -484,6 +484,20 @@ MonoBehaviour:
   leftSideColor: {r: 0.1, g: 0.1, b: 0.1, a: 1}
   wallColor: {r: 0.18, g: 0.22, b: 0.21, a: 1}
   wallCapColor: {r: 0.28, g: 0.32, b: 0.3, a: 1}
+  borderWallHeight: 0.3
+  roomWallHeight: 0.28
+  roomWallThickness: 0.12
+  wallCapHeight: 0.045
+  sealedWallBaseHeight: 0.06
+  doorFrameColor: {r: 0.26, g: 0.3, b: 0.29, a: 1}
+  openDoorColor: {r: 0.12, g: 0.38, b: 0.34, a: 1}
+  mapMaterial: {fileID: 1169820800, guid: 2a0333a9a9204ffb92e7a7454ce04859, type: 2}
+  roomCheckerBrightness: 0.92
+  hallwayCheckerBrightness: 0.96
+  mapCamera: {fileID: 519420031}
+  cameraOffset: {x: 0, y: 0.4}
+  cameraHeightAllowance: 0.85
+  cameraPadding: 0.45
   generateOnStart: 1
   useSchoolLayout: 1
   generationSettings:
@@ -492,27 +506,90 @@ MonoBehaviour:
     secondaryRoomPlacementAttempts: 160
     mainRoomMinimumSize: 6
     mainRoomMaximumSize: 9
+    hallwayWideningPasses: 1
+    maximumHallwayWallIsland: 2
+    secondEntranceChance: 0.5
+    hallwayLengthWeight: 4
+    hallwayBendWeight: 6
   useFixedSeed: 0
   fixedSeed: 0
   floorTilePrefab: {fileID: 1877436113, guid: 079ada1107f54d908eea5bcb6018c07c, type: 3}
   furnitureSettings:
     libraryShelvesMinimum: 2
-    libraryShelvesMaximum: 3
-    libraryTablesMaximum: 2
+    libraryShelvesMaximum: 5
+    libraryTablesMaximum: 3
     libraryCartsMaximum: 1
     computerDesksMinimum: 2
-    computerDesksMaximum: 4
+    computerDesksMaximum: 7
     printersMaximum: 1
     classroomDesksMinimum: 3
-    classroomDesksMaximum: 5
+    classroomDesksMaximum: 10
     teacherDesksMaximum: 1
+    whiteboardCount: 1
     scienceTablesMinimum: 2
-    scienceTablesMaximum: 4
+    scienceTablesMaximum: 6
     scienceCabinetsMaximum: 1
     scienceSinksMaximum: 1
     hallwayObjectsMinimum: 1
     hallwayObjectsMaximum: 2
     specialRoomExtraObjectsMaximum: 1
+    roomPatterns:
+    - room: 1
+      rowsWeight: 3
+      perimeterWeight: 4
+      groupsWeight: 1
+      centerAisleWeight: 2
+      rowSpacing: 2
+      aisleWidth: 1
+      groupSpacing: 3
+      wallPreference: 8
+      randomizeOrientation: 1
+      frontWall: 2
+    - room: 2
+      rowsWeight: 4
+      perimeterWeight: 3
+      groupsWeight: 2
+      centerAisleWeight: 2
+      rowSpacing: 2
+      aisleWidth: 1
+      groupSpacing: 3
+      wallPreference: 8
+      randomizeOrientation: 1
+      frontWall: 2
+    - room: 3
+      rowsWeight: 4
+      perimeterWeight: 0
+      groupsWeight: 3
+      centerAisleWeight: 3
+      rowSpacing: 2
+      aisleWidth: 2
+      groupSpacing: 3
+      wallPreference: 8
+      randomizeOrientation: 1
+      frontWall: 2
+    - room: 4
+      rowsWeight: 4
+      perimeterWeight: 1
+      groupsWeight: 3
+      centerAisleWeight: 2
+      rowSpacing: 2
+      aisleWidth: 1
+      groupSpacing: 3
+      wallPreference: 8
+      randomizeOrientation: 1
+      frontWall: 2
+    doorClearance: 2
+    furnitureSpacing: 1
+    spawnClearance: 1
+    centerClearance: 1
+    hallwaySpacing: 2
+    preventNewDeadEnds: 1
+    sparseRoomArea: 36
+    fullRoomArea: 100
+    countVariation: 0.15
+    optionalFurnitureChance: 0.8
+    roomLayoutAttempts: 8
+    candidateChecksPerObject: 196
   furniturePrefabOverrides: []
   hasExit: 0
   exitDoorAllowed: 1
@@ -586,10 +663,29 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Items.ItemSpawner
   map: {fileID: 1200000002}
-  doubleDicePrefab: {fileID: 1119616090794593453, guid: 798c830d404504ec993fb50111c722ba, type: 3}
-  customDicePrefab: {fileID: 3571401913704896188, guid: 84be71822083a4daa93b2bdda4645980, type: 3}
-  keyStealerPrefab: {fileID: 2278332013471557169, guid: 5150566b7f0b6474e97489b4b70ea5a9, type: 3}
-  keyItemPrefab: {fileID: 8324686912643164936, guid: 48deafd2bac804dee8759ec5b673b47b, type: 3}
+  raceItems:
+  - prefab: {fileID: 1119616090794593453, guid: 798c830d404504ec993fb50111c722ba, type: 3}
+    spawnChance: 50
+  - prefab: {fileID: 3571401913704896188, guid: 84be71822083a4daa93b2bdda4645980, type: 3}
+    spawnChance: 50
+  - prefab: {fileID: 2278332013471557169, guid: 5150566b7f0b6474e97489b4b70ea5a9, type: 3}
+    spawnChance: 50
+  monsterItems:
+  - prefab: {fileID: 1119616090794593453, guid: 798c830d404504ec993fb50111c722ba, type: 3}
+    spawnChance: 50
+  - prefab: {fileID: 3571401913704896188, guid: 84be71822083a4daa93b2bdda4645980, type: 3}
+    spawnChance: 50
+  freeForAllItems:
+  - prefab: {fileID: 1119616090794593453, guid: 798c830d404504ec993fb50111c722ba, type: 3}
+    spawnChance: 50
+  - prefab: {fileID: 3571401913704896188, guid: 84be71822083a4daa93b2bdda4645980, type: 3}
+    spawnChance: 50
+  untitledItems:
+  - prefab: {fileID: 1119616090794593453, guid: 798c830d404504ec993fb50111c722ba, type: 3}
+    spawnChance: 50
+  - prefab: {fileID: 3571401913704896188, guid: 84be71822083a4daa93b2bdda4645980, type: 3}
+    spawnChance: 50
+  gameModeWithoutScript: 0
 --- !u!114 &1200000005
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -603,19 +699,14 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Obstacles.ObstacleSpawner
   map: {fileID: 1200000002}
-  obstacleCatalogInitialized: 1
-  obstaclePrefabs:
-  - {fileID: 11400000, guid: e7c06474f71b480a9437000000000001, type: 3}
-  - {fileID: 11400000, guid: e7c06474f71b480a9437000000000002, type: 3}
-  - {fileID: 11400000, guid: e7c06474f71b480a9437000000000003, type: 3}
+  computerLabPrefabs:
   - {fileID: 11400000, guid: e7c06474f71b480a9437000000000004, type: 3}
   - {fileID: 11400000, guid: e7c06474f71b480a9437000000000005, type: 3}
+  classroomPrefabs:
   - {fileID: 11400000, guid: e7c06474f71b480a9437000000000006, type: 3}
   - {fileID: 11400000, guid: e7c06474f71b480a9437000000000007, type: 3}
   - {fileID: 11400000, guid: e7c06474f71b480a9437000000000008, type: 3}
-  - {fileID: 11400000, guid: e7c06474f71b480a9437000000000009, type: 3}
-  - {fileID: 11400000, guid: e7c06474f71b480a943700000000000a, type: 3}
-  - {fileID: 11400000, guid: e7c06474f71b480a943700000000000b, type: 3}
+  hallwayPrefabs:
   - {fileID: 11400000, guid: e7c06474f71b480a943700000000000c, type: 3}
   - {fileID: 11400000, guid: e7c06474f71b480a943700000000000d, type: 3}
   - {fileID: 11400000, guid: e7c06474f71b480a943700000000000e, type: 3}
@@ -628,12 +719,20 @@ MonoBehaviour:
   - {fileID: 11400000, guid: c67f9649028393368ce03f5a8bd65b32, type: 3}
   - {fileID: 11400000, guid: 6370f1c58a4ae5ffcda3f9796ea34f40, type: 3}
   - {fileID: 8008263496219192108, guid: d0329ec4a35ffd94f8f7d200ad63eb7c, type: 3}
+  libraryPrefabs:
+  - {fileID: 11400000, guid: e7c06474f71b480a9437000000000001, type: 3}
+  - {fileID: 11400000, guid: e7c06474f71b480a9437000000000002, type: 3}
+  - {fileID: 11400000, guid: e7c06474f71b480a9437000000000003, type: 3}
+  scienceLabPrefabs:
+  - {fileID: 11400000, guid: e7c06474f71b480a9437000000000009, type: 3}
+  - {fileID: 11400000, guid: e7c06474f71b480a943700000000000a, type: 3}
+  - {fileID: 11400000, guid: e7c06474f71b480a943700000000000b, type: 3}
+  obstaclePrefabs: []
+  obstacleCatalogInitialized: 1
+  roomSectionsInitialized: 1
   minimumObstacleCount: 2
   maximumObstacleCount: 3
   interactableChance: 0.5
-  possibleItems:
-  - {fileID: 1119616090794593453, guid: 798c830d404504ec993fb50111c722ba, type: 3}
-  - {fileID: 3571401913704896188, guid: 84be71822083a4daa93b2bdda4645980, type: 3}
   mapEvents: {fileID: 1200000003}
   itemSpawner: {fileID: 1200000004}
 --- !u!1 &1200000010
@@ -743,6 +842,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   mapTemplate: {fileID: 1200000002}
   turnSystem: {fileID: 1200000022}
+  gameMode: {fileID: 1200000052}
   gridPosition: {x: 2, y: 2}
   playerColor: {r: 0, g: 0, b: 0, a: 1}
   outlineColor: {r: 0.65, g: 0.65, b: 0.65, a: 1}
@@ -751,8 +851,6 @@ MonoBehaviour:
   moveSpeed: 4
   inventory: {fileID: 1200000014}
   health: 5
-  objectiveBeforeKey: Find the key, then reach the exit.
-  objectiveAfterKey: Reach the exit.
   rollPrompt: 'ROLL: SPACE'
   hudTopLeftMargin: {x: 12, y: 8}
   hudPanelSize: {x: 260, y: 210}
@@ -799,7 +897,6 @@ MonoBehaviour:
   diceRollAnimationDuration: 0.9
   sharedTileHorizontalOffset: 0.14
   sharedTileVerticalOffset: 0.08
-  exitNeedsKey: 1
 --- !u!114 &1200000014
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -825,7 +922,6 @@ GameObject:
   - component: {fileID: 1200000022}
   - component: {fileID: 1200000023}
   - component: {fileID: 1200000024}
-  - component: {fileID: 1200000025}
   m_Layer: 0
   m_Name: Turn System
   m_TagString: Untagged
@@ -863,6 +959,7 @@ MonoBehaviour:
   players:
   - {fileID: 1200000013}
   randomizeStartingOrder: 1
+  gameMode: {fileID: 1200000052}
   includeEnemyTurn: 0
   enemyTurnName: Enemy
   showTurnDisplay: 1
@@ -891,6 +988,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: 
   timeLimit: 300
+  gameMode: {fileID: 1200000052}
 --- !u!114 &1200000024
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -904,6 +1002,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Multiplayer.LocalMultiplayerSession
   showTemporaryUI: 1
+  gameMode: {fileID: 1200000052}
+  setupTitle: Race Mode
   pauseButtonSize: {x: 126, y: 36}
   pauseButtonMargin: {x: 16, y: 16}
   pauseMenuSize: {x: 380, y: 360}
@@ -918,25 +1018,6 @@ MonoBehaviour:
   pauseTitleBarColor: {r: 0.08, g: 0.13, b: 0.19, a: 1}
   pauseTitleColor: {r: 1, g: 1, b: 1, a: 1}
   pauseTitleFontSize: 28
---- !u!114 &1200000025
-MonoBehaviour:
-  m_ObjectHideFlags: 0
-  m_CorrespondingSourceObject: {fileID: 0}
-  m_PrefabInstance: {fileID: 0}
-  m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1200000020}
-  m_Enabled: 1
-  m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 01cfff2c6f7624f0a93e95ade9b6b5dd, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Battle.KeyStealBattleController
-  windowWidth: 360
-  resultWindowHeight: 180
-  opponentWindowBaseHeight: 100
-  opponentRowHeight: 40
-  windowPadding: 15
-  contentSpacing: 10
-  headingFontSize: 18
 --- !u!1 &1200000030
 GameObject:
   m_ObjectHideFlags: 0
@@ -1110,10 +1191,92 @@ RectTransform:
   m_AnchoredPosition: {x: 0, y: 0}
   m_SizeDelta: {x: 0, y: 0}
   m_Pivot: {x: 0, y: 0}
+--- !u!1 &1200000050
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1200000051}
+  - component: {fileID: 1200000052}
+  m_Layer: 0
+  m_Name: Race Mode
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1200000051
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1200000050}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1200000052
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1200000050}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 19c7456a438a73444b5016b39cebbbfa, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.GameModes.Race_Gamemode
+  turns: {fileID: 1200000022}
+  timer: {fileID: 1200000023}
+  playerTemplate: {fileID: 1200000013}
+  inputBindings: {fileID: 11400000, guid: f1c12d1fa3574dd0a240b165789cb007, type: 2}
+  gameplayComponents:
+  - {fileID: 1200000002}
+  - {fileID: 1200000003}
+  - {fileID: 1200000004}
+  - {fileID: 1200000005}
+  - {fileID: 1200000013}
+  - {fileID: 1200000014}
+  - {fileID: 1200000022}
+  - {fileID: 1200000023}
+  - {fileID: 1200000052}
+  - {fileID: 1200000032}
+  map: {fileID: 1200000002}
+  enableLanSupport: 1
+  enableBots: 1
+  exitNeedsKey: 1
+  objectiveBeforeKey: Find the key, then reach the exit.
+  objectiveAfterKey: Reach the exit.
+  escapedTitleSuffix: ESCAPED
+  otherPlayersLoseMessage: All other players lose.
+  timeoutTitle: EVERYONE LOSES
+  timeoutMessage: Time ran out before anyone escaped.
+  keyItemPrefab: {fileID: 8324686912643164936, guid: 48deafd2bac804dee8759ec5b673b47b, type: 3}
+  player1HasKey: 0
+  player2HasKey: 0
+  player3HasKey: 0
+  player4HasKey: 0
+  windowWidth: 360
+  resultWindowHeight: 180
+  opponentWindowBaseHeight: 100
+  opponentRowHeight: 40
+  windowPadding: 15
+  contentSpacing: 10
+  headingFontSize: 18
 --- !u!1660057539 &9223372036854775807
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
+  - {fileID: 1200000051}
   - {fileID: 1200000001}
   - {fileID: 1200000011}
   - {fileID: 1200000021}

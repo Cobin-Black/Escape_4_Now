@@ -50,6 +50,13 @@ namespace Escape4Now.Items
         //Finds the Item Option Select and Use Item actions in the project-wide Input System asset.
         private void Awake()
         {
+            var bindings = Escape4Now.Multiplayer.LocalMultiplayerSession.InputBindings;
+            if (bindings != null)
+            {
+                optionSelectAction = bindings.ItemOptionSelect;
+                useItemAction = bindings.UseItem;
+                return;
+            }
             InputActionAsset actions = InputSystem.actions;
             if (actions == null)
             {
@@ -162,6 +169,30 @@ namespace Escape4Now.Items
             Debug.Log("Custom Dice: Choose a number from 1 to 6.");
             Debug.Log($"Custom Dice selection: {selectedNumber}");
         }
+
+
+        // Lets a bot use Custom Dice without opening the human selection controls.
+        public bool UseForBot(PlayerInventory inventory)
+        {
+            if (inventory == null
+                || !inventory.HasItem(this)
+                || inventory.Player == null
+                || !inventory.Player.CanUseItem()
+                || isSelecting)
+            {
+                return false;
+            }
+
+            int selectedNumber = 6;
+
+            inventory.Player.SetMovesFromItem(selectedNumber);
+            inventory.RemoveItem(this);
+
+            Debug.Log($"Bot used Custom Dice and selected {selectedNumber}.");
+
+            return true;
+        }
+
 
         // Displays the number-selection screen while using Custom Dice.
         private void OnGUI()

@@ -27,9 +27,6 @@ namespace Escape4Now.UI
         [SerializeField] private Color doneColor = new Color(0.3f, 0.82f, 0.48f, 1f);
         [SerializeField] private Color highlightColor = new Color(0.5f, 0.77f, 1f, 1f);
 
-        //The turn panel drawn by PlayerCharacter sits at a fixed place on screen.
-        private static readonly Rect TurnPanelRect = new Rect(16f, 85f, 360f, 235f);
-
         private PlayerCharacter player;
         private IsometricMapTemplate map;
         private ItemPickupBar itemBar;
@@ -100,7 +97,7 @@ namespace Escape4Now.UI
                     if (!player.HasRolled)
                         return MakeStep("move-roll", "Roll the dice",
                             "Welcome to Escape 4 Now! Every turn starts with a dice roll. The number you roll is how many tiles you can move.",
-                            new[] { "SPACE" }, TurnPanelRect);
+                            new[] { "SPACE" }, player.HudPanelRect);
                     return MakeStep("move-walk", "Move around",
                         "Move one tile per key press. Use up all your moves to finish this step. Moves left: " + player.MovesRemaining + ".",
                         new[] { "W", "A", "S", "D" }, PlayerRect());
@@ -308,7 +305,7 @@ namespace Escape4Now.UI
         {
             float margin = 16f;
             float inventoryTop = itemBar != null && itemBar.PanelRect.height > 0f ? itemBar.PanelRect.y : HudScale.Height - 150f;
-            float y = Mathf.Clamp(TurnPanelRect.yMax + 12f, margin, Mathf.Max(margin, inventoryTop - height - 12f));
+            float y = Mathf.Clamp(player.HudPanelRect.yMax + 12f, margin, Mathf.Max(margin, inventoryTop - height - 12f));
             Rect card = new Rect(margin, y, cardWidth, height);
             //If the player is standing behind the left card (for example after a Warp), it moves to the right edge instead.
             Rect? playerRect = PlayerRect();

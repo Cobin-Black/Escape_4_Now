@@ -3,8 +3,11 @@ using Escape4Now.Map;
 using Escape4Now.Player;
 using Escape4Now.TurnSystem;
 using Escape4Now.UI;
-using UnityEngine;
+using Escape4Now.Bots;
+using Escape4Now.GameModes;
+using Escape4Now.Input;
 using UnityEngine.InputSystem;
+using UnityEngine;
 using UnityEngine.SceneManagement;
 
 namespace Escape4Now.Multiplayer
@@ -14,6 +17,10 @@ namespace Escape4Now.Multiplayer
     public sealed class LocalMultiplayerSession : MonoBehaviour
     {
         [SerializeField] private bool showTemporaryUI = true;
+        [Header("Game Mode")]
+        [SerializeField] private string setupTitle = "Escape 4 Now";
+        [SerializeField] private GameModeController gameMode;
+        [SerializeField] private bool showDisplayOptions = true;
         [Header("Pause Menu Layout")]
         [SerializeField, Tooltip("Pause button width and height in screen pixels.")]
         private Vector2 pauseButtonSize = new Vector2(126f, 36f);
@@ -35,10 +42,6 @@ namespace Escape4Now.Multiplayer
         [SerializeField] private Color pauseTitleColor = Color.white;
         [SerializeField, Range(18, 40)] private int pauseTitleFontSize = 28;
         [Header("Result Screen Text")]
-        [SerializeField] private string escapeTitleSuffix = "ESCAPED";
-        [SerializeField] private string timeoutTitle = "EVERYONE LOSES";
-        [SerializeField] private string otherPlayersLoseMessage = "All other players lose.";
-        [SerializeField] private string timeoutMessage = "Time ran out before anyone escaped.";
         [SerializeField] private string resultTimeLabel = "TIME LEFT";
         [SerializeField] private string resultButtonLabel = "Back to Lobby";
         [Header("Result Screen Layout")]
@@ -59,12 +62,19 @@ namespace Escape4Now.Multiplayer
         private static LocalMultiplayerSession instance;
         private readonly List<MonoBehaviour> heldScripts = new List<MonoBehaviour>();
         private IsometricMapTemplate map;
+        private IPlayerGridMap ActiveMap => gameMode != null ? gameMode.GridMap : null;
+        public GameModeController Mode => gameMode;
+        public static GameplayInputBindings InputBindings => instance != null && instance.gameMode != null
+            ? instance.gameMode.InputBindings : null;
         private TurnSystemController turns;
         private GameTimer matchTimer;
         private PlayerCharacter sourcePlayer;
         private PlayerCharacter[] participants;
         private int playerCount = 2;
         private readonly string[] playerNames = { "Player 1", "Player 2", "Player 3", "Player 4" };
+        [Header("Local Player Controllers")]
+        [SerializeField, Tooltip("Default Human/Bot choices for the four lobby slots. Bots are supported in Race Mode only.")]
+        private bool[] playerIsBot = new bool[4];
         private LanMultiplayerSession lan;
         public IReadOnlyList<PlayerCharacter> Participants => participants;
         private string status = "";
@@ -74,6 +84,7 @@ namespace Escape4Now.Multiplayer
         private GUIStyle resultTitleStyle, resultMessageStyle, resultDetailStyle;
         private Texture2D buttonTexture, hoverTexture, selectedTexture;
         private bool pauseMenuOpen;
+        private InputAction pauseAction;
         private bool showEventTiles;
         private bool showItemObstacles;
         private bool showKeyLocation;
@@ -88,11 +99,12 @@ namespace Escape4Now.Multiplayer
 
         private void OnValidate()
         {
+            if (playerIsBot == null || playerIsBot.Length != 4) System.Array.Resize(ref playerIsBot, 4);
             if (playerColors == null || playerColors.Length != 4)
                 System.Array.Resize(ref playerColors, 4);
             pauseButtonSize = new Vector2(Mathf.Clamp(pauseButtonSize.x, 80f, 240f), Mathf.Clamp(pauseButtonSize.y, 28f, 80f));
             pauseButtonMargin = new Vector2(Mathf.Clamp(pauseButtonMargin.x, 0f, 100f), Mathf.Clamp(pauseButtonMargin.y, 0f, 100f));
-            pauseMenuSize = new Vector2(Mathf.Clamp(pauseMenuSize.x, 320f, 700f), Mathf.Clamp(pauseMenuSize.y, 320f, 700f));
+            pauseMenuSize = new Vector2(Mathf.Clamp(pauseMenuSize.x, 320f, 700f), Mathf.Clamp(pauseMenuSize.y, showDisplayOptions ? 320f : 180f, 700f));
             if (string.IsNullOrWhiteSpace(displayOptionsTitle)) displayOptionsTitle = "DISPLAY OPTIONS";
             pauseTitleFontSize = Mathf.Clamp(pauseTitleFontSize, 18, 40);
             resultContentWidth = Mathf.Max(180f, resultContentWidth);
@@ -132,26 +144,44 @@ namespace Escape4Now.Multiplayer
         private void Awake()
         {
             instance = this;
-            map = FindFirstObjectByType<IsometricMapTemplate>();
-            turns = FindFirstObjectByType<TurnSystemController>();
-            matchTimer = FindFirstObjectByType<GameTimer>();
-            sourcePlayer = FindFirstObjectByType<PlayerCharacter>();
-            foreach (MonoBehaviour script in FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None))
+            string configurationError = "";
+            if (gameMode == null || !gameMode.ValidateConfiguration(out configurationError))
             {
-                bool gameplay = script is IsometricMapTemplate || script is PlayerCharacter
-                    || script is TurnSystemController || script is Escape4Now.Items.PlayerInventory
-                    || script is MapEventController || script is Escape4Now.Items.ItemSpawner
-                    || script is Escape4Now.Obstacles.ObstacleSpawner || script is Escape4Now.UI.ItemPickupBar
-                    || script is GameTimer || script is Escape4Now.Battle.KeyStealBattleController;
-                if (!gameplay || !script.enabled) continue;
+                status = gameMode == null ? "Assign a game mode component in the Inspector." : configurationError;
+                Debug.LogError(status, this);
+                enabled = false;
+                return;
+            }
+            map = ActiveMap as IsometricMapTemplate;
+            turns = gameMode.Turns;
+            matchTimer = gameMode.Timer;
+            sourcePlayer = gameMode.PlayerTemplate;
+            foreach (MonoBehaviour script in gameMode.GameplayComponents)
+            {
+                if (script == null || !script.enabled || heldScripts.Contains(script)) continue;
                 heldScripts.Add(script);
                 script.enabled = false;
             }
             if (sourcePlayer != null)
                 foreach (Renderer renderer in sourcePlayer.GetComponentsInChildren<Renderer>()) renderer.enabled = false;
-            lan = gameObject.AddComponent<LanMultiplayerSession>();
-            lan.Initialize(this);
+            if (gameMode.SupportsLan && map != null)
+            {
+                lan = gameObject.AddComponent<LanMultiplayerSession>();
+                lan.Initialize(this);
+            }
+            pauseAction = InputSystem.actions != null ? InputSystem.actions.FindAction("Player/Pause") : null;
         }
+
+        //The shared Pause action is supplied by the project's Input Actions asset.
+        private void Update()
+        {
+            if (!MatchStarted || pauseAction == null || !pauseAction.WasPressedThisFrame() || HasMatchFinished()) return;
+            if (pauseMenuOpen) ResumeMatch();
+            else OpenPauseMenu();
+        }
+
+        private void OpenPauseMenu() { PauseGame(); }
+        private void ResumeMatch() { ResumeGame(); }
 
         //A replacement UI can connect its player-count selector to this method.
         public void SetPlayerCount(int count) { playerCount = Mathf.Clamp(count, 2, 4); }
@@ -170,7 +200,7 @@ namespace Escape4Now.Multiplayer
         }
 
         //The network session calls this after the lobby is ready.
-        internal bool StartNetworkMatch(int count) => CreateParticipants(count);
+        internal bool StartNetworkMatch(int count) => gameMode != null && gameMode.SupportsLan && CreateParticipants(count);
 
         //Both play options share the same player setup.
         private bool CreateParticipants(int count)
@@ -182,16 +212,16 @@ namespace Escape4Now.Multiplayer
             for (int i = 0; i < count; i++)
                 if (!usedNames.Add(GetPlayerName(i)))
                 { status = "Each player needs a different name."; return false; }
-            if (map == null || turns == null || sourcePlayer == null || InputSystem.actions == null)
+            if (gameMode == null || !gameMode.ValidateConfiguration(out _) || ActiveMap == null || turns == null || sourcePlayer == null)
             { status = "The scene needs a map, player, turn system, and input actions."; return false; }
-            try { map.PrepareLayout(); }
+            try { ActiveMap.PrepareLayout(); }
             catch (System.InvalidOperationException error) { status = error.Message; return false; }
             //The hidden scene template has not joined yet, so its old tile is not reserved.
-            map.RemoveOccupant(sourcePlayer.GridPosition);
+            ActiveMap.RemoveOccupant(sourcePlayer.GridPosition);
             var cells = new List<Vector2Int>();
             for (int i = 0; i < count; i++)
             {
-                if (map.TryGetPlayerSpawn(i, out Vector2Int cell)) cells.Add(cell);
+                if (ActiveMap.TryGetPlayerSpawn(i, out Vector2Int cell)) cells.Add(cell);
             }
             if (cells.Count < count)
             { status = "There are not enough open spaces for the players."; return false; }
@@ -200,15 +230,37 @@ namespace Escape4Now.Multiplayer
             participants[0] = sourcePlayer;
             sourcePlayer.gameObject.SetActive(false);
             for (int i = 1; i < count; i++) participants[i] = Instantiate(sourcePlayer);
+
             for (int i = 0; i < count; i++)
             {
                 PlayerCharacter player = participants[i];
-                player.ConfigureParticipant(map, turns, cells[i], i + 1, GetPlayerColor(i), GetPlayerName(i));
+                player.ConfigureParticipant(ActiveMap, turns, cells[i], i + 1, GetPlayerColor(i), GetPlayerName(i), gameMode);
+
+                bool isBot = gameMode.SupportsBots && !LanMultiplayerSession.Active && IsBotPlayer(i);
+                player.SetBotControlled(isBot);
+                BotController bot = player.GetComponent<BotController>();
+                if (isBot)
+                {
+                    if (bot == null)
+                        bot = player.gameObject.AddComponent<BotController>();
+
+                    bot.enabled = true;
+                    bot.ResetSearchMemory();
+                }
+                else if (bot != null)
+                {
+                    bot.enabled = false;
+                }
                 player.enabled = true;
-                if (player.Inventory != null) player.Inventory.enabled = true;
-                foreach (Renderer renderer in player.GetComponentsInChildren<Renderer>(true)) renderer.enabled = true;
+
+                if (player.Inventory != null)
+                    player.Inventory.enabled = true;
+
+                foreach (Renderer renderer in player.GetComponentsInChildren<Renderer>(true))
+                    renderer.enabled = true;
             }
-            turns.SetPlayers(participants, map.LayoutSeed);
+            turns.SetPlayers(participants, ActiveMap.LayoutSeed);
+            gameMode.EnableMatchInputs();
             foreach (PlayerCharacter player in participants) player.gameObject.SetActive(true);
             foreach (MonoBehaviour script in heldScripts)
             {
@@ -217,11 +269,24 @@ namespace Escape4Now.Multiplayer
                     || script is Escape4Now.Obstacles.ObstacleSpawner)) continue;
                 script.enabled = true;
             }
-            if (LanMultiplayerSession.IsClient) map.GenerateBlankMap();
+            if (LanMultiplayerSession.IsClient && map != null) map.GenerateBlankMap();
             MatchStarted = true;
             status = "";
             Time.timeScale = 1f;
             return true;
+        }
+
+        //Returns whether the selected player slot is a bot.
+        public bool IsBotPlayer(int index)
+        {
+            return gameMode != null && gameMode.SupportsBots && index >= 0
+                && playerIsBot != null && index < playerIsBot.Length && playerIsBot[index];
+        }
+
+        public void SetBotPlayer(int index, bool value)
+        {
+            if (MatchStarted || index < 0 || index >= playerIsBot.Length) return;
+            playerIsBot[index] = gameMode != null && gameMode.SupportsBots && value;
         }
 
         //Temporary controls can be replaced by the team's main menu later.
@@ -230,7 +295,7 @@ namespace Escape4Now.Multiplayer
             PrepareSetupStyles();
             if (MatchStarted)
             {
-                if (TryGetMatchResult(out PlayerCharacter winner)) DrawMatchResult(winner);
+                if (gameMode.TryGetResult(participants, out MatchResult result)) DrawMatchResult(result);
                 else DrawMatchPauseMenu();
                 return;
             }
@@ -241,8 +306,8 @@ namespace Escape4Now.Multiplayer
             Rect area = new Rect((Screen.width - width) / 2, (Screen.height - height) / 2, width, height);
             setupScroll = GUI.BeginScrollView(area, setupScroll, new Rect(0, 0, width - 20, 520));
             float contentWidth = width - 24;
-            GUI.Label(new Rect(0, 0, contentWidth, 44), "Escape 4 Now", titleStyle);
-            GUI.enabled = !LanMultiplayerSession.Active && !lan.Connecting;
+            GUI.Label(new Rect(0, 0, contentWidth, 44), setupTitle, titleStyle);
+            GUI.enabled = !LanMultiplayerSession.Active && (lan == null || !lan.Connecting);
             GUI.Toolbar(new Rect(0, 50, contentWidth, 32), 0, new[] { "Same Device" });
             GUI.enabled = true;
             DrawSetupColor(new Rect(0, 90, contentWidth, 1), new Color(0.23f, 0.27f, 0.24f));
@@ -260,14 +325,42 @@ namespace Escape4Now.Multiplayer
                 bool playing = i < playerCount;
                 Color color = playing ? GetPlayerColor(i) : new Color(0.24f, 0.27f, 0.25f);
                 DrawSetupColor(new Rect(8, y + 4, 14, 26), color);
+
                 if (playing)
                 {
                     GUI.Label(new Rect(40, y, 48, 32), "Name", smallStyle);
-                    playerNames[i] = GUI.TextField(new Rect(92, y + 2, Mathf.Max(50, contentWidth - 100), 28),
-                        playerNames[i], 16, buttonStyle);
+
+                    float buttonWidth = gameMode != null && gameMode.SupportsBots ? 76 : 0;
+                    float buttonX = contentWidth - buttonWidth;
+                    float nameWidth = Mathf.Max(30, buttonX - 100);
+
+                    if (IsBotPlayer(i))
+                    {
+                        GUI.Label(new Rect(92, y + 2, nameWidth, 28), "Bot " + GetBotNumber(i), buttonStyle);
+                    }
+                    else
+                    {
+                        playerNames[i] = GUI.TextField(
+                            new Rect(92, y + 2, nameWidth, 28),
+                            playerNames[i], 16, buttonStyle);
+                    }
+
+                    if (buttonWidth > 0 && GUI.Button(
+                        new Rect(buttonX, y + 2, buttonWidth, 28),
+                        playerIsBot[i] ? "Bot" : "Human",
+                        playerIsBot[i] ? selectedStyle : buttonStyle))
+                    {
+                        SetBotPlayer(i, !IsBotPlayer(i));
+                    }
                 }
-                else GUI.Label(new Rect(40, y + 4, 110, 26), "Not playing", smallStyle);
-                DrawSetupColor(new Rect(0, y + 38, contentWidth, 1), new Color(0.16f, 0.19f, 0.17f));
+                else
+                {
+                    GUI.Label(new Rect(40, y + 4, 110, 26), "Not playing", smallStyle);
+                }
+
+                DrawSetupColor(
+                    new Rect(0, y + 38, contentWidth, 1),
+                    new Color(0.16f, 0.19f, 0.17f));
             }
             if (GUI.Button(new Rect(0, 402, contentWidth, 48), "Start Match", selectedStyle)) StartLocalMatch();
             GUI.Label(new Rect(0, 464, contentWidth, 56), status, errorStyle);
@@ -275,20 +368,25 @@ namespace Escape4Now.Multiplayer
         }
 
         //Keeps match controls in one menu instead of covering the map.
+        public void PauseGame()
+        {
+            if (!MatchStarted || HasMatchFinished()) return;
+            pauseMenuOpen = true;
+            Time.timeScale = 0f;
+            if (LanMultiplayerSession.Active) lan.Submit("pause");
+        }
+
+        public void ResumeGame()
+        {
+            if (LanMultiplayerSession.Active) lan.Submit("resume");
+            else ApplyNetworkPause(false, HasMatchFinished());
+        }
+
         private void DrawMatchPauseMenu()
         {
             Rect pauseButton = new Rect(Screen.width - pauseButtonMargin.x - pauseButtonSize.x,
                 pauseButtonMargin.y, pauseButtonSize.x, pauseButtonSize.y);
-            if (!pauseMenuOpen && GUI.Button(pauseButton, "Pause", buttonStyle))
-            {
-                pauseMenuOpen = true;
-                if (LanMultiplayerSession.Active)
-                {
-                    Time.timeScale = 0f;
-                    lan.Submit("pause");
-                }
-                else Time.timeScale = 0f;
-            }
+            if (!pauseMenuOpen && GUI.Button(pauseButton, "Pause", buttonStyle)) OpenPauseMenu();
 
             if (!pauseMenuOpen) return;
 
@@ -313,18 +411,19 @@ namespace Escape4Now.Multiplayer
             float left = panel.x + 20f;
             float rowWidth = panel.width - 40f;
             if (GUI.Button(new Rect(left, panel.y + 52f, rowWidth, 38f), "Resume Game", selectedStyle))
+                ResumeMatch();
+
+            if (showDisplayOptions)
             {
-                if (LanMultiplayerSession.Active) lan.Submit("resume");
-                else ApplyNetworkPause(false, HasMatchFinished());
+                GUI.Label(new Rect(left, panel.y + 100f, rowWidth, 24f), displayOptionsTitle, labelStyle);
+                DrawPauseToggle(new Rect(left, panel.y + 132f, rowWidth, 30f), "Show Event Tiles", ref showEventTiles, true);
+                DrawPauseToggle(new Rect(left, panel.y + 170f, rowWidth, 30f), "Show Item Obstacles", ref showItemObstacles);
+                DrawPauseToggle(new Rect(left, panel.y + 208f, rowWidth, 30f), "Show Key Location", ref showKeyLocation);
             }
 
-            GUI.Label(new Rect(left, panel.y + 100f, rowWidth, 24f), displayOptionsTitle, labelStyle);
-            DrawPauseToggle(new Rect(left, panel.y + 132f, rowWidth, 30f), "Show Event Tiles", ref showEventTiles, true);
-            DrawPauseToggle(new Rect(left, panel.y + 170f, rowWidth, 30f), "Show Item Obstacles", ref showItemObstacles);
-            DrawPauseToggle(new Rect(left, panel.y + 208f, rowWidth, 30f), "Show Key Location", ref showKeyLocation);
-
-            DrawSetupColor(new Rect(left, panel.y + 258f, rowWidth, 1f), new Color(1f, 1f, 1f, 0.2f));
-            if (GUI.Button(new Rect(left, panel.y + 278f, rowWidth, 38f), "Leave Match", buttonStyle))
+            float leaveY = showDisplayOptions ? panel.y + 278f : panel.yMax - 58f;
+            DrawSetupColor(new Rect(left, leaveY - 20f, rowWidth, 1f), new Color(1f, 1f, 1f, 0.2f));
+            if (GUI.Button(new Rect(left, leaveY, rowWidth, 38f), "Leave Match", buttonStyle))
                 ReturnToSetup();
         }
 
@@ -341,25 +440,12 @@ namespace Escape4Now.Multiplayer
         //Keeps a finished match stopped if the pause menu is opened after the result.
         private bool HasMatchFinished()
         {
-            return TryGetMatchResult(out _);
+            return gameMode != null && gameMode.TryGetResult(participants, out _);
         }
 
-        private bool TryGetMatchResult(out PlayerCharacter winner)
+        private void DrawMatchResult(MatchResult result)
         {
-            winner = null;
-            if (participants != null)
-                foreach (PlayerCharacter player in participants)
-                    if (player != null && player.HasReachedExit)
-                    {
-                        winner = player;
-                        return true;
-                    }
-            return matchTimer != null && matchTimer.HasExpired;
-        }
-
-        private void DrawMatchResult(PlayerCharacter winner)
-        {
-            Color accent = winner != null ? resultWinColor : resultLoseColor;
+            Color accent = result.Won ? resultWinColor : resultLoseColor;
             if (resultTitleStyle == null)
             {
                 resultTitleStyle = new GUIStyle(GUI.skin.label)
@@ -373,8 +459,8 @@ namespace Escape4Now.Multiplayer
             resultTitleStyle.normal.textColor = accent;
             resultMessageStyle.normal.textColor = resultTextColor;
             resultDetailStyle.normal.textColor = resultDetailColor;
-            string title = winner != null ? winner.name.ToUpperInvariant() + " " + escapeTitleSuffix : timeoutTitle;
-            string message = winner != null ? otherPlayersLoseMessage : timeoutMessage;
+            string title = result.Title;
+            string message = result.Message;
             int seconds = matchTimer != null ? Mathf.Max(0, Mathf.CeilToInt(matchTimer.TimeRemaining)) : 0;
             string detail = resultTimeLabel + " " + (seconds / 60).ToString("00") + ":" + (seconds % 60).ToString("00");
 
@@ -412,6 +498,12 @@ namespace Escape4Now.Multiplayer
             value = value.Replace("<", "").Replace(">", "").Trim();
             if (value.Length == 0) value = "Player " + (index + 1);
             return value.Length > 16 ? value.Substring(0, 16) : value;
+        }
+
+        //Returns the bot's display number.
+        private int GetBotNumber(int index)
+        {
+            return index + 1;
         }
 
         //Creates the temporary menu styles once, instead of allocating them every frame.

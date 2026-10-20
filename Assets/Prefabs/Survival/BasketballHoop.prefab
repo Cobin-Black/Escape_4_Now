@@ -1,0 +1,81 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &100000
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 400000}
+  - component: {fileID: 11400000}
+  m_Layer: 0
+  m_Name: BasketballHoop
+  m_TagString: Untagged
+  m_IsActive: 1
+--- !u!4 &400000
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 100000}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_Children: []
+  m_Father: {fileID: 0}
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 100000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b732f042c1524cf7a535638ccdb4f003, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  kind: 10
+  material: {fileID: 1169820800, guid: 2a0333a9a9204ffb92e7a7454ce04859, type: 2}
+  previewTileSize: {x: 1.2, y: 0.6}
+  previewFootprint: {x: 1, y: 1}
+  parts:
+  - offset: {x: -0.31, y: 0}
+    width: 0.11
+    depth: 0.11
+    bottom: 0
+    height: 1.25
+    color: {r: 0.49, g: 0.56, b: 0.59, a: 1}
+  - offset: {x: -0.31, y: 0}
+    width: 0.08
+    depth: 0.72
+    bottom: 1.12
+    height: 0.48
+    color: {r: 0.91, g: 0.94, b: 0.9, a: 1}
+  - offset: {x: -0.18, y: 0}
+    width: 0.32
+    depth: 0.08
+    bottom: 1.18
+    height: 0.05
+    color: {r: 0.83, g: 0.27, b: 0.22, a: 1}
+  strokes:
+  - points:
+    - {x: -0.02, y: -0.19}
+    - {x: 0.29, y: -0.19}
+    - {x: 0.29, y: 0.19}
+    - {x: -0.02, y: 0.19}
+    height: 1.18
+    width: 0.035
+    color: {r: 0.83, g: 0.27, b: 0.22, a: 1}
+    loop: 1
+  - points:
+    - {x: -0.28, y: -0.17}
+    - {x: -0.28, y: 0.17}
+    height: 1.32
+    width: 0.025
+    color: {r: 0.83, g: 0.27, b: 0.22, a: 1}
+    loop: 0

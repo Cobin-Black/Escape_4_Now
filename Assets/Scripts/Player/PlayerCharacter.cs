@@ -7,6 +7,8 @@ using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.AI;
 using Escape4Now.UI;
+using Escape4Now.GameModes;
+using Escape4Now.Input;
 
 namespace Escape4Now.Player
 {
@@ -15,8 +17,15 @@ namespace Escape4Now.Player
     public sealed class PlayerCharacter : MonoBehaviour
     {
         //Starting tile, appearance, and movement speed.
+        [Header("Map and Turn References")]
         [SerializeField] private IsometricMapTemplate mapTemplate;
+        [SerializeField] private GameModeController gameMode;
+        private IPlayerGridMap configuredMap;
+        private IPlayerGridMap MovementMap => configuredMap ?? gameMode?.GridMap ?? mapTemplate;
+        public GameModeController Mode => gameMode;
+        public GameplayInputBindings InputBindings => gameMode != null ? gameMode.InputBindings : null;
         [SerializeField] private TurnSystemController turnSystem;
+        [Header("Player Setup")]
         [SerializeField] private Vector2Int gridPosition = new Vector2Int(2, 2);
         [SerializeField] private Color playerColor = Color.black;
         [SerializeField] private Color outlineColor = new Color(0.65f, 0.65f, 0.65f, 1f);
@@ -35,8 +44,6 @@ namespace Escape4Now.Player
         [SerializeField, Range(0.01f, 0.2f)] private float turnRingThickness = 0.045f;
         [SerializeField] private float turnRingGroundOffset = 0.015f;
         [Header("Current Game Mode Objective")]
-        [SerializeField] private string objectiveBeforeKey = "Find the key, then reach the exit.";
-        [SerializeField] private string objectiveAfterKey = "Reach the exit.";
         [SerializeField] private string rollPrompt = "ROLL: SPACE";
         [SerializeField] private string compactRollPrompt = "SPACE";
         [Header("Gameplay HUD")]
@@ -96,9 +103,6 @@ namespace Escape4Now.Player
         [SerializeField, Min(0.1f)] private float diceRollAnimationDuration = 0.9f;
         [SerializeField, Min(0f)] private float sharedTileHorizontalOffset = 0.14f;
         [SerializeField, Min(0f)] private float sharedTileVerticalOffset = 0.08f;
-        [Header("Exit Rules")]
-        [SerializeField, Tooltip("When enabled, players must carry the key before they can escape.")]
-        private bool exitNeedsKey = true;
 
         private SpriteRenderer spriteRenderer;
         private Coroutine moveRoutine;
@@ -129,6 +133,7 @@ namespace Escape4Now.Player
         public PlayerEventState EventState => eventState;
         private bool isUsingItem;
         private bool isInMenu;
+        private bool isBotControlled;
         public PlayerInventory Inventory => inventory;
         public bool HasReachedExit => hasReachedExit;
         public bool HasRolled => hasRolled;
@@ -146,9 +151,17 @@ namespace Escape4Now.Player
         //Read-only movement state for the turn and map scripts.
         public Vector2Int GridPosition => gridPosition;
         public bool IsMoving => moveRoutine != null;
+        public bool IsBotControlled => isBotControlled;
 
-        public void SetExitNeedsKey(bool value) { exitNeedsKey = value; }
-        private bool CanUseExit => !exitNeedsKey || (inventory != null && inventory.HasKey());
+        //The scene's gamemode decides who may leave. With no gamemode (such as the tutorial) the exit is open.
+        private bool CanUseExit
+        {
+            get
+            {
+                var mode = Escape4Now.GameModes.GameMode.Current;
+                return mode == null || mode.CanUseExit(this);
+            }
+        }
 
         //Checks settings and places the player on its starting tile.
         private void Awake()
@@ -160,10 +173,10 @@ namespace Escape4Now.Player
             SetupTurnRing();
             SnapToGridPosition();
             registeredPosition = gridPosition;
-            if (mapTemplate != null)
+            if (MovementMap != null)
             {
-                mapEvents = mapTemplate.GetComponent<MapEventController>();
-                mapTemplate.SetOccupantPosition(gridPosition, gridPosition);
+                mapEvents = mapTemplate != null ? mapTemplate.GetComponent<MapEventController>() : null;
+                MovementMap.SetOccupantPosition(gridPosition, gridPosition);
             }
         }
 
@@ -172,6 +185,7 @@ namespace Escape4Now.Player
         {
             if (Escape4Now.Multiplayer.LanMultiplayerSession.Active) return;
             if (Time.timeScale <= 0f || Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused) return;
+            if (isBotControlled) return;
             if (!CanReadTurnInput) return;
             if (hasReachedExit)
             {
@@ -216,6 +230,26 @@ private Texture2D circleTexture;
             && Time.realtimeSinceStartup - rollAnimStart < diceRollAnimationDuration;
 // Which of the 3x3 cells hold a dot for faces 1-6 (cell = row * 3 + column)
 private static readonly int[] DiceFaceMasks = { 0, 16, 257, 273, 325, 341, 365 };
+        //The turn panel's size before shrinking, and how much it shrinks to fit a small window.
+        private Vector2 GetHudPanelSize(out float fitScale)
+        {
+            Vector2 requestedSize = isTutorial ? tutorialHudSize : hudPanelSize;
+            float availableWidth = HudScale.Width - hudTopLeftMargin.x * 2f - hudTopRightClearance;
+            fitScale = Mathf.Clamp(Mathf.Min(availableWidth / requestedSize.x,
+                (HudScale.Height - hudTopLeftMargin.y * 2f) / requestedSize.y), 0.01f, 1f);
+            return requestedSize;
+        }
+
+        //Where the turn panel is drawn, in HudScale units, so other UI (like the tutorial) can point at it.
+        public Rect HudPanelRect
+        {
+            get
+            {
+                Vector2 size = GetHudPanelSize(out float fitScale);
+                return new Rect(hudTopLeftMargin.x, hudTopLeftMargin.y, size.x * fitScale, size.y * fitScale);
+            }
+        }
+
         //Draws the roll prompt or the current move budget.
         private void OnGUI()
         {
@@ -226,12 +260,7 @@ private static readonly int[] DiceFaceMasks = { 0, 16, 257, 273, 325, 341, 365 }
             PrepareHudStyles();
 
             Matrix4x4 previousMatrix = HudScale.Apply();
-            float screenWidth = HudScale.Width;
-            float screenHeight = HudScale.Height;
-            Vector2 requestedSize = isTutorial ? tutorialHudSize : hudPanelSize;
-            float availableWidth = screenWidth - hudTopLeftMargin.x * 2f - hudTopRightClearance;
-            float fitScale = Mathf.Clamp(Mathf.Min(availableWidth / requestedSize.x,
-                (screenHeight - hudTopLeftMargin.y * 2f) / requestedSize.y), 0.01f, 1f);
+            Vector2 requestedSize = GetHudPanelSize(out float fitScale);
             GUI.matrix *= Matrix4x4.Scale(new Vector3(fitScale, fitScale, 1f));
             Rect panel = new Rect(hudTopLeftMargin.x / fitScale, hudTopLeftMargin.y / fitScale,
                 requestedSize.x, requestedSize.y);
@@ -255,12 +284,12 @@ private static readonly int[] DiceFaceMasks = { 0, 16, 257, 273, 325, 341, 365 }
                 turnName.ToUpperInvariant(), hudPlayerStyle);
 
             DrawHudColor(new Rect(contentX, detailsY - hudSectionGap, contentWidth, hudDividerThickness), hudDividerColor);
-            float timerWidth = Mathf.Min(hudTimerWidth, contentWidth * 0.42f);
+            float timerWidth = gameTimer != null ? Mathf.Min(hudTimerWidth, contentWidth * 0.42f) : 0f;
             float minimumActionWidth = hudRollTextOffset + hudActionStyle.CalcSize(new GUIContent(compactRollPrompt)).x;
-            bool stackHudDetails = contentWidth - timerWidth - hudColumnGap < minimumActionWidth;
+            bool stackHudDetails = gameTimer != null && contentWidth - timerWidth - hudColumnGap < minimumActionWidth;
             float timerX = stackHudDetails ? contentX : panel.xMax - hudPadding - timerWidth;
             float actionWidth = Mathf.Max(0f, timerX - contentX - hudColumnGap);
-            if (stackHudDetails) actionWidth = contentWidth;
+            if (stackHudDetails || gameTimer == null) actionWidth = contentWidth;
             else DrawHudColor(new Rect(timerX - hudColumnGap * 0.5f, detailsY,
                 hudDividerThickness, detailsHeight), hudDividerColor);
             if (hasReachedExit)
@@ -298,9 +327,11 @@ private static readonly int[] DiceFaceMasks = { 0, 16, 257, 273, 325, 341, 365 }
                     (stackHudDetails ? contentWidth : timerWidth) - timerTextOffset, detailsHeight), time, hudTimerStyle);
             }
 
-            if (!hasReachedExit && !isTutorial)
+            var gameMode = isTutorial ? null : Escape4Now.GameModes.GameMode.Current;
+            string objective = gameMode != null ? gameMode.GetObjective(this) : "";
+            if (!hasReachedExit && !string.IsNullOrEmpty(objective))
             {
-                string objective = inventory != null && inventory.HasKey() ? objectiveAfterKey : objectiveBeforeKey;
+
                 float minimumObjectiveY = detailsY + detailsHeight * (stackHudDetails ? 2f : 1f) + hudSectionGap * 2f;
                 float objectiveY = Mathf.Max(minimumObjectiveY, panel.y + panel.height * hudObjectiveRowPosition);
                 DrawHudColor(new Rect(contentX, objectiveY - hudSectionGap, contentWidth, hudDividerThickness), hudDividerColor);
@@ -431,10 +462,10 @@ private void DrawKeyMarker()
 {
     bool hasKey = networkHasKey || (inventory != null && inventory.HasKey());
     Camera viewCamera = Camera.main;
-    if (!hasKey || !isActiveAndEnabled || viewCamera == null || mapTemplate == null) return;
-    ItemSpawner spawner = mapTemplate.GetComponent<ItemSpawner>();
-    SpriteRenderer keyVisual = spawner != null && spawner.KeyPrefab != null
-        ? spawner.KeyPrefab.GetComponentInChildren<SpriteRenderer>(true) : null;
+    if (!hasKey || !isActiveAndEnabled || viewCamera == null || MovementMap == null) return;
+    var race = Escape4Now.GameModes.Race_Gamemode.Current;
+    SpriteRenderer keyVisual = race != null && race.KeyPrefab != null
+        ? race.KeyPrefab.GetComponentInChildren<SpriteRenderer>(true) : null;
     Sprite sprite = keyVisual != null ? keyVisual.sprite : null;
     if (sprite == null || sprite.texture == null) return;
 
@@ -539,6 +570,12 @@ private Texture2D MakeCircleTexture(int size)
         //Finds the player's actions in the project-wide Input System asset (Assets/Settings/InputSystem_Actions).
         private void SetupInputActions()
         {
+            if (InputBindings != null)
+            {
+                moveAction = InputBindings.Move;
+                rollDiceAction = InputBindings.RollDice;
+                return;
+            }
             InputActionAsset actions = InputSystem.actions;
             if (actions == null)
             {
@@ -644,12 +681,15 @@ private Texture2D MakeCircleTexture(int size)
         }
 
         //Sets a local player's starting space and identifying color before the match.
-        public void ConfigureParticipant(IsometricMapTemplate map, TurnSystemController turns,
-            Vector2Int cell, int number, Color color, string displayName = null)
+        public void ConfigureParticipant(IPlayerGridMap map, TurnSystemController turns,
+            Vector2Int cell, int number, Color color, string displayName = null, GameModeController mode = null)
         {
-            if (spriteRenderer != null && mapTemplate != null)
-                mapTemplate.RemoveOccupant(registeredPosition);
-            mapTemplate = map;
+            if (spriteRenderer != null && MovementMap != null)
+                MovementMap.RemoveOccupant(registeredPosition);
+            mapTemplate = map as IsometricMapTemplate;
+            configuredMap = map;
+            if (mode != null) gameMode = mode;
+            SetupInputActions();
             turnSystem = turns;
             gridPosition = cell;
             string safeName = string.IsNullOrWhiteSpace(displayName) ? "Player " + number : displayName.Trim();
@@ -660,7 +700,7 @@ private Texture2D MakeCircleTexture(int size)
                 SetupMarker();
                 SnapToGridPosition();
                 registeredPosition = cell;
-                mapTemplate.SetOccupantPosition(cell, cell);
+                MovementMap.SetOccupantPosition(cell, cell);
             }
         }
 
@@ -677,7 +717,7 @@ private Texture2D MakeCircleTexture(int size)
             if (updateOccupancy) UpdateMapOccupancy(gridPosition);
             else registeredPosition = gridPosition;
             transform.position = new Vector3(state.worldX, state.worldY, -1f);
-            float row = (state.worldY - mapTemplate.transform.position.y) / (mapTemplate.TileHeight * 0.5f);
+            float row = (state.worldY - MovementMap.transform.position.y) / (MovementMap.TileHeight * 0.5f);
             spriteRenderer.sortingOrder = 505 - Mathf.RoundToInt(row * 10f);
         }
 
@@ -745,7 +785,7 @@ private Texture2D MakeCircleTexture(int size)
         public bool SetGridPosition(Vector2Int newGridPosition)
         {
             if (Time.timeScale <= 0f || Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused
-                || (IsMoving && !resolvingStep) || hasReachedExit || mapTemplate == null || !mapTemplate.IsWalkable(newGridPosition))
+                || (IsMoving && !resolvingStep) || hasReachedExit || MovementMap == null || !MovementMap.IsWalkable(newGridPosition))
             {
                 return false;
             }
@@ -753,7 +793,7 @@ private Texture2D MakeCircleTexture(int size)
             gridPosition = newGridPosition;
             SnapToGridPosition();
             UpdateMapOccupancy(newGridPosition);
-            if (mapTemplate.IsExit(newGridPosition) && CanUseExit) ReachExit();
+            if (MovementMap.IsExit(newGridPosition) && CanUseExit) ReachExit();
             return true;
         }
 
@@ -766,13 +806,13 @@ private Texture2D MakeCircleTexture(int size)
             var cells = new Vector2Int[participants.Count];
             var people = new HashSet<PlayerCharacter>();
             var indices = new HashSet<int>();
-            IsometricMapTemplate map = participants[0] != null ? participants[0].mapTemplate : null;
+            IPlayerGridMap map = participants[0] != null ? participants[0].MovementMap : null;
             if (map == null) return false;
             for (int i = 0; i < participants.Count; i++)
             {
                 PlayerCharacter player = participants[i];
                 int target = destinations[i];
-                if (player == null || !player.isActiveAndEnabled || !people.Add(player) || player.mapTemplate != map
+                if (player == null || !player.isActiveAndEnabled || !people.Add(player) || player.MovementMap != map
                     || player.hasReachedExit || (player.IsMoving && !player.resolvingStep)
                     || !map.IsWalkable(player.gridPosition) || map.IsExit(player.gridPosition)
                     || target < 0 || target >= participants.Count
@@ -797,8 +837,8 @@ private Texture2D MakeCircleTexture(int size)
         //Event movement cannot go below zero or grow beyond the board's tile count.
         internal void ChangeEventMovement(int amount)
         {
-            if (!resolvingStep || mapTemplate == null) return;
-            movesRemaining = Mathf.Clamp(movesRemaining + Mathf.Clamp(amount, -2, 2), 0, mapTemplate.Width * mapTemplate.Height);
+            if (!resolvingStep || MovementMap == null) return;
+            movesRemaining = Mathf.Clamp(movesRemaining + Mathf.Clamp(amount, -2, 2), 0, MovementMap.Width * MovementMap.Height);
         }
 
         //Checks all destinations before moving the group, without changing inventory or moves.
@@ -806,14 +846,14 @@ private Texture2D MakeCircleTexture(int size)
         {
             if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient || participants == null || targets == null
                 || participants.Count < 2 || participants.Count > 4 || targets.Length != participants.Count) return false;
-            IsometricMapTemplate map = participants[0] != null ? participants[0].mapTemplate : null;
+            IPlayerGridMap map = participants[0] != null ? participants[0].MovementMap : null;
             if (map == null) return false;
             var cells = new HashSet<Vector2Int>();
             var people = new HashSet<PlayerCharacter>();
             for (int i = 0; i < participants.Count; i++)
             {
                 PlayerCharacter player = participants[i];
-                if (player == null || !player.isActiveAndEnabled || player.mapTemplate != map || !people.Add(player)
+                if (player == null || !player.isActiveAndEnabled || player.MovementMap != map || !people.Add(player)
                     || player.hasReachedExit || (player.IsMoving && !player.resolvingStep)
                     || !map.IsWalkable(targets[i]) || map.IsOccupied(targets[i]) || map.IsExit(targets[i])
                     || !cells.Add(targets[i])) return false;
@@ -831,21 +871,21 @@ private Texture2D MakeCircleTexture(int size)
         //Starts a move only when the player is ready and a valid route exists.
         public bool MoveToGridPosition(Vector2Int newGridPosition)
         {
-            if (!CanReadTurnInput || !isActiveAndEnabled || IsMoving || hasReachedExit || mapTemplate == null
+            if (!CanReadTurnInput || !isActiveAndEnabled || IsMoving || hasReachedExit || MovementMap == null
                 || !hasRolled || IsRollAnimating || movesRemaining <= 0
                 || (turnSystem != null && !turnSystem.IsPlayersTurn(this)))
             {
                 return false;
             }
 
-            if (!mapTemplate.TryFindPath(gridPosition, newGridPosition, out List<Vector2Int> path))
+            if (!MovementMap.TryFindPath(gridPosition, newGridPosition, out List<Vector2Int> path))
             {
                 return false;
             }
 
             if (path.Count > movesRemaining) return false;
             //Players may share a tile; walls and the movement budget still limit the route.
-            if (path.Count == 0 || (mapTemplate.IsExit(path[0]) && !CanUseExit)) return false;
+            if (path.Count == 0 || (MovementMap.IsExit(path[0]) && !CanUseExit)) return false;
             moveRoutine = StartCoroutine(MoveAlongPath(path));
             return true;
         }
@@ -1004,12 +1044,12 @@ private Texture2D MakeCircleTexture(int size)
         //Lines the player's feet up with the center of its current tile.
         private void SnapToGridPosition()
         {
-            if (mapTemplate == null || spriteRenderer == null)
+            if (MovementMap == null || spriteRenderer == null)
             {
                 return;
             }
 
-            Vector3 worldPosition = mapTemplate.GridToWorld(gridPosition);
+            Vector3 worldPosition = MovementMap.GridToWorld(gridPosition);
             transform.position = new Vector3(worldPosition.x, worldPosition.y, -1f);
             spriteRenderer.sortingOrder = 505 - (gridPosition.x + gridPosition.y) * 10;
         }
@@ -1017,7 +1057,7 @@ private Texture2D MakeCircleTexture(int size)
         // Adjusts player positions when multiple players share the same tile.
         private void RefreshSharedTilePositions(Vector2Int tile)
         {
-            if (mapTemplate == null)
+            if (MovementMap == null)
             {
                 return;
             }
@@ -1030,14 +1070,14 @@ private Texture2D MakeCircleTexture(int size)
             foreach (PlayerCharacter player in allPlayers)
             {
                 if (player != null && player.isActiveAndEnabled
-                    && player.mapTemplate == mapTemplate
+                    && player.MovementMap == MovementMap
                     && player.gridPosition == tile)
                 {
                     playersOnTile.Add(player);
                 }
             }
 
-            Vector3 tileCenter = mapTemplate.GridToWorld(tile);
+            Vector3 tileCenter = MovementMap.GridToWorld(tile);
 
             // Keep one player centered.
             if (playersOnTile.Count == 1)
@@ -1074,8 +1114,8 @@ private Texture2D MakeCircleTexture(int size)
 
             foreach (PlayerCharacter player in playersOnTile)
             {
-                float row = (player.transform.position.y - mapTemplate.transform.position.y)
-                    / (mapTemplate.TileHeight * 0.5f);
+                float row = (player.transform.position.y - MovementMap.transform.position.y)
+                    / (MovementMap.TileHeight * 0.5f);
 
                 player.spriteRenderer.sortingOrder =
                     505 - Mathf.RoundToInt(row * 10f);
@@ -1088,18 +1128,18 @@ private Texture2D MakeCircleTexture(int size)
             // Move through the grid one tile at a time.
             foreach (Vector2Int next in path)
             {
-                if (!mapTemplate.IsWalkable(next) || movesRemaining <= 0) break;
-                if (mapTemplate.IsExit(next) && !CanUseExit)
+                if (!MovementMap.IsWalkable(next) || movesRemaining <= 0) break;
+                if (MovementMap.IsExit(next) && !CanUseExit)
                 {
                     Debug.Log("The exit is locked. Go find a key.");
                     break;
                 }
-                Vector3 targetPosition = mapTemplate.GridToWorld(next);
+                Vector3 targetPosition = MovementMap.GridToWorld(next);
                 targetPosition.z = -1f;
                 while (Vector3.Distance(transform.position, targetPosition) > 0.01f)
                 {
                     transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
-                    float row = (transform.position.y - mapTemplate.transform.position.y) / (mapTemplate.TileHeight * 0.5f);
+                    float row = (transform.position.y - MovementMap.transform.position.y) / (MovementMap.TileHeight * 0.5f);
                     spriteRenderer.sortingOrder = 505 - Mathf.RoundToInt(row * 10f);
                     yield return null;
                 }
@@ -1110,7 +1150,7 @@ private Texture2D MakeCircleTexture(int size)
                 UpdateMapOccupancy(next);
                 CheckForItem(next);
 
-                if (mapTemplate.IsExit(next))
+                if (MovementMap.IsExit(next))
                 {
                     if (CanUseExit)
                     {
@@ -1154,7 +1194,7 @@ private Texture2D MakeCircleTexture(int size)
         public bool CanBeTargetedBy(PlayerCharacter attacker)
         {
             return !Escape4Now.Multiplayer.LanMultiplayerSession.IsClient && attacker != null && attacker != this
-                && isActiveAndEnabled && attacker.isActiveAndEnabled && mapTemplate != null && attacker.mapTemplate == mapTemplate
+                && isActiveAndEnabled && attacker.isActiveAndEnabled && MovementMap != null && attacker.MovementMap == MovementMap
                 && attacker.turnSystem == turnSystem && attacker.IsCurrentTurn && !attacker.IsMoving
                 && !attacker.HasReachedExit && !attacker.IsInMenu() && !attacker.IsUsingItem()
                 && !IsMoving && !hasReachedExit && !eventState.IsProtectedFromPlayers;
@@ -1171,7 +1211,7 @@ private Texture2D MakeCircleTexture(int size)
         //Updates which tile the map thinks this player occupies, for wall fading.
         private void UpdateMapOccupancy(Vector2Int newPosition)
         {
-            if (mapTemplate == null)
+            if (MovementMap == null)
             {
                 return;
             }
@@ -1182,8 +1222,8 @@ private Texture2D MakeCircleTexture(int size)
             //Rebuild the occupied set so leaving a shared tile does not mark it empty.
             var occupied = new List<Vector2Int>();
             foreach (PlayerCharacter player in FindObjectsByType<PlayerCharacter>(FindObjectsSortMode.None))
-                if (player.isActiveAndEnabled && player.mapTemplate == mapTemplate) occupied.Add(player.gridPosition);
-            mapTemplate.ReplacePlayerOccupants(occupied);
+                if (player.isActiveAndEnabled && player.MovementMap == MovementMap) occupied.Add(player.gridPosition);
+            MovementMap.ReplacePlayerOccupants(occupied);
 
             RefreshSharedTilePositions(oldPosition);
             RefreshSharedTilePositions(newPosition);
@@ -1284,12 +1324,18 @@ private Texture2D MakeCircleTexture(int size)
             }
         }
 
+        // Sets whether this player is controlled by a bot.
+        public void SetBotControlled(bool value)
+        {
+            isBotControlled = value;
+        }
+
         //Releases the generated image and stops tracking this player on the map.
         private void OnDestroy()
         {
-            if (mapTemplate != null)
+            if (MovementMap != null)
             {
-                mapTemplate.RemoveOccupant(registeredPosition);
+                MovementMap.RemoveOccupant(registeredPosition);
             }
 
             ReleaseMarker();
