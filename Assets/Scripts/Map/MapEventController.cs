@@ -54,17 +54,13 @@ namespace Escape4Now.Map
         private int visibilityTurnsRemaining;
         private bool blackoutStartedThisTurn;
         private TurnSystemController turnSystem;
-        private Texture2D visibilityMask;
         private PlayerCharacter[] players;
-        private GUIStyle noticeText;
-        private GUIStyle noticeTitle;
         private HashSet<MapEventType> allowedTypes;
         private readonly Dictionary<MapEventType, Vector2Int> forcedTiles = new Dictionary<MapEventType, Vector2Int>();
         private readonly List<EventTileMarker> placedMarkers = new List<EventTileMarker>();
         private readonly Dictionary<EventTileMarker, Vector2Int> cellsByMarker = new Dictionary<EventTileMarker, Vector2Int>();
         private bool showEventLocations;
         private bool isTutorial;
-        private GUIStyle eventToggleStyle;
 
         public event System.Action<PlayerCharacter, MapEventType> EventTriggered;
 
@@ -378,41 +374,6 @@ namespace Escape4Now.Map
         }
 
         //Keeps the latest result readable beside the turn panel, including during Blackout.
-        private void OnGUI()
-        {
-            if (Escape4Now.Multiplayer.LocalMultiplayerSession.MatchHasEnded) return;
-            if (visibilityTurnsRemaining > 0) DrawReducedVisibility();
-            if (!Escape4Now.Multiplayer.LocalMultiplayerSession.MatchIsRunning && isTutorial)
-            {
-                eventToggleStyle ??= new GUIStyle(GUI.skin.button) { fontSize = 14, fontStyle = FontStyle.Bold };
-                bool visible = GUI.Toggle(new Rect(Screen.width - 174f, 62f, 162f, 32f),
-                    showEventLocations, showEventLocations ? "Hide Event Tiles" : "Show Event Tiles", eventToggleStyle);
-                if (visible != showEventLocations) SetEventLocationsVisible(visible);
-            }
-            if (string.IsNullOrEmpty(message)) return;
-            noticeText ??= new GUIStyle(GUI.skin.label) { fontSize = 18, wordWrap = true, richText = false };
-            noticeTitle ??= new GUIStyle(GUI.skin.label) { fontSize = 14, fontStyle = FontStyle.Bold, richText = false };
-            noticeText.normal.textColor = Color.white;
-            noticeTitle.normal.textColor = new Color(1f, 0.87f, 0.45f);
-            float width = Mathf.Min(360f, Mathf.Max(100f, Screen.width - 32f));
-            string text = message;
-            if (visibilityTurnsRemaining > 0) text += "\nLights return in " + visibilityTurnsRemaining + " player turns.";
-            float height = noticeText.CalcHeight(new GUIContent(text), width - 24f) + 48f;
-            float top = Screen.width >= 800 ? 110f : 330f;
-            Rect panel = new Rect(Screen.width - width - 16f, top, width, height);
-            int oldDepth = GUI.depth;
-            Color oldColor = GUI.color;
-            GUI.depth = -100;
-            GUI.color = new Color(0.04f, 0.04f, 0.04f, 0.95f);
-            GUI.DrawTexture(panel, Texture2D.whiteTexture);
-            GUI.color = Color.white;
-            GUI.Label(new Rect(panel.x + 12f, panel.y + 8f, width - 24f, 22f), "LATEST RESULT", noticeTitle);
-            GUI.Label(new Rect(panel.x + 12f, panel.y + 34f, width - 24f, height - 40f), text, noticeText);
-            GUI.color = oldColor;
-            GUI.depth = oldDepth;
-        }
-
-        //Adds the player's name to the message explaining what happened.
         public void ShowMessage(PlayerCharacter player, string result)
         {
             if (player != null) message = player.name + ": " + result;
@@ -653,70 +614,5 @@ namespace Escape4Now.Map
         }
 
 
-        //Darkens the shared screen except for a small area around the current player.
-        private void DrawReducedVisibility()
-        {
-            Camera camera = Camera.main;
-            if (camera == null || players == null) return;
-            PlayerCharacter active = null;
-            foreach (PlayerCharacter player in players)
-            {
-                if (player != null && player.isActiveAndEnabled && player.IsCurrentTurn)
-                {
-                    active = player;
-                    break;
-                }
-            }
-
-            int oldDepth = GUI.depth;
-            Color oldColor = GUI.color;
-            GUI.depth = 100;
-            GUI.color = Color.black;
-            if (active == null)
-            {
-                GUI.DrawTexture(new Rect(0, 0, Screen.width, Screen.height), Texture2D.whiteTexture);
-            }
-            else
-            {
-                if (visibilityMask == null) CreateVisibilityMask();
-                Vector3 center = camera.WorldToScreenPoint(active.transform.position);
-                Vector3 edge = camera.WorldToScreenPoint(active.transform.position + Vector3.right * map.TileWidth * 2f);
-                float radius = Mathf.Max(1f, Mathf.Abs(edge.x - center.x));
-                float left = center.x - radius;
-                float top = Screen.height - center.y - radius;
-                float size = radius * 2f;
-                GUI.DrawTexture(new Rect(0, 0, Screen.width, Mathf.Max(0, top)), Texture2D.whiteTexture);
-                GUI.DrawTexture(new Rect(0, top + size, Screen.width, Mathf.Max(0, Screen.height - top - size)), Texture2D.whiteTexture);
-                GUI.DrawTexture(new Rect(0, top, Mathf.Max(0, left), size), Texture2D.whiteTexture);
-                GUI.DrawTexture(new Rect(left + size, top, Mathf.Max(0, Screen.width - left - size), size), Texture2D.whiteTexture);
-                GUI.DrawTexture(new Rect(left, top, size, size), visibilityMask);
-            }
-            GUI.color = oldColor;
-            GUI.depth = oldDepth;
-        }
-
-        //Makes an image with a clear center and dark edges for the Blackout effect.
-        private void CreateVisibilityMask()
-        {
-            const int size = 128;
-            visibilityMask = new Texture2D(size, size, TextureFormat.RGBA32, false);
-            visibilityMask.wrapMode = TextureWrapMode.Clamp;
-            for (int y = 0; y < size; y++)
-            {
-                for (int x = 0; x < size; x++)
-                {
-                    float distance = new Vector2((x + 0.5f) / size * 2f - 1f, (y + 0.5f) / size * 2f - 1f).magnitude;
-                    float alpha = Mathf.InverseLerp(0.7f, 1f, distance);
-                    visibilityMask.SetPixel(x, y, new Color(0f, 0f, 0f, alpha));
-                }
-            }
-            visibilityMask.Apply();
-        }
-
-        //Releases the screen mask created by this component.
-        private void OnDestroy()
-        {
-            if (visibilityMask != null) Destroy(visibilityMask);
-        }
     }
 }

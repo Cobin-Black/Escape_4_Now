@@ -39,6 +39,9 @@ namespace Escape4Now.Bots
 
             if (turnRoutine != null || player == null || map == null)
                 return;
+            if (!player.isActiveAndEnabled || !player.CanReadTurnInput
+                || Escape4Now.Multiplayer.LocalMultiplayerSession.MatchHasEnded)
+                return;
 
             if (battleController != null && battleController.IsBattleActive)
                 return;

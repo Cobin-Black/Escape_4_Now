@@ -1,0 +1,71 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &100000
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 400000}
+  - component: {fileID: 11400000}
+  m_Layer: 0
+  m_Name: LightPole
+  m_TagString: Untagged
+  m_IsActive: 1
+--- !u!4 &400000
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 100000}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_Children: []
+  m_Father: {fileID: 0}
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 100000}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b732f042c1524cf7a535638ccdb4f003, type: 3}
+  m_Name:
+  m_EditorClassIdentifier:
+  kind: 13
+  material: {fileID: 1169820800, guid: 2a0333a9a9204ffb92e7a7454ce04859, type: 2}
+  previewTileSize: {x: 1.2, y: 0.6}
+  previewFootprint: {x: 1, y: 1}
+  parts:
+  - offset: {x: 0, y: 0}
+    width: 0.24
+    depth: 0.24
+    bottom: 0
+    height: 0.12
+    color: {r: 0.13, g: 0.2, b: 0.22, a: 1}
+  - offset: {x: 0, y: 0}
+    width: 0.065
+    depth: 0.065
+    bottom: 0.1
+    height: 1.7
+    color: {r: 0.49, g: 0.56, b: 0.59, a: 1}
+  - offset: {x: 0, y: 0}
+    width: 0.4
+    depth: 0.4
+    bottom: 1.8
+    height: 0.1
+    color: {r: 0.98, g: 0.89, b: 0.58, a: 1}
+  - offset: {x: 0, y: 0}
+    width: 0.48
+    depth: 0.48
+    bottom: 1.9
+    height: 0.08
+    color: {r: 0.13, g: 0.2, b: 0.22, a: 1}
+  strokes: []

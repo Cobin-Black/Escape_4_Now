@@ -1,0 +1,103 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 3a5ef9bbf03b33b4890073c9ecb183c7, type: 3}
+  m_Name: TutorialLessons
+  m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.UI.TutorialLessonCatalog
+  lessons:
+  - id: move-roll
+    title: Roll the dice
+    body: Welcome to Escape 4 Now! Every turn starts with a dice roll. The number
+      you roll is how many tiles you can move.
+    target: 1
+    action: 1
+  - id: move-walk
+    title: Move around
+    body: 'Move one tile per key press. Use up all your moves to finish this step. Moves
+      left: {moves}.'
+    target: 2
+    action: 2
+  - id: items-find
+    title: Find an item
+    body: Items help you escape. See the red Double Dice on the floor? Roll the dice,
+      then walk onto it to pick it up.
+    target: 3
+    action: 1
+  - id: items-pickup
+    title: Pick up the item
+    body: 'Walk onto the Double Dice. It will go straight into your inventory in the bottom-right. Moves
+      left: {moves}.'
+    target: 3
+    action: 2
+  - id: items-use
+    title: Use your item
+    body: '{player} has a Double Dice in their inventory (bottom-right). Items are used
+      at the start of your turn, before you roll. Press {binding} to use it: it rolls
+      two dice and adds them together.'
+    target: 4
+    action: 4
+  - id: items-later
+    title: Use it next turn
+    body: You rolled before using your item. Items can only be used before you roll,
+      so use up your moves now, then use your item at the start of your next turn.
+    target: 4
+    action: 2
+  - id: items-walk
+    title: Move with your bonus roll
+    body: 'The Double Dice is used up and has left your inventory. Use up all your bonus moves to finish this step.
+      Moves left: {moves}.'
+    target: 2
+    action: 2
+  - id: obstacles-take
+    title: Take the item
+    body: The locker is open. Press {binding} again to take what's inside. It goes into your inventory.
+    target: 5
+    action: 3
+  - id: obstacles-open
+    title: Open the locker
+    body: You're next to the locker. Press {binding} to open it.
+    target: 5
+    action: 3
+  - id: obstacles-find
+    title: Find the locker
+    body: 'Obstacles block your path: you cannot walk through them. Lockers can hold items
+      you can take. Stand right next to the locker.'
+    target: 5
+    action: 2
+  - id: events-all
+    title: Special events
+    body: Colored tiles are special events. Green Lucky Roll lets you roll twice, purple
+      Warp teleports you, orange Random is a surprise, blue Freeze skips a turn,
+      and gray Blackout darkens the map. Roll and step on any of them.
+    target: 6
+    action: 2
+  - id: events
+    title: Step on an event tile
+    body: 'Colored tiles set off events. This purple one is a Warp: it teleports you
+      to another part of the map. Roll and walk onto it.'
+    target: 6
+    action: 2
+  - id: exit
+    title: Escape!
+    body: 'Last step: get out! Walk through the green EXIT door on the outside wall to escape and win.'
+    target: 7
+    action: 2
+  - id: done-all
+    title: Tutorial complete!
+    body: Tutorial complete! You know how to roll, move, use items, open lockers, use
+      Warp tiles, and escape through the exit. Press {binding} to start the real game. Good luck!
+    target: 0
+    action: 3
+  - id: done-section
+    title: '{section} complete!'
+    body: Press {binding} to go to {next}.
+    target: 0
+    action: 3

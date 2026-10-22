@@ -5,11 +5,11 @@ Wi-Fi play is temporarily hidden in the setup screen.
 
 ## Start a Game
 
-1. Open `SampleScene` and press Play.
-2. Pick 2, 3, or 4 players, then press **Start Match**.
+1. Open `Race_Gamemode` and press Play.
+2. Pick 2, 3, or 4 players, enable **Bot** beside any Race slot controlled by the computer, then press **Start Match**.
 3. Press Space to roll and use WASD or the arrow keys to move.
-4. Use **End Turn** to pass after rolling and finishing a move.
-5. **Leave Match** goes back to setup.
+4. Turns advance after the move budget is used. The randomized starting order repeats without changing player identities.
+5. Open **Pause** to resume, change display assists in Race, or leave the match.
 
 The colored markers match the players on the map. Only the current player can move.
 
@@ -34,11 +34,12 @@ The room code limits who can join; this version is for a trusted local network a
 
 ## Replace the Setup UI
 
-This UI is temporary. The team's final UI will replace it.
+The native Canvas UI is saved in `Assets/Prefabs/Interface/MatchInterface.prefab`. Its individual views can be edited or replaced independently of gameplay.
 Use these methods on `LocalMultiplayerSession`:
 
 - `SetTemporaryUIVisible(false)` hides this setup UI.
 - `SetPlayerCount(count)` picks the number of players.
+- `SetBotPlayer(index, value)` sets a Race lobby slot to human or bot before starting.
 - `StartLocalMatch()` starts the game.
 - `ReturnToSetup()` goes back to setup.
 - `MatchStarted` and `Status` show whether the game started or something went wrong.
