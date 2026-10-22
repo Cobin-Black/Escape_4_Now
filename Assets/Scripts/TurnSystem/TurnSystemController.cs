@@ -20,6 +20,9 @@ namespace Escape4Now.TurnSystem
         private bool randomizeStartingOrder = true;
         [SerializeField] private bool includeEnemyTurn = false;
         [SerializeField] private string enemyTurnName = "Enemy";
+        [Header("Optional Controls")]
+        [SerializeField, Tooltip("Show the native End Turn button. Normal turns still finish automatically when movement runs out.")]
+        private bool showEndTurnButton;
         [SerializeField] private TurnOwner currentTurnOwner = TurnOwner.Player;
         [SerializeField] private int currentPlayerIndex;
         [SerializeField] private int turnNumber = 1;
@@ -60,6 +63,7 @@ namespace Escape4Now.TurnSystem
 
         //Read-only turn details for other scripts.
         public TurnOwner CurrentTurnOwner => currentTurnOwner;
+        public bool ShowEndTurnButton => showEndTurnButton;
         //This remains the identity slot used by inventories and LAN ownership, not a turn position.
         public int CurrentPlayerIndex => currentPlayerIndex;
         public int TurnNumber => turnNumber;

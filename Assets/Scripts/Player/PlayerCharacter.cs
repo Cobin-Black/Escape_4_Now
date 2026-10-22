@@ -29,6 +29,8 @@ namespace Escape4Now.Player
         [SerializeField] private PlayerAppearance appearance;
         [SerializeField, Min(0.1f)] private float moveSpeed = 4f;
         [SerializeField] private PlayerInventory inventory;
+        [Header("Health")]
+        [SerializeField, Min(0)] private int health = 5;
         [Header("Movement Display")]
         [SerializeField, Min(0.1f)] private float diceRollAnimationDuration = 0.9f;
         [SerializeField, Min(0f)] private float sharedTileHorizontalOffset = 0.14f;

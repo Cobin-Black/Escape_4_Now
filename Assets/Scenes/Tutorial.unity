@@ -308,7 +308,7 @@ GameObject:
   - component: {fileID: 30058496}
   - component: {fileID: 30058500}
   m_Layer: 0
-  m_Name: Player One
+  m_Name: Player
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -344,6 +344,7 @@ MonoBehaviour:
   turnSystem: {fileID: 0}
   gridPosition: {x: 2, y: 2}
   playerColor: {r: 0, g: 0, b: 0, a: 1}
+  health: 5
   appearance: {fileID: 30058500}
   moveSpeed: 4
   inventory: {fileID: 30058496}

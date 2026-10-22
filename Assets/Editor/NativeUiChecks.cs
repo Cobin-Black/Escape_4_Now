@@ -52,6 +52,10 @@ public static class NativeUiChecks
     {
         string scene = Argument("-uiScene", "Race_Gamemode");
         EditorSceneManager.OpenScene("Assets/Scenes/" + scene + ".unity");
+        var playerSettings = new SerializedObject(Object.FindFirstObjectByType<Escape4Now.Player.PlayerCharacter>());
+        Require(playerSettings.FindProperty("health").intValue == 5, "Scene retains main's serialized starting health");
+        playerSettings.FindProperty("health").intValue = 7;
+        playerSettings.ApplyModifiedPropertiesWithoutUndo();
         CheckInventoryLayout(Object.FindFirstObjectByType<MatchUIContext>());
         var visibility = Object.FindFirstObjectByType<MatchCanvasVisibility>();
         Require(visibility != null && !visibility.GetComponent<Canvas>().enabled, "Match Canvas is hidden outside Play Mode");
@@ -170,6 +174,17 @@ public static class NativeUiChecks
         string prefix = Argument("-uiScene", "Race_Gamemode");
         if (session == null)
         {
+            Require(new SerializedObject(context.ActivePlayer).FindProperty("health").intValue == 7,
+                "Tutorial respects Inspector-configured health");
+            var eventToggle = (Toggle)new SerializedObject(context.GetComponentInChildren<EventFeedbackUI>())
+                .FindProperty("tutorialEventLocations").objectReferenceValue;
+            Require(eventToggle.gameObject.activeInHierarchy && eventToggle.isOn == context.Events.EventLocationsVisible,
+                "Tutorial has a native event visibility toggle");
+            bool originalVisibility = eventToggle.isOn;
+            yield return Click(eventToggle);
+            Require(context.Events.EventLocationsVisible != originalVisibility, "Pointer toggle changes tutorial event visibility");
+            yield return Click(eventToggle);
+            Require(context.Events.EventLocationsVisible == originalVisibility, "Tutorial event visibility can be restored");
             CheckHudLayout(context);
             CheckActivePlayerName(context, true);
             yield return CheckEventNotice(context, prefix);
@@ -216,6 +231,25 @@ public static class NativeUiChecks
         yield return Click(lobby.Find("Start Match").GetComponent<Button>());
         Require(session.MatchStarted && session.Participants.Count == 4, "Native Start button creates four participants");
         yield return null; yield return null;
+        foreach (var participant in session.Participants)
+            Require(new SerializedObject(participant).FindProperty("health").intValue == 7,
+                "Every participant inherits Inspector-configured health without changing identity");
+        var firstHealth = new SerializedObject(session.Participants[0]);
+        firstHealth.FindProperty("health").intValue = 3;
+        firstHealth.ApplyModifiedPropertiesWithoutUndo();
+        Require(new SerializedObject(session.Participants[1]).FindProperty("health").intValue == 7,
+            "Health belongs to each player independently");
+        firstHealth.FindProperty("health").intValue = 7;
+        firstHealth.ApplyModifiedPropertiesWithoutUndo();
+        var turnControls = context.GetComponentInChildren<TurnControlsUI>();
+        var endTurn = (Button)new SerializedObject(turnControls).FindProperty("endTurn").objectReferenceValue;
+        Require(!endTurn.gameObject.activeSelf, "Optional End Turn button is hidden by default");
+        var turnSettings = new SerializedObject(context.Turns);
+        turnSettings.FindProperty("showEndTurnButton").boolValue = true;
+        turnSettings.ApplyModifiedPropertiesWithoutUndo();
+        yield return null; yield return null;
+        Require(endTurn.gameObject.activeInHierarchy && !endTurn.interactable,
+            "Inspector can enable End Turn, but it cannot skip the required roll");
         var hud = Object.FindFirstObjectByType<MatchHudUI>();
         CheckHudLayout(context);
         CheckPlayerBodies(session);
@@ -233,6 +267,16 @@ public static class NativeUiChecks
         yield return new WaitForSecondsRealtime(1);
         CheckActivePlayerName(context, true);
         yield return Capture(prefix + "-gameplay");
+        Require(endTurn.interactable, "End Turn becomes available after the roll finishes");
+        yield return Click(endTurn);
+        Require(context.ActivePlayer != player, "Native End Turn advances the current player");
+        for (int turn = 1; turn < session.Participants.Count; turn++)
+            context.Turns.EndTurnAfterBattleLoss(context.ActivePlayer);
+        turnSettings.FindProperty("showEndTurnButton").boolValue = false;
+        turnSettings.ApplyModifiedPropertiesWithoutUndo();
+        yield return null; yield return null;
+        Require(context.ActivePlayer == player && !endTurn.gameObject.activeSelf,
+            "Fixed turn order repeats and the optional control can be hidden again");
         for (int turn = 0; turn < session.Participants.Count; turn++)
         {
             var previous = context.ActivePlayer;
