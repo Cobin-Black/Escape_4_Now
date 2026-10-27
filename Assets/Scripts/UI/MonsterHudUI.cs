@@ -1,6 +1,7 @@
 using Escape4Now.GameModes;
 using Escape4Now.Player;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace Escape4Now.UI
@@ -58,14 +59,22 @@ namespace Escape4Now.UI
             health.gameObject.SetActive(!monsterTurn);
             abilities.gameObject.SetActive(monsterTurn);
             if (monsterTurn)
-                abilities.text = "CHARGE (Q)   " + Cooldown(monster.ChargeCooldownRemaining)
-                    + "\nROAR (E)   " + Cooldown(monster.RoarCooldownRemaining)
-                    + "\nSTOMP (R)   " + Cooldown(monster.StompCooldownRemaining);
+                abilities.text = Ability("CHARGE", monster.ChargeAction, monster) + "   " + Cooldown(monster.ChargeCooldownRemaining)
+                    + "\n" + Ability("ROAR", monster.RoarAction, monster) + "   " + Cooldown(monster.RoarCooldownRemaining)
+                    + "\n" + Ability("STOMP", monster.StompAction, monster) + "   " + Cooldown(monster.StompCooldownRemaining);
             else
                 health.text = string.Format(healthFormat, Hearts(player.Health));
 
             panel.anchoredPosition = hud.anchoredPosition - new Vector2(0f, hud.rect.height + gap);
             panel.sizeDelta = new Vector2(hud.rect.width, monsterTurn ? abilitiesHeight : healthHeight);
+        }
+
+        //Shows the key from the Monster action map, e.g. "CHARGE (Q)". The AI Monster has no key to show.
+        private static string Ability(string label, InputAction action, MonsterCharacter monster)
+        {
+            if (monster.IsAIControlled || action == null) return label;
+            string binding = action.GetBindingDisplayString();
+            return string.IsNullOrEmpty(binding) ? label : label + " (" + binding.ToUpperInvariant() + ")";
         }
 
         private string Cooldown(int turns) => turns <= 0 ? readyText : string.Format(cooldownFormat, turns);

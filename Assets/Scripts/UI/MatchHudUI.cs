@@ -65,7 +65,10 @@ namespace Escape4Now.UI
             if (monsterTurn)
             {
                 playerName.text = "MONSTER";
-                action.text = monster.HasRolled ? string.Format(movesFormat, monster.MovesRemaining) : rollingText;
+                var monsterRoll = monster.RollDiceAction;
+                action.text = monster.HasRolled ? string.Format(movesFormat, monster.MovesRemaining)
+                    : monster.IsRolling || monster.IsAIControlled ? rollingText
+                    : string.Format(rollFormat, monsterRoll != null ? monsterRoll.GetBindingDisplayString(0).ToUpperInvariant() : rollFallback);
                 dice.Show(monster.HasRolled ? monster.LastRoll : 1, monster.IsRolling);
             }
             else

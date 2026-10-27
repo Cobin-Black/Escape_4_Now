@@ -16,8 +16,8 @@ namespace Escape4Now.UI
             public InputField name;
             public Image swatch;
             public Toggle bot;
-            [Tooltip("Survival only. Click to make this player the Monster; click again to clear it.")]
-            public Button monster;
+            [Tooltip("Survival only. Makes this player the Monster. With no player checked, the AI controls it.")]
+            public Toggle monster;
         }
         [Header("Unity UI References")]
         [SerializeField] private MatchUIContext context;
@@ -28,9 +28,6 @@ namespace Escape4Now.UI
         [SerializeField] private PlayerSlot[] slots;
         [SerializeField, Tooltip("Opens the skin picking menu. Hidden when the scene has no Skin Handler.")]
         private Button skinsButton;
-        [Header("Monster Selection")]
-        [SerializeField] private Color monsterSelectedColor = new Color(0.75f, 0.2f, 0.2f, 1f);
-        [SerializeField] private Color monsterUnselectedColor = new Color(0.2f, 0.3f, 0.25f, 1f);
         private SkinSelectionUI skinMenu;
 
         private void Start()
@@ -51,9 +48,13 @@ namespace Escape4Now.UI
                 slot.name.onValueChanged.AddListener(value => session.SetPlayerName(index, value));
                 slot.bot.SetIsOnWithoutNotify(session.IsBotPlayer(i));
                 slot.bot.onValueChanged.AddListener(value => session.SetBotPlayer(index, value));
-                //SetMonsterPlayer picks this slot, or clears it when it was already the Monster.
+                //Only one player can be the Monster: checking a box moves the Monster to that player,
+                //and unchecking the current one hands the Monster back to the AI.
                 if (slot.monster != null)
-                    slot.monster.onClick.AddListener(() => session.SetMonsterPlayer(index));
+                    slot.monster.onValueChanged.AddListener(value =>
+                    {
+                        if (value != session.IsMonsterPlayer(index)) session.SetMonsterPlayer(index);
+                    });
             }
             if (skinsButton != null) skinsButton.onClick.AddListener(OpenSkins);
         }
@@ -94,9 +95,7 @@ namespace Escape4Now.UI
                 {
                     slot.monster.gameObject.SetActive(isMonsterMode);
                     slot.monster.interactable = i < session.PlayerCount;
-                    if (slot.monster.targetGraphic != null)
-                        slot.monster.targetGraphic.color = session.IsMonsterPlayer(i)
-                            ? monsterSelectedColor : monsterUnselectedColor;
+                    slot.monster.SetIsOnWithoutNotify(session.IsMonsterPlayer(i));
                 }
             }
             for (int i = 0; i < playerCounts.Length; i++)

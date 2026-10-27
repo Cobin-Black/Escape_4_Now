@@ -223,12 +223,10 @@ namespace Escape4Now.Multiplayer
             }
 
             bool monsterMode = gameMode is SurvivalModeController;
-            int monsterSlot = monsterMode ? monsterPlayerIndex : -1;
-            if (monsterMode && (monsterSlot < 0 || monsterSlot >= count))
-            {
-                status = "Choose a player to become the Monster.";
-                return false;
-            }
+            //No player picked (or the pick is outside the player count) means the AI controls the Monster.
+            int monsterSlot = monsterMode && monsterPlayerIndex >= 0 && monsterPlayerIndex < count
+                ? monsterPlayerIndex : -1;
+            bool monsterIsPlayer = monsterSlot >= 0;
 
             try
             {
@@ -320,7 +318,7 @@ namespace Escape4Now.Multiplayer
 
             }
 
-            int survivorCount = monsterMode ? count - 1 : count;
+            int survivorCount = monsterIsPlayer ? count - 1 : count;
             participants = new PlayerCharacter[survivorCount];
 
             sourcePlayer.gameObject.SetActive(false);
@@ -330,7 +328,7 @@ namespace Escape4Now.Multiplayer
                 int lobbyIndex = i;
 
                 // Skips the lobby slot selected to become the Monster.
-                if (monsterMode && lobbyIndex >= monsterSlot)
+                if (monsterIsPlayer && lobbyIndex >= monsterSlot)
                     lobbyIndex++;
 
                 PlayerCharacter player = lobbyIndex == 0
@@ -389,6 +387,7 @@ namespace Escape4Now.Multiplayer
                     turns,
                     participants,
                     monsterSpawn);
+                matchMonster.SetAIControlled(!monsterIsPlayer);
 
                 matchMonster.gameObject.SetActive(true);
                 matchMonster.enabled = true;
