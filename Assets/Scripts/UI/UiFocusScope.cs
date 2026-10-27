@@ -1,3 +1,5 @@
+// Gives an opened UI panel a sensible selection and clears or restores that selection when it closes.
+
 using UnityEngine;
 using UnityEngine.EventSystems;
 using UnityEngine.UI;
@@ -18,6 +20,7 @@ namespace Escape4Now.UI
             if (firstSelection != null) firstSelection.Select();
         }
 
+        // Clear the closing panel's selection so a later Interact press cannot click its hidden button.
         private void OnDisable()
         {
             if (!Application.isPlaying || EventSystem.current == null) return;

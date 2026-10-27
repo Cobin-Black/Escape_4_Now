@@ -32,6 +32,7 @@ namespace Escape4Now.Items
         //Finds the Item Option Select and Use Item actions in the project-wide Input System asset.
         private void Awake()
         {
+            // Use the scene's input references for selecting and using the item.
             var bindings = Escape4Now.Input.GameplayInputContext.Current;
             if (bindings != null)
             {
@@ -170,6 +171,7 @@ namespace Escape4Now.Items
         public int SelectedNumber => selectedNumber;
         public PlayerInventory SelectingInventory => currentInventory;
 
+        // Let the saved UI choose a number through this method while the item is actively being selected.
         public void SelectNumber(int value)
         {
             if (isSelecting && Time.timeScale > 0f

@@ -1,3 +1,5 @@
+// Displays the existing custom-dice item's choices and forwards its Confirm or Cancel buttons.
+
 using Escape4Now.Items;
 using Escape4Now.Multiplayer;
 using UnityEngine;

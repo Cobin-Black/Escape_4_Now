@@ -1,3 +1,5 @@
+// Shuffles participant slot numbers once from the seed, without changing names, colors or player objects.
+
 using System;
 
 namespace Escape4Now.TurnSystem
@@ -5,6 +7,7 @@ namespace Escape4Now.TurnSystem
     //Turn positions refer to stable participant slots, never renamed or reordered players.
     internal static class PlayerTurnOrder
     {
+        // Shuffle slot numbers once. Names, colors and inventories remain attached to their original players.
         public static int[] Create(int playerCount, int seed, bool randomize = true)
         {
             if (playerCount < 1) throw new ArgumentOutOfRangeException(nameof(playerCount));
@@ -22,6 +25,7 @@ namespace Escape4Now.TurnSystem
             return order;
         }
 
+        // A saved or received order must contain every participant slot exactly once.
         public static bool IsValid(int[] order, int playerCount)
         {
             if (order == null || order.Length != playerCount) return false;

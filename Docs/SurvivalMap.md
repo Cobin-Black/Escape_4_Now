@@ -1,12 +1,12 @@
 # Survival Map Foundation
 
-Open `Assets/Scenes/SurvivalMode.unity`, enter Play Mode, choose 2, 3, or 4 players, and start the match. This scene reuses the indoor mode's player controller, randomized turn controller, individual inventories, inventory bar, countdown, and pause menu. Its shared gameplay HUD shows the current player, round, die/moves, remaining time, and the Inspector-authored objective **Survive the monster.** No item spawner is attached.
+Open `Assets/Scenes/SurvivalMode.unity`, enter Play Mode, choose 1-4 survivors, and start the match. This scene reuses the existing player controller, randomized turn controller, individual inventories, inventory bar, countdown, and pause menu. The objective is now **complete shared puzzles, unlock exits, then escape**. No item spawner or monster behavior is attached. See [Survival Mode Rules](SurvivalMode.md) for the gameplay, puzzle/event settings and monster-team integration.
 
 Select **Survival Outdoor Map** to edit the **Survival Map** and **Survival Obstacle Spawner** components. The scene is also registered in Build Settings and is separate from the indoor and tutorial scenes.
 
 ## Inspector Settings
 
-- **Turn System > Game Timer > Match Settings:** **Time Limit** sets the match duration in seconds (300 by default). The countdown starts with the match, not in the lobby, and freezes while paused. **Survival Mode > Survival Mode Controller** owns the survival-success rule: reaching zero ends the match with **YOU SURVIVED** and a list of every surviving participant's actual name. Edit result wording and survivor heading there; result colors are on **Match Interface > Result View > Match Result UI**. Race Mode has a separate mode script and retains its timeout loss.
+- **Turn System > Game Timer > Match Settings:** **Time Limit** sets the match duration in seconds (600 initially). The countdown starts with the match, continues during puzzles and freezes while paused. At zero, survivors who have not escaped lose; earlier escapes remain wins. **Survival Mode > Survival Mode Controller > Rules** links the shared-objective settings and result wording; result colors remain on **Match Interface > Result View > Match Result UI**. Race Mode retains its separate rules.
 - **Generation Rules:** default 32 x 32 dimensions, internal main-path width, outer circulation width, layout variation, pool deck and track widths, area walkway clearance, validation limits, spawn counts and separation. The original three-band subdivision and two-slot field are retained.
 - **Area Rules:** type, required/optional status, appearance chance, width/height ranges, fences, and entrance count. The Track / Field joins two adjacent macro areas and remains at least as large as every other area. Its width/height ranges describe its long/short dimensions; its orientation can change.
 - **Pool Water:** minimum water width/height and fill ratio. Defaults reserve at least 4 x 4 water tiles inside an 8+ tile fenced pool area, with clear deck circulation and optional additional deck furniture space. Area sizing accounts for the fence, deck, and water minimum before selecting a plot.
@@ -48,4 +48,4 @@ Unity's **Tools > Survival > Validate Scene and Render Previews** validates ever
 
 ## Scope
 
-This is a playable map/gameplay foundation, not the finished Survival rule set. It intentionally does not add a monster, monster spawning, combat/co-op rules, or indoor-mode events/items. The existing inventory logic is ready for a different future item set. Until the monster is added, all players survive if the countdown completes; players can also leave through Pause.
+The existing campus now hosts shared puzzles, outdoor events, individual escapes and elimination/timeout rules. Monster AI/control, attacks, damage and spawning remain outside this implementation. The existing inventory is ready for a different future item set. Reaching timeout without escaping is a loss, not a survival victory.

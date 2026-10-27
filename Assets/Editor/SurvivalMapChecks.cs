@@ -1,3 +1,5 @@
+// Checks generated outdoor maps, prefab references and camera framing, then saves map previews.
+
 using System;
 using System.IO;
 using Escape4Now.Map;

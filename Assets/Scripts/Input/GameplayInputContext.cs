@@ -1,3 +1,5 @@
+// Provides the active set of gameplay input references to scripts that share the same controls.
+
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;

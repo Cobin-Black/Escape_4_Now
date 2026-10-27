@@ -1,5 +1,7 @@
 # Events
 
+This page describes Race/indoor events. Survival reuses the shared event state and effect helpers but has its own placement and outdoor pool; see [Survival Mode Rules](SurvivalMode.md).
+
 Events activate during normal movement, including when passing through a tile.
 Forced movement and teleports never activate another event.
 Every event has a prefab in `Assets/Prefabs/Event Tiles/Resources/EventTiles`.

@@ -1,3 +1,5 @@
+// Checks that only the LAN host applies gameplay changes and that clients cannot act for other players.
+
 using System;
 using System.Collections;
 using System.Net;

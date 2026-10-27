@@ -127,6 +127,7 @@ namespace Escape4Now.Obstacles
         }
 
         //Adds flat details to the visible face using the same mesh and fading material.
+        // Add the locker door, vents and handle to the chosen visible face.
         private void AddLockerDetails(Vector3 start, Vector3 end)
         {
             var vertices = new List<Vector3>(obstacleMesh.vertices);

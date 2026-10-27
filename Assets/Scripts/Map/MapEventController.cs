@@ -1,3 +1,5 @@
+// Places and applies Race events, while exposing their messages and visibility to the shared UI.
+
 using System.Collections.Generic;
 using Escape4Now.Player;
 using Escape4Now.TurnSystem;
@@ -22,7 +24,7 @@ namespace Escape4Now.Map
 
     //Places special tiles around the map and applies their effects when crossed.
     [RequireComponent(typeof(IsometricMapTemplate))]
-    public sealed class MapEventController : MonoBehaviour
+    public sealed class MapEventController : MonoBehaviour, IMapEventSource
     {
         private IsometricMapTemplate map;
         private readonly Dictionary<Vector2Int, MapEventType> events = new Dictionary<Vector2Int, MapEventType>();
@@ -142,6 +144,8 @@ namespace Escape4Now.Map
         }
 
         //Existing partial lists receive their missing defaults once; later edits stay authoritative.
+        // Prepare the Inspector's assigned event choices without replacing a designer-edited list on every match.
+        // Prepare the Inspector's assigned event choices without replacing a designer-edited list on every match.
         private void InitializeEventCatalog()
         {
             if (eventCatalogInitialized) return;
@@ -444,11 +448,11 @@ namespace Escape4Now.Map
                     ShowMessage(player, "Stumble: you lost " + (beforeStumble - player.MovesRemaining) + " moves. You have " + player.MovesRemaining + " left.");
                     break;
                 case MapEventType.SecondChance:
-                    player.EventState.GiveSecondChance();
+                    SharedEventEffects.Apply(player, type);
                     ShowMessage(player, "Second Chance: your next harmful event will be blocked. Events that affect everyone still work.");
                     break;
                 case MapEventType.BadRoll:
-                    player.EventState.GiveBadRoll();
+                    SharedEventEffects.Apply(player, type);
                     ShowMessage(player, "Bad Roll: use the lower of two dice next turn.");
                     break;
                 case MapEventType.WrongRoom:
@@ -463,7 +467,7 @@ namespace Escape4Now.Map
                     ShowMessage(player, "Good Luck Day: everyone gets +1 on their next normal roll.");
                     break;
                 case MapEventType.Freeze:
-                    player.EventState.GiveFreeze();
+                    SharedEventEffects.Apply(player, type);
                     ShowMessage(player, "Freeze: you will miss your next turn, then play normally.");
                     break;
                 case MapEventType.Blackout:
@@ -477,7 +481,7 @@ namespace Escape4Now.Map
                     ShowMessage(player, "Blackout: everyone's visibility is reduced for the next " + visibilityTurnsRemaining + " player turns.");
                     break;
                 case MapEventType.LuckyRoll:
-                    player.EventState.GiveLuckyRoll();
+                    SharedEventEffects.Apply(player, type);
                     ShowMessage(player, "Lucky Roll: roll twice next turn and keep the higher roll.");
                     break;
             }
@@ -540,7 +544,10 @@ namespace Escape4Now.Map
         }
 
         //These are all possible swaps where nobody stays put, including two separate pairs.
-        private static bool SwitchLocations(IReadOnlyList<PlayerCharacter> participants)
+        private static bool SwitchLocations(IReadOnlyList<PlayerCharacter> participants) => SwitchSurvivorLocations(participants, null);
+
+        //Reuse survivors' current positions; this effect does not choose new teleport destinations.
+        internal static bool SwitchSurvivorLocations(IReadOnlyList<PlayerCharacter> participants, System.Random random)
         {
             if (participants == null || participants.Count < 2 || participants.Count > 4) return false;
             int[][] choices = participants.Count == 2 ? new[] { new[] { 1, 0 } }
@@ -558,7 +565,7 @@ namespace Escape4Now.Map
                         || participants[i].GridPosition == participants[choice[i]].GridPosition) movesEveryone = false;
                 if (movesEveryone) valid.Add(choice);
             }
-            return valid.Count > 0 && PlayerCharacter.SwitchLocations(participants, valid[Random.Range(0, valid.Count)]);
+            return valid.Count > 0 && PlayerCharacter.SwitchLocations(participants, valid[random != null ? random.Next(valid.Count) : Random.Range(0, valid.Count)]);
         }
 
         //Lists safe destinations first, then picks one randomly for Warp.

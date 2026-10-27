@@ -1,3 +1,5 @@
+// Editor tests for shared-screen setup, turns, items, movement and Race match results.
+
 using System;
 using System.Collections;
 using System.Collections.Generic;

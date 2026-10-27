@@ -1,0 +1,71 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &4287232295714837334
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 3090772629587490532}
+  - component: {fileID: 9064014683220739416}
+  m_Layer: 0
+  m_Name: Autumn Tree
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &3090772629587490532
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4287232295714837334}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &9064014683220739416
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 4287232295714837334}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b732f042c1524cf7a535638ccdb4f003, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  kind: 0
+  material: {fileID: 1169820800, guid: 2a0333a9a9204ffb92e7a7454ce04859, type: 2}
+  previewTileSize: {x: 1.2, y: 0.6}
+  previewFootprint: {x: 1, y: 1}
+  materialOverride: {fileID: 0}
+  parts:
+  - offset: {x: 0, y: 0}
+    width: 0.15
+    depth: 0.15
+    height: 0.4
+    bottom: 0
+    color: {r: 0.34, g: 0.23, b: 0.16, a: 1}
+  - offset: {x: 0, y: 0}
+    width: 0.8
+    depth: 0.8
+    height: 0.45
+    bottom: 0.35
+    color: {r: 0.45882353, g: 0.5529412, b: 0.25882354, a: 1}
+  - offset: {x: 0, y: 0}
+    width: 0.55
+    depth: 0.55
+    height: 0.18
+    bottom: 0.8
+    color: {r: 0.6313726, g: 0.54901963, b: 0.26666668, a: 1}
+  strokes: []

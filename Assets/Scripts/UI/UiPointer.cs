@@ -1,3 +1,5 @@
+// Checks whether a pointer is over Unity UI so gameplay clicks do not also move the player.
+
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.EventSystems;

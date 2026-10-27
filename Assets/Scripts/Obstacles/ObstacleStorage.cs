@@ -24,6 +24,7 @@ namespace Escape4Now.Obstacles
 
         //Read-only contents for other scripts.
         public Item StoredItemPrefab => storedItemPrefab;
+        // Clients display the host's reported contents; the host keeps the actual stored item.
         public bool HasItem => Escape4Now.Multiplayer.LanMultiplayerSession.IsClient ? networkHasItem : storedItemPrefab != null;
         public bool ContainsKey => Escape4Now.Multiplayer.LanMultiplayerSession.IsClient
             ? networkContainsKey : storedItemPrefab is KeyItem;

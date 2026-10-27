@@ -54,6 +54,8 @@ namespace Escape4Now.UI
             var root = new GameObject("Skin Menu", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
             var rect = (RectTransform)root.transform;
             rect.SetParent(parent, false);
+            //This is an overlay, not another row in the lobby's layout group.
+            root.AddComponent<LayoutElement>().ignoreLayout = true;
             rect.anchorMin = Vector2.zero;
             rect.anchorMax = Vector2.one;
             rect.offsetMin = Vector2.zero;

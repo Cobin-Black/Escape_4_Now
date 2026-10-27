@@ -1,0 +1,181 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!1 &6272495453822961086
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 5684643723312508497}
+  - component: {fileID: 4467923840631050308}
+  m_Layer: 0
+  m_Name: Editable Geometry
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 0
+--- !u!4 &5684643723312508497
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6272495453822961086}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 1944570389727242193}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &4467923840631050308
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 6272495453822961086}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b732f042c1524cf7a535638ccdb4f003, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Map.SurvivalPropVisual
+  kind: 0
+  material: {fileID: 1169820800, guid: 2a0333a9a9204ffb92e7a7454ce04859, type: 2}
+  previewTileSize: {x: 1.2, y: 0.6}
+  previewFootprint: {x: 1, y: 1}
+  materialOverride: {fileID: 0}
+  parts:
+  - offset: {x: -0.28, y: 0}
+    width: 0.12
+    depth: 0.8
+    height: 0.025
+    bottom: 0.005
+    color: {r: 1, g: 0.84, b: 0.18, a: 1}
+  - offset: {x: 0, y: 0}
+    width: 0.12
+    depth: 0.8
+    height: 0.025
+    bottom: 0.005
+    color: {r: 1, g: 0.84, b: 0.18, a: 1}
+  - offset: {x: 0.28, y: 0}
+    width: 0.12
+    depth: 0.8
+    height: 0.025
+    bottom: 0.005
+    color: {r: 1, g: 0.84, b: 0.18, a: 1}
+  strokes:
+  - points:
+    - {x: -0.3, y: -0.13}
+    - {x: -0.17, y: 0}
+    - {x: -0.3, y: 0.13}
+    height: 0.06
+    width: 0.035
+    color: {r: 0.95, g: 0.95, b: 0.65, a: 1}
+    loop: 0
+  - points:
+    - {x: -0.099999994, y: -0.13}
+    - {x: 0.030000005, y: 0}
+    - {x: -0.099999994, y: 0.13}
+    height: 0.06
+    width: 0.035
+    color: {r: 0.95, g: 0.95, b: 0.65, a: 1}
+    loop: 0
+  - points:
+    - {x: 0.10000001, y: -0.13}
+    - {x: 0.23, y: 0}
+    - {x: 0.10000001, y: 0.13}
+    height: 0.06
+    width: 0.035
+    color: {r: 0.95, g: 0.95, b: 0.65, a: 1}
+    loop: 0
+--- !u!1 &8952917698467104959
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 1944570389727242193}
+  - component: {fileID: 9073901665199694607}
+  - component: {fileID: 2256599229237784162}
+  m_Layer: 0
+  m_Name: Track Boost Marking
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!4 &1944570389727242193
+Transform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8952917698467104959}
+  serializedVersion: 2
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children:
+  - {fileID: 5684643723312508497}
+  m_Father: {fileID: 0}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &9073901665199694607
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8952917698467104959}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0f65a80a260ab8b42a288b64182a06df, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Map.SurvivalWorldMarker
+  geometry: {fileID: 4467923840631050308}
+  caption: {fileID: 0}
+  indicator: {fileID: 0}
+  captionBackground: {fileID: 0}
+  captionPadding: {x: 0.16, y: 0.1}
+  useCaptionColor: 0
+  captionColor: {r: 1, g: 1, b: 1, a: 1}
+  captionOverride: 
+  availableColor: {r: 0, g: 1, b: 1, a: 1}
+  completedColor: {r: 0, g: 1, b: 0, a: 1}
+  lockedColor: {r: 1, g: 0.92156863, b: 0.015686275, a: 1}
+--- !u!114 &2256599229237784162
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8952917698467104959}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: de7edf4cd88248a08256f89f2f27cfe0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Map.SurvivalEnvironmentalSurface
+  style: 2
+  replacedVisuals:
+  - {fileID: 6272495453822961086}
+  materialOverride: {fileID: 0}
+  groundColor: {r: 0.25, g: 0.17, b: 0.09, a: 1}
+  variationColor: {r: 0.38, g: 0.27, b: 0.15, a: 1}
+  puddleColor: {r: 0.42, g: 0.39, b: 0.28, a: 0.7}
+  edgeRoundness: 0.32
+  cornerSegments: 5
+  grainScale: 1.4
+  puddleChance: 0.45
+  puddleRadius: {x: 0.22, y: 0.14}
+  paintColor: {r: 1, g: 0.9, b: 0.42, a: 1}
+  chevronSize: 0.6
+  paintWidth: 0.04
+  groundSortingOrder: -9440
+  paintSortingOrder: -9430

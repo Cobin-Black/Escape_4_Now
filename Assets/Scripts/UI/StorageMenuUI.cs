@@ -1,3 +1,5 @@
+// Shows the open obstacle's stored item and forwards Take or Close to the storage component.
+
 using Escape4Now.Items;
 using Escape4Now.Obstacles;
 using UnityEngine;

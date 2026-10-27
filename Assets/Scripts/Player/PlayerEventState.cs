@@ -1,3 +1,5 @@
+// Remembers one player's pending effects and consumes them when their turn or roll uses them.
+
 using System;
 
 namespace Escape4Now.Player
@@ -10,9 +12,19 @@ namespace Escape4Now.Player
         private bool luckyRoll;
         private bool nextBadRoll;
         private bool badRoll;
+        // Keep next-turn changes separate until BeginTurn makes them ready for the player's next roll.
+        private int nextMovementBonus, nextMovementPenalty, movementModifier;
+        public void GiveMovementBonus(int amount) { nextMovementBonus = Math.Max(0, amount); }
+        public void GiveMovementPenalty(int amount) { nextMovementPenalty = Math.Max(0, amount); }
         public bool HasSecondChance { get; private set; }
         public bool HasRollBonus { get; private set; }
         public bool HasBadRoll => badRoll;
+        public bool HasPendingFreeze => frozen;
+        // These read-only checks let messages follow the real effect instead of inventing another timer.
+        public bool HasLuckyEffect => nextLuckyRoll || luckyRoll;
+        public bool HasBadRollEffect => nextBadRoll || badRoll;
+        public bool HasMovementBonus => nextMovementBonus > 0 || movementModifier > 0;
+        public bool HasMovementPenalty => nextMovementPenalty > 0 || movementModifier < 0;
 
         public bool HasLuckyRoll => luckyRoll;
         public bool IsProtectedFromPlayers { get; private set; }
@@ -56,6 +68,8 @@ namespace Escape4Now.Player
             nextLuckyRoll = false;
             badRoll = nextBadRoll;
             nextBadRoll = false;
+            movementModifier = nextMovementBonus - nextMovementPenalty;
+            nextMovementBonus = nextMovementPenalty = 0;
             return true;
         }
 
@@ -71,6 +85,8 @@ namespace Escape4Now.Player
             badRoll = false;
             if (HasRollBonus) movement++;
             HasRollBonus = false;
+            movement += movementModifier;
+            movementModifier = 0;
             return movement;
         }
     }

@@ -1,3 +1,5 @@
+// Editor checks for Survival setup, player controls, shared UI and match startup.
+
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -46,6 +48,9 @@ public static class SurvivalGameplayChecks
     {
         if (!Application.isBatchMode && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
         EditorSceneManager.OpenScene("Assets/Scenes/SurvivalMode.unity");
+        var sessionFields = new SerializedObject(UnityEngine.Object.FindFirstObjectByType<LocalMultiplayerSession>());
+        sessionFields.FindProperty("spawnAIMonsterWhenUnassigned").boolValue = false;
+        sessionFields.ApplyModifiedPropertiesWithoutUndo();
         if (!Application.isBatchMode)
         {
             var gameViewType = typeof(Editor).Assembly.GetType("UnityEditor.GameView");
@@ -101,17 +106,15 @@ public static class SurvivalGameplayChecks
         float lobbyTime = timer.TimeRemaining;
         yield return new WaitForSecondsRealtime(.1f);
         Require(timer.TimeRemaining == lobbyTime, "Lobby time does not consume the match clock");
-        Require(!session.TryStartLocalMatch(1) && !session.TryStartLocalMatch(5), "Unsupported counts are rejected");
+        Require(!session.TryStartLocalMatch(0) && !session.TryStartLocalMatch(5), "Unsupported counts are rejected");
         Require(session.TryStartLocalMatch(count), "Survival starts: " + session.Status);
         Require(!session.TryStartLocalMatch(count), "Starting twice cannot duplicate participants");
         for (int i = 0; i < 10; i++) yield return null;
         NativeUiChecks.CheckPlayerBodies(session);
         Require(session.Participants.Count == count && map.LayoutSeed == 42, "Chosen player count and fixed seed are respected");
         float timeLimit = new SerializedObject(timer).FindProperty("timeLimit").floatValue;
-        Require(timer.enabled && timer.ExpirationIsWin && timer.TimeRemaining > 0f && timer.TimeRemaining < timeLimit,
-            "Survival starts its configured countdown with a survival-success outcome");
-        Require(new SerializedObject(session.Mode).FindProperty("survivedTitle").stringValue == "YOU SURVIVED",
-            "Survival has its own Inspector-authored timeout result");
+        Require(timer.enabled && !timer.ExpirationIsWin && timer.TimeRemaining > 0f && timer.TimeRemaining < timeLimit,
+            "Survival starts its configured countdown; expiry is not a win");
         float runningTime = timer.TimeRemaining;
         yield return new WaitForSecondsRealtime(.1f);
         Require(timer.TimeRemaining < runningTime, "The match clock counts down");
@@ -133,7 +136,7 @@ public static class SurvivalGameplayChecks
             Require(player.Inventory != null && player.Inventory.Player == player && player.Inventory.Items.Count == 0, "Separate empty shared inventory");
             var settings = new SerializedObject(player);
             Require(player.Mode == session.Mode && ReferenceEquals(player.Mode.GridMap, map), "Player uses its mode's outdoor grid");
-            Require(player.Mode.GetObjective(player) == "Survive the monster.", "Survival objective comes from its own mode");
+            Require(player.Mode.GetObjective(player).Contains("0/"), "Survival objective shows the shared puzzle count");
             Require(!player.Mode.CanUseExit(player), "Survival cannot accidentally use indoor escape rules");
             Require(!map.IsExit(player.GridPosition), "Survival has no indoor escape win condition");
         }
@@ -261,14 +264,14 @@ public static class SurvivalGameplayChecks
         yield return new WaitForSecondsRealtime(.15f);
         Require(timer.HasExpired && timer.TimeRemaining == 0f && Time.timeScale == 0f && LocalMultiplayerSession.MatchHasEnded,
             "Reaching zero clamps the clock and ends the survival match");
-        Require(session.Mode.TryGetResult(session.Participants, out MatchResult result) && result.Won,
-            "Survival mode, not the shared session, selects countdown success");
+        Require(session.Mode.TryGetResult(session.Participants, out MatchResult result) && !result.Won,
+            "Survivors who have not escaped lose at timeout");
         string resultMessage = result.Message;
         string[] resultLines = resultMessage.Split('\n');
         foreach (PlayerCharacter player in participants)
             Require(Array.IndexOf(resultLines, player.name) >= 0, "Survival results list every survivor's actual name: " + player.name);
         Require(Array.IndexOf(resultLines, "Player 1") < 0, "Survivor names are not hardcoded player numbers");
-        PlayerCharacter finalPlayer = participants[turns.CurrentPlayerIndex];
+        PlayerCharacter finalPlayer = participants[0];
         int finalTurn = turns.CurrentPlayerIndex;
         turns.AdvanceTurn();
         session.ResumeGame();

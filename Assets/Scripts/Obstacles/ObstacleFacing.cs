@@ -1,3 +1,5 @@
+// Converts an obstacle's grid facing into the direction used for its isometric drawing.
+
 using System;
 using System.Collections.Generic;
 using Escape4Now.Map;

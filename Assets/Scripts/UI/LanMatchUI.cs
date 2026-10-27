@@ -1,3 +1,5 @@
+// Displays LAN setup and match controls, forwarding requests to the existing network session.
+
 using Escape4Now.Multiplayer;
 using UnityEngine;
 using UnityEngine.UI;

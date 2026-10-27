@@ -112,6 +112,7 @@ namespace Escape4Now.Obstacles
             InitializeSpecialSections();
         }
 
+        // Set up the smaller rooms' prefab sections without repeatedly overwriting their saved Inspector choices.
         private void InitializeSpecialSections()
         {
             if (specialSectionsInitialized) return;

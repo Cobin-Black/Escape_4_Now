@@ -39,6 +39,7 @@ namespace Escape4Now.Bots
 
             if (turnRoutine != null || player == null || map == null)
                 return;
+            // Stop this added integration path when the participant is inactive or the match no longer accepts turns.
             if (!player.isActiveAndEnabled || !player.CanReadTurnInput
                 || Escape4Now.Multiplayer.LocalMultiplayerSession.MatchHasEnded)
                 return;

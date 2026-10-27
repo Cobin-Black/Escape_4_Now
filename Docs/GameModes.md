@@ -3,12 +3,14 @@
 Each match scene has a named root object for its unique rules:
 
 - **Race_Gamemode > Race Mode > Race Gamemode:** indoor map, optional LAN support, key requirement, before/after-key objectives, escaped-player result, and timeout loss.
-- **SurvivalMode > Survival Mode > Survival Mode Controller:** outdoor map, survival objective, countdown-success result, and actual survivor names. There is no exit victory, monster, or elimination system yet.
+- **SurvivalMode > Survival Mode > Survival Mode Controller:** outdoor map, shared puzzles, two unlocked exits, individual escape/elimination results and timeout loss. Monster behavior is owned separately. See `Docs/SurvivalMode.md` for rules, Inspector assets and integration hooks.
 - Tutorials retain their existing **Tutorial Functionality** script and lesson settings. They are not converted to multiplayer matches.
 
 `GameModeController` extends the team's `GameMode` contract with shared-system references, startup gating, input references and result data. `Race_Gamemode` owns the Race key, key-testing toggles and escape rules; its assigned `RaceKeyBattle` component owns stealing battles. `SurvivalModeController` supplies Survival rules through the same base. `LocalMultiplayerSession` only manages participant setup and match lifecycle. Native UI views present the result supplied by the mode.
 
 ## Inspector Setup
+
+Race supports **1–4 local players**. **Race Gamemode → Player Setup → Allow Solo Play** controls the one-player lobby option. Solo uses the same key, timer, movement and inventory rules; each finished turn returns to the same player and advances the turn counter. **Results → Solo Escape Message** supplies the single-player win text.
 
 Select the named mode object to edit **Shared Match References**, **Match Startup**, the map, objectives and result wording. References are explicitly saved in both scenes; the session does not scan the scene to guess a mode or collect every gameplay script.
 

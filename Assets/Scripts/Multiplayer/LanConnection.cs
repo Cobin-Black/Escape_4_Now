@@ -1,3 +1,5 @@
+// Sends and receives LAN messages over a connection; match rules are handled by the session.
+
 using System;
 using System.Collections.Generic;
 using System.Net;
@@ -26,6 +28,7 @@ namespace Escape4Now.Multiplayer
         }
 
         //Rejects large messages and disconnects a peer whose send queue keeps growing.
+        // Queue a complete encoded message; sending may need several socket writes.
         public void Send(string message)
         {
             if (Closed) return;
@@ -41,6 +44,7 @@ namespace Escape4Now.Multiplayer
         }
 
         //Handles partial reads and writes, with a fixed amount of work per game frame.
+        // Collect complete incoming messages before handing them to the session.
         public void Pump(Action<string> onMessage)
         {
             if (Closed) return;
@@ -86,6 +90,7 @@ namespace Escape4Now.Multiplayer
         }
 
         //Releases the socket on leave, timeout, or a broken connection.
+        // Close this connection and its socket when the match leaves or the peer disconnects.
         public void Dispose()
         {
             if (Closed) return;

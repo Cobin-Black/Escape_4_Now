@@ -1,3 +1,5 @@
+// Builds outdoor campus areas, paths and props from a seed, then checks that the important routes connect.
+
 using System;
 using System.Collections.Generic;
 
@@ -74,6 +76,8 @@ namespace Escape4Now.Map
         public IReadOnlyList<int> SpawnCandidates => spawnCandidates.AsReadOnly();
         public IReadOnlyList<OutdoorParkingBay> ParkingBays => parkingBays.AsReadOnly();
 
+        // Use one seeded random source and retry invalid layouts within the configured generation limit.
+        // Use one seeded random source and retry invalid layouts within the configured generation limit.
         public SurvivalMapLayout(int seed, SurvivalGenerationSettings generationSettings = null, SurvivalObstacleSettings obstacles = null)
         {
             settings = generationSettings ?? new SurvivalGenerationSettings();
@@ -99,6 +103,7 @@ namespace Escape4Now.Map
         public OutdoorSurface GetSurface(int x, int y) => InBounds(x, y) ? surface[y * Width + x] : OutdoorSurface.Fence;
         public OutdoorAreaKind GetArea(int x, int y) => InBounds(x, y) ? areaTypes[y * Width + x] : OutdoorAreaKind.None;
         public bool IsMainPath(int x, int y) => InBounds(x, y) && mainPath[y * Width + x];
+        public bool IsProtectedRoute(int x, int y) => InBounds(x, y) && protectedPath[y * Width + x];
 
         public IEnumerable<int> GetNeighbours(int cell)
         {
@@ -110,6 +115,8 @@ namespace Escape4Now.Map
             }
         }
 
+        // Build areas, connect paths, place props and pick spawns before accepting the campus.
+        // Build areas, connect paths, place props and pick spawns before accepting the campus.
         private bool TryBuild()
         {
             Array.Clear(surface, 0, surface.Length); Array.Clear(areaTypes, 0, areaTypes.Length);
@@ -210,6 +217,8 @@ namespace Escape4Now.Map
             && slot.Height >= (vertical ? MinimumWidth(rule) : MinimumHeight(rule))
             && rule.MaximumWidth >= MinimumWidth(rule) && rule.MaximumHeight >= MinimumHeight(rule);
 
+        // Give each generated area its own ground and blocked features, while keeping its reserved border paths.
+        // Give each generated area its own ground and blocked features, while keeping its reserved border paths.
         private void BuildArea(OutdoorAreaRule rule, Rect slot, bool vertical)
         {
             int width = random.Next(vertical ? MinimumHeight(rule) : MinimumWidth(rule),
@@ -290,6 +299,8 @@ namespace Escape4Now.Map
             : area == OutdoorAreaKind.Maintenance ? OutdoorSurface.Service : area == OutdoorAreaKind.Parking ? OutdoorSurface.Asphalt
             : OutdoorSurface.Grass;
 
+        // Carve walking routes through the garden instead of filling every garden cell with props.
+        // Carve walking routes through the garden instead of filling every garden cell with props.
         private void BuildGardenPaths(OutdoorArea area)
         {
             int cx = Math.Clamp(area.X + area.Width / 2 + random.Next(-settings.GardenPathBend, settings.GardenPathBend + 1),
@@ -321,6 +332,8 @@ namespace Escape4Now.Map
             }
         }
 
+        // Reserve organized bays for vehicles so parking props do not scatter across the road.
+        // Reserve organized bays for vehicles so parking props do not scatter across the road.
         private void BuildParkingBays(OutdoorArea area)
         {
             int margin = (area.Fenced ? 1 : 0) + settings.AreaWalkwayWidth;
@@ -443,6 +456,8 @@ namespace Escape4Now.Map
             return x >= bounds.X && y >= bounds.Y && x + w <= bounds.X + bounds.Width && y + h <= bounds.Y + bounds.Height;
         }
 
+        // Check the whole prop footprint and spacing, not only the tile under its anchor.
+        // Check the whole prop footprint and spacing, not only the tile under its anchor.
         private bool CanPlace(int x, int y, int w, int h, int spacing, OutdoorAreaKind kind, bool usesParkingBay = false)
         {
             for (int yy = y; yy < y + h; yy++) for (int xx = x; xx < x + w; xx++)
@@ -456,6 +471,8 @@ namespace Escape4Now.Map
         private void SetFootprint(int x, int y, int w, int h, bool value)
         { for (int yy = y; yy < y + h; yy++) for (int xx = x; xx < x + w; xx++) blocked[yy * Width + xx] = value; }
 
+        // Pick separate walkable spawn cells from the completed layout.
+        // Pick separate walkable spawn cells from the completed layout.
         private bool ChooseSpawns()
         {
             for (int y = 1; y < Height - 1; y++) for (int x = 1; x < Width - 1; x++)
@@ -492,6 +509,8 @@ namespace Escape4Now.Map
             return count;
         }
 
+        // Measure narrow branches so validation can reject long unavoidable dead ends.
+        // Measure narrow branches so validation can reject long unavoidable dead ends.
         public int LongestDeadEnd()
         {
             int longest = 0;
@@ -556,6 +575,8 @@ namespace Escape4Now.Map
         }
 
         //Iterative articulation-point check: future chases must not depend on one main-route tile.
+        // Look for narrow points on main routes that would make the wider campus paths misleading.
+        // Look for narrow points on main routes that would make the wider campus paths misleading.
         private bool HasMainPathBottleneck()
         {
             int start = Array.FindIndex(blocked, value => !value);

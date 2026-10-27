@@ -1,3 +1,5 @@
+// Checks obstacle drawings and saves preview images without starting a normal match.
+
 using System;
 using System.IO;
 using Escape4Now.Map;

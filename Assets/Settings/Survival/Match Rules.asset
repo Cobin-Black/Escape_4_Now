@@ -1,0 +1,56 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7140b0bc2e1670845b2abce9abbd050d, type: 3}
+  m_Name: Match Rules
+  m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.GameModes.SurvivalRulesSettings
+  taskCounts:
+  - survivors: 1
+    required: 2
+    extraStations: 1
+  - survivors: 2
+    required: 3
+    extraStations: 1
+  - survivors: 3
+    required: 4
+    extraStations: 1
+  - survivors: 4
+    required: 4
+    extraStations: 2
+  puzzles:
+  - {fileID: 11400000, guid: 3ba0cc186d4028143baf6b36032c4e21, type: 2}
+  - {fileID: 11400000, guid: a98136256dab18e419397fa5686a3741, type: 2}
+  - {fileID: 11400000, guid: dcfe0ed3952a6f747ab5e580fd51191e, type: 2}
+  - {fileID: 11400000, guid: 30fa89dd4ba43c0478d0924c8464a236, type: 2}
+  - {fileID: 11400000, guid: 0cb7ed048f2154644af4ffa221540f42, type: 2}
+  - {fileID: 11400000, guid: 79863edf2fe4f7444bfd96bd6033f920, type: 2}
+  - {fileID: 11400000, guid: e28546a6b12d4b646ba33e2d4eb803ca, type: 2}
+  - {fileID: 11400000, guid: 2615c6c6894c9104895058a0ac942fbd, type: 2}
+  - {fileID: 11400000, guid: b6b8fd3afefb9a64cb9d95d0271e4c5f, type: 2}
+  escapeCount: 2
+  minimumExitSeparation: 12
+  exitPrefab: {fileID: 2582375253263552497, guid: 8ef8b158b68bd3c4299240f82bb9ee88, type: 3}
+  exitLabel: EXIT
+  interactionRange: 1
+  taskProtectionRadius: 1
+  spawnClearance: 1
+  monsterFootprint: {x: 2, y: 2}
+  minimumTaskSeparation: 5
+  placementAttempts: 128
+  candidatesPerTask: 128
+  mapRegenerationAttempts: 8
+  objectiveFormat: Puzzles {0}/{1}. Unlock exits and escape.
+  unlockedObjective: Exits unlocked. Reach an exit to escape.
+  resultTitle: MATCH RESULTS
+  escapedLabel: ESCAPED
+  deadLabel: ELIMINATED
+  timeoutLabel: DID NOT ESCAPE
+  noneLabel: None

@@ -1,3 +1,5 @@
+// Shows the Race key battle result and forwards Continue to the battle controller.
+
 using Escape4Now.GameModes;
 using Escape4Now.Multiplayer;
 using UnityEngine;

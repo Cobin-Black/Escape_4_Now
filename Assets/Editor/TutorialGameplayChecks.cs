@@ -1,3 +1,5 @@
+// Checks the tutorial lessons and their controls without changing the normal match rules.
+
 using System;
 using System.Collections;
 using System.Collections.Generic;
