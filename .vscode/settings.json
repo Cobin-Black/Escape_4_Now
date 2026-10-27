@@ -67,5 +67,5 @@
         "*.sln": "*.csproj",
         "*.slnx": "*.csproj"
     },
-    "dotnet.defaultSolution": "Escape_4_Now.slnx"
+    "dotnet.defaultSolution": "Escape_4_Now 2.slnx"
 }
