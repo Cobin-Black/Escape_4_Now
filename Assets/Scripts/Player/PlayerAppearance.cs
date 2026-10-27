@@ -21,9 +21,19 @@ namespace Escape4Now.Player
         [SerializeField, Min(0f)] private float pulseSpeed = 1.5f;
         [SerializeField, Range(0f, 0.15f)] private float pulseAmount = 0.035f;
         [SerializeField] private float groundOffset = 0.015f;
+        [Header("Skin")]
+        [SerializeField, Min(0.1f), Tooltip("Uniform body scale used once a skin sprite replaces the placeholder body.")]
+        private float skinScale = 1f;
         [Header("Editor Preview")]
         [SerializeField, Tooltip("Show the saved player visuals outside Play Mode. Off while editing maps by default.")]
         private bool previewInEditMode;
+        private Sprite skinFront;
+        private Sprite skinBack;
+        private bool facingBack;
+        private bool facingRight;
+
+        //The placeholder outline only fits the plain body shape, so it is hidden once a skin is on.
+        public bool HasSkin => skinFront != null && skinBack != null;
 
         private void OnEnable()
         {
@@ -40,14 +50,45 @@ namespace Escape4Now.Player
         private void SetVisible(bool visible)
         {
             if (body != null) body.enabled = visible;
-            if (outline != null) outline.enabled = visible;
+            if (outline != null) outline.enabled = visible && !HasSkin;
             if (turnRing != null) turnRing.enabled = visible;
             if (turnGlow != null) turnGlow.enabled = visible;
         }
 
         public void ApplyIdentity(Color color)
         {
-            if (body != null) body.color = color;
+            if (body != null && !HasSkin) body.color = color;
+        }
+
+        //Swaps the placeholder body for a skin. The player starts facing forward (down and to the left).
+        public void ApplySkin(Sprite front, Sprite back)
+        {
+            if (body == null || front == null || back == null) return;
+            skinFront = front;
+            skinBack = back;
+            body.color = Color.white;
+            body.transform.localScale = new Vector3(skinScale, skinScale, 1f);
+            if (outline != null) outline.enabled = false;
+            facingBack = false;
+            facingRight = false;
+            RefreshFacing();
+        }
+
+        //Turns the skin toward the on-screen direction the player just moved.
+        //Down-left: front. Down-right: front flipped. Up-right: back. Up-left: back flipped.
+        public void FaceToward(Vector2 screenDirection)
+        {
+            if (!HasSkin) return;
+            const float threshold = 0.0001f;
+            if (Mathf.Abs(screenDirection.y) > threshold) facingBack = screenDirection.y > 0f;
+            if (Mathf.Abs(screenDirection.x) > threshold) facingRight = screenDirection.x > 0f;
+            RefreshFacing();
+        }
+
+        private void RefreshFacing()
+        {
+            body.sprite = facingBack ? skinBack : skinFront;
+            body.flipX = facingBack ? !facingRight : facingRight;
         }
 
         private void LateUpdate()
@@ -64,7 +105,7 @@ namespace Escape4Now.Player
             body.enabled = visible;
             if (outline != null)
             {
-                outline.enabled = visible;
+                outline.enabled = visible && !HasSkin;
                 outline.sortingLayerID = body.sortingLayerID;
                 outline.sortingOrder = body.sortingOrder + 1;
             }

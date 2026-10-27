@@ -27,11 +27,15 @@ namespace Escape4Now.Multiplayer
             new Color(0.15f, 0.7f, 1f), new Color(1f, 0.35f, 0.3f),
             new Color(0.3f, 0.85f, 0.4f), new Color(1f, 0.8f, 0.2f)
         };
+        [Header("Player Skins")]
+        [SerializeField, Tooltip("Gives each player a different skin when the match starts.")]
+        private Skin_Handler skinHandler;
         private static LocalMultiplayerSession instance;
         private readonly List<MonoBehaviour> heldScripts = new List<MonoBehaviour>();
         private IsometricMapTemplate map;
         private IPlayerGridMap ActiveMap => gameMode != null ? gameMode.GridMap : null;
         public GameModeController Mode => gameMode;
+        public Skin_Handler Skins => skinHandler;
         public static GameplayInputBindings InputBindings => instance != null && instance.gameMode != null
             ? instance.gameMode.InputBindings : null;
         private TurnSystemController turns;
@@ -199,6 +203,12 @@ namespace Escape4Now.Multiplayer
                 }
             }
 
+            if (skinHandler != null && !skinHandler.AllAssigned(count))
+            {
+                status = "Each player needs to pick a skin.";
+                return false;
+            }
+
             if (gameMode == null || !gameMode.ValidateConfiguration(out _)
                 || ActiveMap == null || turns == null || sourcePlayer == null)
             {
@@ -337,6 +347,10 @@ namespace Escape4Now.Multiplayer
                     GetPlayerColor(lobbyIndex),
                     GetPlayerName(lobbyIndex),
                     gameMode);
+
+                //Uses the lobby slot so skins stay correct when a slot is skipped for the Monster.
+                if (skinHandler != null)
+                    skinHandler.ApplyTo(player, lobbyIndex);
 
                 bool isBot = gameMode.SupportsBots
                     && !LanMultiplayerSession.Active

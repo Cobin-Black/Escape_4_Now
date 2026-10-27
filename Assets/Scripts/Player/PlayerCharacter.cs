@@ -133,6 +133,7 @@ namespace Escape4Now.Player
             && Time.realtimeSinceStartup - rollAnimStart < diceRollAnimationDuration;
         public bool HasKey => networkHasKey || (inventory != null && inventory.HasKey());
         public Color IdentityColor => playerColor;
+        public PlayerAppearance Appearance => appearance;
         public IPlayerGridMap GridMap => MovementMap;
 
         //Uses the scene's Inspector-assigned movement and roll actions.
@@ -270,7 +271,10 @@ namespace Escape4Now.Player
         //Clients show confirmed state without running dice, pickups, or events again.
         public void ApplyNetworkState(Escape4Now.Multiplayer.LanPlayerState state, bool updateOccupancy = true)
         {
+            Vector2Int previousPosition = gridPosition;
             gridPosition = new Vector2Int(state.x, state.y);
+            if (appearance != null && previousPosition != gridPosition && MovementMap != null)
+                appearance.FaceToward(MovementMap.GridToWorld(gridPosition) - MovementMap.GridToWorld(previousPosition));
             lastRoll = state.roll;
             movesRemaining = state.moves;
             hasRolled = state.rolled;
@@ -510,6 +514,8 @@ namespace Escape4Now.Player
                 }
                 Vector3 targetPosition = MovementMap.GridToWorld(next);
                 targetPosition.z = -1f;
+                //Face the way this step goes on screen before sliding to the next tile.
+                if (appearance != null) appearance.FaceToward(targetPosition - MovementMap.GridToWorld(gridPosition));
                 while (Vector3.Distance(transform.position, targetPosition) > 0.01f)
                 {
                     transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
