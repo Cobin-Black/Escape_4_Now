@@ -30,6 +30,11 @@ namespace Escape4Now.UI
         [SerializeField] private string rollingText = "ROLLING";
         [SerializeField] private string rollFormat = "{0}";
         [SerializeField] private string rollFallback = "ROLL";
+        [SerializeField] private Text health;
+        [SerializeField] private Text chargeAbility;
+        [SerializeField] private Text roarAbility;
+        [SerializeField] private Text stompAbility;
+        [SerializeField] private GameObject playerHealthSection;
         public Rect PanelRect => panel.activeInHierarchy
             ? MatchUIContext.ScreenRect((RectTransform)panel.transform) : default;
         public Rect OccupiedRect
@@ -44,29 +49,98 @@ namespace Escape4Now.UI
             }
         }
 
+
         private void LateUpdate()
         {
             var player = context.ActivePlayer;
-            panel.SetActive(player != null && !context.Finished);
+            var monster = context.Monster;
+            bool monsterTurn = monster != null
+                && context.Turns != null
+                && context.Turns.CurrentTurnOwner == Escape4Now.TurnSystem.TurnOwner.Enemy;
+
+            panel.SetActive((player != null || monsterTurn) && !context.Finished);
             if (!panel.activeSelf) return;
-            turn.text = string.Format(turnFormat, context.Turns != null ? context.Turns.TurnNumber : 1);
-            playerName.text = (context.Turns != null ? context.Turns.CurrentTurnName : player.name).ToUpperInvariant();
-            var roll = player.InputBindings != null ? player.InputBindings.RollDice : null;
+
+            turn.text = string.Format(turnFormat,
+                context.Turns != null ? context.Turns.TurnNumber : 1);
+
+            if (monsterTurn)
+            {
+                playerName.text = "MONSTER";
+                health.gameObject.SetActive(false);
+
+                string charge = monster.ChargeCooldownRemaining == 0
+                    ? "READY" : monster.ChargeCooldownRemaining + " TURNS";
+                string roar = monster.RoarCooldownRemaining == 0
+                    ? "READY" : monster.RoarCooldownRemaining + " TURNS";
+                string stomp = monster.StompCooldownRemaining == 0
+                    ? "READY" : monster.StompCooldownRemaining + " TURNS";
+
+                chargeAbility.gameObject.SetActive(true);
+                roarAbility.gameObject.SetActive(true);
+                stompAbility.gameObject.SetActive(true);
+
+                chargeAbility.text = "CHARGE (Q): " + charge;
+                roarAbility.text = "ROAR (E): " + roar;
+                stompAbility.text = "STOMP (R): " + stomp;
+
+                action.text = monster.HasRolled
+                    ? string.Format(movesFormat, monster.MovesRemaining)
+                    : rollingText;
+
+                dice.Show(monster.HasRolled ? monster.LastRoll : 1, monster.IsRolling);
+                objectiveSection.SetActive(false);
+                timerSection.SetActive(context.Timer != null);
+                timerDivider.SetActive(context.Timer != null);
+
+                if (context.Timer != null)
+                    time.text = MatchUIContext.FormatTime(context.Timer.TimeRemaining);
+
+                return;
+            }
+
+            health.gameObject.SetActive(true);
+            chargeAbility.gameObject.SetActive(false);
+            roarAbility.gameObject.SetActive(false);
+            stompAbility.gameObject.SetActive(false);
+
+            playerName.text = (context.Turns != null
+                ? context.Turns.CurrentTurnName : player.name).ToUpperInvariant();
+
+            health.text = "HEALTH  " + new string('♥', player.Health)
+                + new string('♡', Mathf.Max(0, 5 - player.Health));
+
+            var roll = player.InputBindings != null
+                ? player.InputBindings.RollDice : null;
+
             action.text = player.IsRollAnimating ? rollingText : player.HasRolled
                 ? string.Format(movesFormat, player.MovesRemaining)
-                : string.Format(rollFormat, roll != null ? roll.GetBindingDisplayString(0).ToUpperInvariant() : rollFallback);
+                : string.Format(rollFormat,
+                    roll != null ? roll.GetBindingDisplayString(0).ToUpperInvariant()
+                    : rollFallback);
+
             dice.Show(player.HasRolled ? player.LastRoll : 1, player.IsRollAnimating);
+
             bool hasTimer = context.Timer != null;
             timerSection.SetActive(hasTimer);
             timerDivider.SetActive(hasTimer);
-            if (context.Timer != null) time.text = MatchUIContext.FormatTime(context.Timer.TimeRemaining);
-            string text = player.Mode != null ? player.Mode.GetObjective(player) : "";
-            bool hasObjective = !string.IsNullOrEmpty(text);
+
+            if (context.Timer != null)
+                time.text = MatchUIContext.FormatTime(context.Timer.TimeRemaining);
+
+            string objectiveText = player.Mode != null
+                ? player.Mode.GetObjective(player) : "";
+            bool hasObjective = !string.IsNullOrEmpty(objectiveText);
             objectiveSection.SetActive(hasObjective);
-            objective.text = text;
-            ((RectTransform)panel.transform).SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,
-                hasObjective ? heightWithObjective : attachedNotice != null && attachedNotice.gameObject.activeSelf
-                    ? heightWithoutObjectiveWithNotice : heightWithoutObjective);
+            objective.text = objectiveText;
+
+            ((RectTransform)panel.transform).SetSizeWithCurrentAnchors(
+                RectTransform.Axis.Vertical,
+                hasObjective ? heightWithObjective
+                : attachedNotice != null && attachedNotice.gameObject.activeSelf
+                    ? heightWithoutObjectiveWithNotice
+                    : heightWithoutObjective);
         }
+
     }
 }

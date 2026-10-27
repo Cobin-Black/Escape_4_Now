@@ -56,6 +56,7 @@ namespace Escape4Now.Player
         private bool isUsingItem;
         private bool isInMenu;
         private bool isBotControlled;
+        private bool roarSlowActive;
         public PlayerInventory Inventory => inventory;
         public bool HasReachedExit => hasReachedExit;
         public bool HasRolled => hasRolled;
@@ -73,6 +74,7 @@ namespace Escape4Now.Player
         public Vector2Int GridPosition => gridPosition;
         public bool IsMoving => moveRoutine != null;
         public bool IsBotControlled => isBotControlled;
+
 
         //The scene's gamemode decides who may leave. With no gamemode (such as the tutorial) the exit is open.
         private bool CanUseExit
@@ -170,6 +172,11 @@ namespace Escape4Now.Player
             int second = lucky || bad ? Random.Range(1, 7) : first;
             lastRoll = lucky ? Mathf.Max(first, second) : bad ? Mathf.Min(first, second) : first;
             movesRemaining = eventState.UseRoll(first, second);
+            if (roarSlowActive)
+            {
+                movesRemaining = Mathf.Max(1, movesRemaining / 2);
+                roarSlowActive = false;
+            }
             rollAnimStart = Time.realtimeSinceStartup;
             hasRolled = true;
             if (mapEvents != null && (lucky || bad || bonus))
@@ -588,8 +595,17 @@ namespace Escape4Now.Player
             registeredPosition = newPosition;
             //Rebuild the occupied set so leaving a shared tile does not mark it empty.
             var occupied = new List<Vector2Int>();
+
+            // Only living players count as occupying a tile.
             foreach (PlayerCharacter player in FindObjectsByType<PlayerCharacter>(FindObjectsSortMode.None))
-                if (player.isActiveAndEnabled && player.MovementMap == MovementMap) occupied.Add(player.gridPosition);
+            {
+                if (player.isActiveAndEnabled && player.Health > 0
+                    && player.MovementMap == MovementMap)
+                {
+                    occupied.Add(player.gridPosition);
+                }
+            }
+
             MovementMap.ReplacePlayerOccupants(occupied);
 
             RefreshSharedTilePositions(oldPosition);
@@ -695,6 +711,35 @@ namespace Escape4Now.Player
         public void SetBotControlled(bool value)
         {
             isBotControlled = value;
+        }
+
+        // Gets the player's current health.
+        public int Health => health;
+
+        // Removes one heart and eliminates the player when health reaches zero.
+        public void TakeDamage()
+        {
+            if (health <= 0)
+                return;
+
+            health--;
+            Debug.Log(name + " has " + health + " hearts remaining.");
+
+            if (health == 0)
+            {
+                Debug.Log(name + " has been eliminated!");
+
+                UpdateMapOccupancy(gridPosition);
+
+                // Deactivate the character while retaining its health for match results.
+                gameObject.SetActive(false);
+            }
+        }
+
+        // Applies the Monster's Roar effect to the player's next dice roll.
+        public void ApplyMonsterSlow()
+        {
+            roarSlowActive = true;
         }
 
         //Stops tracking this player when the scene or participant is removed.

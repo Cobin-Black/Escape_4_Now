@@ -1,4 +1,5 @@
 using System;
+using Escape4Now.GameModes;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -13,6 +14,7 @@ namespace Escape4Now.UI
             public InputField name;
             public Image swatch;
             public Toggle bot;
+            public Toggle monster;
         }
         [Header("Unity UI References")]
         [SerializeField] private MatchUIContext context;
@@ -40,6 +42,14 @@ namespace Escape4Now.UI
                 slot.name.onValueChanged.AddListener(value => session.SetPlayerName(index, value));
                 slot.bot.SetIsOnWithoutNotify(session.IsBotPlayer(i));
                 slot.bot.onValueChanged.AddListener(value => session.SetBotPlayer(index, value));
+                if (slot.monster != null)
+                {
+                    slot.monster.onValueChanged.AddListener(value =>
+                    {
+                        if (value)
+                            session.SetMonsterPlayer(index);
+                    });
+                }
             }
         }
 
@@ -60,6 +70,17 @@ namespace Escape4Now.UI
                 slot.name.interactable = !session.IsBotPlayer(i);
                 if (!slot.name.isFocused && slot.name.text != session.GetPlayerName(i))
                     slot.name.SetTextWithoutNotify(session.GetPlayerName(i));
+
+                bool isMonsterMode = session.Mode is SurvivalModeController;
+
+                if (slot.monster != null)
+                {
+                    slot.monster.gameObject.SetActive(isMonsterMode);
+                    slot.monster.interactable = i < session.PlayerCount;
+
+                    slot.monster.SetIsOnWithoutNotify(
+                        session.IsMonsterPlayer(i));
+                }
             }
             for (int i = 0; i < playerCounts.Length; i++)
                 playerCounts[i].SetIsOnWithoutNotify(session.PlayerCount == i + 2);

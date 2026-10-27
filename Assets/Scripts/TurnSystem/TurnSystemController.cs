@@ -27,7 +27,7 @@ namespace Escape4Now.TurnSystem
         [SerializeField] private int currentPlayerIndex;
         [SerializeField] private int turnNumber = 1;
         [SerializeField] private string currentTurnName = "Player One";
-       
+
         private int turnStartedFrame;
         private int[] turnOrder;
         private bool hasNetworkTurnOrder;
@@ -35,8 +35,8 @@ namespace Escape4Now.TurnSystem
         //Registers the separate players created for this local match.
         public void SetPlayers(PlayerCharacter[] participants, int? seed = null)
         {
-            if (participants == null || participants.Length < 2 || participants.Length > 4)
-                throw new System.ArgumentException("A local match needs two to four players.");
+            if (participants == null || participants.Length < 1 || participants.Length > 4)
+                throw new System.ArgumentException("A local match needs one to four players.");
             var unique = new System.Collections.Generic.HashSet<PlayerCharacter>();
             foreach (PlayerCharacter participant in participants)
                 if (participant == null || !unique.Add(participant))
@@ -73,7 +73,9 @@ namespace Escape4Now.TurnSystem
         private void Start()
         {
             if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) return;
-            RestartTurnCycle();
+
+            if (players != null && players.Length > 0)
+                RestartTurnCycle();
         }
 
         public int[] CopyTurnOrder()
@@ -173,19 +175,23 @@ namespace Escape4Now.TurnSystem
                     return;
                 }
 
-                if (current.HasReachedExit)
+                // Only enforce normal turn requirements for living players.
+                if (current.Health > 0)
                 {
-                    return;
-                }
+                    if (current.HasReachedExit)
+                    {
+                        return;
+                    }
 
-                if (!current.HasRolled && !battleLoss)
-                {
-                    return;
-                }
+                    if (!current.HasRolled && !battleLoss)
+                    {
+                        return;
+                    }
 
-                if (current.IsMoving || current.IsUsingItem() || current.IsInMenu())
-                {
-                    return;
+                    if (current.IsMoving || current.IsUsingItem() || current.IsInMenu())
+                    {
+                        return;
+                    }
                 }
             }
 
@@ -257,7 +263,7 @@ namespace Escape4Now.TurnSystem
             for (int attempts = 0; attempts < count * 2; attempts++)
             {
                 PlayerCharacter player = players[currentPlayerIndex];
-                if (player != null && player.isActiveAndEnabled && !player.HasReachedExit)
+                if (player != null && player.isActiveAndEnabled && player.Health > 0 && !player.HasReachedExit)
                 {
                     if (player.BeginEventTurn())
                     {

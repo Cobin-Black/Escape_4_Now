@@ -2,6 +2,7 @@ using Escape4Now.TurnSystem;
 using TMPro;
 using UnityEngine;
 using UnityEngine.InputSystem;
+using Escape4Now.Player;
 
 public class DiceRollController : MonoBehaviour
 {
@@ -36,6 +37,7 @@ public class DiceRollController : MonoBehaviour
     {
         if (rollAction != null && rollAction.action.WasPressedThisFrame())
         {
+            Debug.Log("Dice roll input detected.");
             RollDice();
         }
     }
@@ -43,11 +45,24 @@ public class DiceRollController : MonoBehaviour
     private void RollDice()
     {
         int roll = Random.Range(1, 7);
-        if (diceResultText != null) diceResultText.text = string.Format(resultFormat, roll);
 
-        if (turnSystem != null)
+        if (diceResultText != null)
+            diceResultText.text = string.Format(resultFormat, roll);
+
+        if (turnSystem == null)
+            return;
+
+        if (turnSystem.CurrentTurnOwner == TurnOwner.Enemy)
         {
-            turnSystem.AdvanceTurn();
+            MonsterCharacter monster =
+                FindFirstObjectByType<MonsterCharacter>();
+
+            if (monster != null)
+                monster.SetMovementFromRoll(roll);
+
+            return;
         }
+
+        turnSystem.AdvanceTurn();
     }
 }

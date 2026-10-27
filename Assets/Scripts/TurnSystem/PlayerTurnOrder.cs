@@ -7,7 +7,7 @@ namespace Escape4Now.TurnSystem
     {
         public static int[] Create(int playerCount, int seed, bool randomize = true)
         {
-            if (playerCount < 0) throw new ArgumentOutOfRangeException(nameof(playerCount));
+            if (playerCount < 1) throw new ArgumentOutOfRangeException(nameof(playerCount));
             var order = new int[playerCount];
             for (int i = 0; i < order.Length; i++) order[i] = i;
             if (!randomize) return order;
