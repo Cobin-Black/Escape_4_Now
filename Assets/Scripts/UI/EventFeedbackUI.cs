@@ -11,7 +11,6 @@ namespace Escape4Now.UI
         [SerializeField] private Text message;
         [SerializeField] private Image blackout;
         [SerializeField] private Material blackoutMaterial;
-        [SerializeField] private Toggle tutorialEventLocations;
         [Header("Blackout")]
         [SerializeField, Min(0.1f)] private float visibleRadiusTiles = 2f;
         [SerializeField, Range(0f, 0.99f)] private float clearRadiusRatio = 0.7f;
@@ -32,9 +31,6 @@ namespace Escape4Now.UI
         {
             var events = context.Events;
             bool playing = context.Playing && !context.Finished && events != null;
-            tutorialEventLocations.gameObject.SetActive(playing && context.Session == null);
-            if (tutorialEventLocations.gameObject.activeSelf)
-                tutorialEventLocations.SetIsOnWithoutNotify(events.EventLocationsVisible);
             panel.SetActive(playing && !string.IsNullOrEmpty(events.CurrentMessage));
             if (panel.activeSelf)
                 message.text = events.CurrentMessage + (events.BlackoutTurns > 0 ? string.Format(remainingFormat, events.BlackoutTurns) : "");
@@ -56,12 +52,6 @@ namespace Escape4Now.UI
             instance.SetVector(Center, center);
             instance.SetFloat(Radius, radius);
             instance.SetFloat(ClearRatio, clearRadiusRatio);
-        }
-
-        public void SetTutorialEventLocations(bool visible)
-        {
-            if (context.Session == null && context.Events != null)
-                context.Events.SetEventLocationsVisible(visible);
         }
 
         private void OnDestroy()

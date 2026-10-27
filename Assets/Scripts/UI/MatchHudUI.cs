@@ -78,7 +78,11 @@ namespace Escape4Now.UI
                 action.text = player.IsRollAnimating ? rollingText : player.HasRolled
                     ? string.Format(movesFormat, player.MovesRemaining)
                     : string.Format(rollFormat, roll != null ? roll.GetBindingDisplayString(0).ToUpperInvariant() : rollFallback);
-                dice.Show(player.HasRolled ? player.LastRoll : 1, player.IsRollAnimating);
+                //Double Dice shows both dice it rolled; every other roll shows one die.
+                if (player.HasRolled && player.SecondDie > 0)
+                    dice.Show(player.FirstDie, player.SecondDie, player.IsRollAnimating);
+                else
+                    dice.Show(player.HasRolled ? player.LastRoll : 1, player.IsRollAnimating);
                 text = player.Mode != null ? player.Mode.GetObjective(player) : "";
             }
             bool hasObjective = !string.IsNullOrEmpty(text);
