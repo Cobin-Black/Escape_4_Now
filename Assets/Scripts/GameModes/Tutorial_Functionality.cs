@@ -61,6 +61,8 @@ namespace Escape4Now.GameModes
         [SerializeField] private bool isLastTutorialScene;
         //Places every event type in the Event Triggers section, and any of them ends the lesson, instead of only the Warp.
         [SerializeField] private bool showAllEventTypes;
+        //The Obstacles section's locker. Uses the same blue hallway Lockers as Race mode.
+        [SerializeField] private SchoolFurniture lessonLockerPrefab;
 
         //Section to load next. It survives the scene reload, and is cleared when Play mode starts.
         private static TutorialSection? pendingSection;
@@ -284,6 +286,7 @@ namespace Escape4Now.GameModes
                     obstacleSpawner.SetObstacleCount(1);
                     obstacleSpawner.SetInteractableChance(1f);
                     obstacleSpawner.ForceObstacleTile(start + obstacleOffset);
+                    if (lessonLockerPrefab != null) obstacleSpawner.ForceObstaclePrefab(lessonLockerPrefab);
                 }
             }
 

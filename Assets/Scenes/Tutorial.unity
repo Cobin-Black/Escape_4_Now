@@ -4065,6 +4065,7 @@ MonoBehaviour:
   nextTutorialScene: 
   isLastTutorialScene: 0
   showAllEventTypes: 0
+  lessonLockerPrefab: {fileID: 11400000, guid: e7c06474f71b480a943700000000000c, type: 3}
 --- !u!1 &1700000020
 GameObject:
   m_ObjectHideFlags: 0
