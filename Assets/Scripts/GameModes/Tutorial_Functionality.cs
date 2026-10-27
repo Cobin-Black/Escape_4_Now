@@ -21,6 +21,8 @@ namespace Escape4Now.GameModes
         [SerializeField] private ObstacleSpawner obstacleSpawner;
         [SerializeField] private ItemSpawner itemSpawner;
         [SerializeField] private PlayerCharacter player;
+        [SerializeField, Tooltip("The tutorial player uses the first skin.")]
+        private Skin_Handler skinHandler;
 
         //Section used when Play mode starts, so a single section can be tested.
         [SerializeField] private TutorialSection startingSection = TutorialSection.Movement;
@@ -128,6 +130,7 @@ namespace Escape4Now.GameModes
         //Gives the section's starting item once the inventory is ready, then announces the section.
         private void Start()
         {
+            if (skinHandler != null) skinHandler.ApplyTo(player, 0);
             //The tutorial has no gamemode script, so the exit is open and no key is needed to leave.
             if (currentSection == TutorialSection.Exit && startWithKey) GiveTutorialKey();
             if (currentSection == TutorialSection.Items)

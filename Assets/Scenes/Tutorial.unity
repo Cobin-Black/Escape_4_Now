@@ -4008,6 +4008,7 @@ GameObject:
   m_Component:
   - component: {fileID: 1700000002}
   - component: {fileID: 1700000003}
+  - component: {fileID: 1700000090}
   m_Layer: 0
   m_Name: Tutorial Manager
   m_TagString: Untagged
@@ -4047,6 +4048,7 @@ MonoBehaviour:
   obstacleSpawner: {fileID: 69550735}
   itemSpawner: {fileID: 69550736}
   player: {fileID: 30058497}
+  skinHandler: {fileID: 1700000090}
   startingSection: 1
   doubleDicePrefab: {fileID: 1119616090794593453, guid: 798c830d404504ec993fb50111c722ba, type: 3}
   keyItemPrefab: {fileID: 8324686912643164936, guid: 48deafd2bac804dee8759ec5b673b47b, type: 3}
@@ -4985,3 +4987,34 @@ SceneRoots:
   - {fileID: 1921998359}
   - {fileID: 1219372545}
   - {fileID: 1052762025}
+--- !u!114 &1700000090
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1700000001}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b75a98a5181a477cb6739556ef501e21, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Player.Skin_Handler
+  skins:
+  - skinName: Skin 1
+    front: {fileID: -6418356387306343322, guid: ca31979cf515edc4cacc0d342e23a333, type: 3}
+    back: {fileID: -2581596509250930723, guid: ca31979cf515edc4cacc0d342e23a333, type: 3}
+  - skinName: Skin 2
+    front: {fileID: -961476164333022237, guid: ca31979cf515edc4cacc0d342e23a333, type: 3}
+    back: {fileID: -927085747878242335, guid: ca31979cf515edc4cacc0d342e23a333, type: 3}
+  - skinName: Skin 3
+    front: {fileID: 1214475616386120183, guid: ca31979cf515edc4cacc0d342e23a333, type: 3}
+    back: {fileID: -3348348555746905471, guid: ca31979cf515edc4cacc0d342e23a333, type: 3}
+  - skinName: Skin 4
+    front: {fileID: -1091320312576279179, guid: ca31979cf515edc4cacc0d342e23a333, type: 3}
+    back: {fileID: -3412951408619502139, guid: ca31979cf515edc4cacc0d342e23a333, type: 3}
+  - skinName: Skin 5
+    front: {fileID: 2811353989969079501, guid: ca31979cf515edc4cacc0d342e23a333, type: 3}
+    back: {fileID: -770898819949058251, guid: ca31979cf515edc4cacc0d342e23a333, type: 3}
+  - skinName: Skin 6
+    front: {fileID: -5032625193117769610, guid: ca31979cf515edc4cacc0d342e23a333, type: 3}
+    back: {fileID: 6927646566867304780, guid: ca31979cf515edc4cacc0d342e23a333, type: 3}
