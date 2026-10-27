@@ -27,11 +27,15 @@ namespace Escape4Now.Multiplayer
             new Color(0.15f, 0.7f, 1f), new Color(1f, 0.35f, 0.3f),
             new Color(0.3f, 0.85f, 0.4f), new Color(1f, 0.8f, 0.2f)
         };
+        [Header("Player Skins")]
+        [SerializeField, Tooltip("Gives each player a different skin when the match starts.")]
+        private Skin_Handler skinHandler;
         private static LocalMultiplayerSession instance;
         private readonly List<MonoBehaviour> heldScripts = new List<MonoBehaviour>();
         private IsometricMapTemplate map;
         private IPlayerGridMap ActiveMap => gameMode != null ? gameMode.GridMap : null;
         public GameModeController Mode => gameMode;
+        public Skin_Handler Skins => skinHandler;
         public static GameplayInputBindings InputBindings => instance != null && instance.gameMode != null
             ? instance.gameMode.InputBindings : null;
         private TurnSystemController turns;
@@ -199,6 +203,12 @@ namespace Escape4Now.Multiplayer
                 }
             }
 
+            if (skinHandler != null && !skinHandler.AllAssigned(count))
+            {
+                status = "Each player needs to pick a skin.";
+                return false;
+            }
+
             if (gameMode == null || !gameMode.ValidateConfiguration(out _)
                 || ActiveMap == null || turns == null || sourcePlayer == null)
             {
@@ -213,12 +223,10 @@ namespace Escape4Now.Multiplayer
             }
 
             bool monsterMode = gameMode is SurvivalModeController;
-            int monsterSlot = monsterMode ? monsterPlayerIndex : -1;
-            if (monsterMode && (monsterSlot < 0 || monsterSlot >= count))
-            {
-                status = "Choose a player to become the Monster.";
-                return false;
-            }
+            //No player picked (or the pick is outside the player count) means the AI controls the Monster.
+            int monsterSlot = monsterMode && monsterPlayerIndex >= 0 && monsterPlayerIndex < count
+                ? monsterPlayerIndex : -1;
+            bool monsterIsPlayer = monsterSlot >= 0;
 
             try
             {
@@ -310,7 +318,7 @@ namespace Escape4Now.Multiplayer
 
             }
 
-            int survivorCount = monsterMode ? count - 1 : count;
+            int survivorCount = monsterIsPlayer ? count - 1 : count;
             participants = new PlayerCharacter[survivorCount];
 
             sourcePlayer.gameObject.SetActive(false);
@@ -320,7 +328,7 @@ namespace Escape4Now.Multiplayer
                 int lobbyIndex = i;
 
                 // Skips the lobby slot selected to become the Monster.
-                if (monsterMode && lobbyIndex >= monsterSlot)
+                if (monsterIsPlayer && lobbyIndex >= monsterSlot)
                     lobbyIndex++;
 
                 PlayerCharacter player = lobbyIndex == 0
@@ -337,6 +345,10 @@ namespace Escape4Now.Multiplayer
                     GetPlayerColor(lobbyIndex),
                     GetPlayerName(lobbyIndex),
                     gameMode);
+
+                //Uses the lobby slot so skins stay correct when a slot is skipped for the Monster.
+                if (skinHandler != null)
+                    skinHandler.ApplyTo(player, lobbyIndex);
 
                 bool isBot = gameMode.SupportsBots
                     && !LanMultiplayerSession.Active
@@ -375,6 +387,7 @@ namespace Escape4Now.Multiplayer
                     turns,
                     participants,
                     monsterSpawn);
+                matchMonster.SetAIControlled(!monsterIsPlayer);
 
                 matchMonster.gameObject.SetActive(true);
                 matchMonster.enabled = true;

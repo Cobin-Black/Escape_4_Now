@@ -20,7 +20,18 @@ namespace Escape4Now.Player
         [SerializeField, Min(0.01f)] private float moveDuration = 0.15f;
 
         [Header("Control")]
-        [SerializeField] private bool aiControlled;
+        [SerializeField, Tooltip("Set by the lobby: on when no player picked to be the Monster.")]
+        private bool aiControlled;
+
+        [Header("Player Controls (Input System)")]
+        [SerializeField, Tooltip("Actions asset holding the Monster action map. Empty uses the project-wide actions.")]
+        private InputActionAsset inputActions;
+        [SerializeField] private string actionMapName = "Monster";
+        [SerializeField] private string moveActionName = "Move";
+        [SerializeField] private string rollDiceActionName = "Roll Dice";
+        [SerializeField] private string chargeActionName = "Charge";
+        [SerializeField] private string roarActionName = "Roar";
+        [SerializeField] private string stompActionName = "Stomp";
 
         [Header("Charge")]
         [SerializeField, Min(2)] private int chargeDistance = 6;
@@ -78,6 +89,96 @@ namespace Escape4Now.Player
         public int RoarCooldownRemaining => Mathf.Max(0, roarReadyTurn - monsterTurn);
         public int StompCooldownRemaining => Mathf.Max(0, stompReadyTurn - monsterTurn);
 
+        private InputAction moveAction;
+        private InputAction rollDiceAction;
+        private InputAction chargeAction;
+        private InputAction roarAction;
+        private InputAction stompAction;
+        private readonly List<InputAction> enabledActions = new List<InputAction>();
+        private Vector2Int heldDirection;
+
+        public bool IsAIControlled => aiControlled;
+        public InputAction RollDiceAction => rollDiceAction;
+        public InputAction ChargeAction => chargeAction;
+        public InputAction RoarAction => roarAction;
+        public InputAction StompAction => stompAction;
+
+        // Chooses between AI and player control. Player control reads the Monster action map.
+        public void SetAIControlled(bool value)
+        {
+            aiControlled = value;
+            if (!aiControlled)
+                SetupInputActions();
+        }
+
+        // Finds and enables the Monster action map's actions.
+        private void SetupInputActions()
+        {
+            if (moveAction != null)
+                return;
+
+            InputActionAsset asset = inputActions != null ? inputActions : InputSystem.actions;
+            InputActionMap actionMap = asset != null ? asset.FindActionMap(actionMapName) : null;
+
+            if (actionMap == null)
+            {
+                Debug.LogError($"MonsterCharacter could not find the '{actionMapName}' action map.", this);
+                return;
+            }
+
+            moveAction = FindAction(actionMap, moveActionName);
+            rollDiceAction = FindAction(actionMap, rollDiceActionName);
+            chargeAction = FindAction(actionMap, chargeActionName);
+            roarAction = FindAction(actionMap, roarActionName);
+            stompAction = FindAction(actionMap, stompActionName);
+        }
+
+        private InputAction FindAction(InputActionMap actionMap, string actionName)
+        {
+            InputAction action = actionMap.FindAction(actionName);
+
+            if (action == null)
+            {
+                Debug.LogError($"MonsterCharacter could not find '{actionMapName}/{actionName}'.", this);
+                return null;
+            }
+
+            // Only disable actions this script turned on.
+            if (!action.enabled)
+            {
+                action.Enable();
+                enabledActions.Add(action);
+            }
+
+            return action;
+        }
+
+        private void OnDestroy()
+        {
+            foreach (InputAction action in enabledActions)
+                action.Disable();
+        }
+
+        // Turns the Move action into one grid step, once per press.
+        private Vector2Int ReadMoveDirection()
+        {
+            Vector2 value = moveAction != null ? moveAction.ReadValue<Vector2>() : Vector2.zero;
+            Vector2Int direction = Vector2Int.zero;
+
+            if (value.sqrMagnitude > 0.25f)
+            {
+                direction = Mathf.Abs(value.x) >= Mathf.Abs(value.y)
+                    ? new Vector2Int(value.x > 0f ? 1 : -1, 0)
+                    : new Vector2Int(0, value.y > 0f ? 1 : -1);
+            }
+
+            bool newPress = direction != Vector2Int.zero && direction != heldDirection;
+            heldDirection = direction;
+            return newPress ? direction : Vector2Int.zero;
+        }
+
+        private static bool Pressed(InputAction action) => action != null && action.WasPressedThisFrame();
+
 
 
         private void Start()
@@ -100,6 +201,9 @@ namespace Escape4Now.Player
             }
 
             transform.position = GetFootprintWorldPosition(gridPosition);
+
+            if (!aiControlled)
+                SetupInputActions();
         }
 
         // Initializes the Monster for a new Survival Mode match.
@@ -255,74 +359,47 @@ namespace Escape4Now.Player
             hasRolled = true;
         }
 
-        // Reads movement input and lets the Monster choose its Charge direction.
+        // Reads the Monster action map: Move, Roll Dice, Charge, Roar and Stomp.
         private void ReadMonsterInput()
         {
-            if (Keyboard.current == null)
+            if (moveAction == null)
+                SetupInputActions();
+
+            if (moveAction == null)
                 return;
 
+            Vector2Int direction = ReadMoveDirection();
+
             // Rolls once per Monster turn, from 1 to 4.
-            if (!hasRolled && !isRolling && Keyboard.current.spaceKey.wasPressedThisFrame)
+            if (!hasRolled && !isRolling && Pressed(rollDiceAction))
             {
                 StartCoroutine(RollDice());
                 return;
             }
 
-            // Choose the direction after activating Charge with Q.
+            // After Charge is pressed, the next Move press picks the Charge direction.
             if (isChoosingChargeDirection)
             {
-                if (Keyboard.current.wKey.wasPressedThisFrame ||
-                    Keyboard.current.upArrowKey.wasPressedThisFrame)
-                    TryCharge(Vector2Int.up);
-
-                else if (Keyboard.current.sKey.wasPressedThisFrame ||
-                         Keyboard.current.downArrowKey.wasPressedThisFrame)
-                    TryCharge(Vector2Int.down);
-
-                else if (Keyboard.current.aKey.wasPressedThisFrame ||
-                         Keyboard.current.leftArrowKey.wasPressedThisFrame)
-                    TryCharge(Vector2Int.left);
-
-                else if (Keyboard.current.dKey.wasPressedThisFrame ||
-                         Keyboard.current.rightArrowKey.wasPressedThisFrame)
-                    TryCharge(Vector2Int.right);
+                if (direction != Vector2Int.zero)
+                    TryCharge(direction);
 
                 return;
             }
 
-            // Activates Charge direction selection.
-            if (Keyboard.current.qKey.wasPressedThisFrame &&
-                monsterTurn >= chargeReadyTurn && !isMoving)
+            if (Pressed(chargeAction) && monsterTurn >= chargeReadyTurn && !isMoving)
             {
                 isChoosingChargeDirection = true;
                 return;
             }
 
-            // Normal movement.
-            if (Keyboard.current.wKey.wasPressedThisFrame ||
-                Keyboard.current.upArrowKey.wasPressedThisFrame)
-                TryMove(Vector2Int.up);
+            if (direction != Vector2Int.zero)
+                TryMove(direction);
 
-            else if (Keyboard.current.sKey.wasPressedThisFrame ||
-                     Keyboard.current.downArrowKey.wasPressedThisFrame)
-                TryMove(Vector2Int.down);
-
-            else if (Keyboard.current.aKey.wasPressedThisFrame ||
-                     Keyboard.current.leftArrowKey.wasPressedThisFrame)
-                TryMove(Vector2Int.left);
-
-            else if (Keyboard.current.dKey.wasPressedThisFrame ||
-                     Keyboard.current.rightArrowKey.wasPressedThisFrame)
-                TryMove(Vector2Int.right);
-
-            // Activates Roar.
-            if (Keyboard.current.eKey.wasPressedThisFrame)
+            if (Pressed(roarAction))
                 TryRoar();
 
-            // Activates Stomp.
-            if (Keyboard.current.rKey.wasPressedThisFrame)
+            if (Pressed(stompAction))
                 TryStomp();
-
         }
 
         // Moves the Monster one tile if its entire footprint can fit, then damages players on newly entered tiles.
@@ -615,6 +692,15 @@ namespace Escape4Now.Player
                 return;
             }
 
+            // The AI rolls for its moves the same way a player-controlled Monster does.
+            if (!hasRolled)
+            {
+                if (!isRolling)
+                    StartCoroutine(RollDice());
+
+                return;
+            }
+
             if (monsterTurn >= stompReadyTurn
                 && IsInsideAbilityArea(target.GridPosition))
             {
@@ -626,7 +712,7 @@ namespace Escape4Now.Player
                 return;
             }
 
-            if (!hasRolled || movesUsed >= rolledMoves)
+            if (movesUsed >= rolledMoves)
             {
                 EndMonsterTurn();
                 return;

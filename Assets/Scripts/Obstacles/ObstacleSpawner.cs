@@ -50,6 +50,7 @@ namespace Escape4Now.Obstacles
         private int? forcedObstacleCount;
         private float? forcedInteractableChance;
         private Vector2Int? forcedObstacleCell;
+        private SchoolFurniture forcedObstaclePrefab;
         private SchoolFurnitureSettings placementSettings;
         //Item placement waits until all searchable obstacles have been created.
         public bool HasSpawnedObstacles { get; private set; }
@@ -57,6 +58,8 @@ namespace Escape4Now.Obstacles
         public void SetObstacleCount(int count) { forcedObstacleCount = Mathf.Max(0, count); }
         public void SetInteractableChance(float chance) { forcedInteractableChance = Mathf.Clamp01(chance); }
         public void ForceObstacleTile(Vector2Int cell) { forcedObstacleCell = cell; }
+        //Optional furniture (such as the hallway Lockers) to place on the forced tile instead of a random obstacle.
+        public void ForceObstaclePrefab(SchoolFurniture prefab) { forcedObstaclePrefab = prefab; }
 
         private void Awake()
         {
@@ -328,7 +331,9 @@ namespace Escape4Now.Obstacles
                 Vector2Int cell = forcedObstacleCell.Value;
                 bool canForce = emptyTiles.Remove(cell) || (map.IsWalkable(cell) && !map.IsOccupied(cell)
                     && !map.IsExit(cell) && (mapEvents == null || !mapEvents.HasEvent(cell)) && !HasItemAt(cell));
-                if (canForce && SpawnObstacle(cell))
+                bool spawned = canForce && (forcedObstaclePrefab != null
+                    ? SpawnFurniture(cell, forcedObstaclePrefab) : SpawnObstacle(cell));
+                if (spawned)
                 {
                     placed++;
                     decorations.Add(cell);
@@ -461,6 +466,16 @@ namespace Escape4Now.Obstacles
             ObstacleStorage storage = obstacle.GetComponent<ObstacleStorage>();
             if (storage == null) storage = obstacle.gameObject.AddComponent<ObstacleStorage>();
             storage.SetStoredItem(null);
+            return true;
+        }
+
+        //Places searchable furniture on one tile, built the same way the map builds its hallway furniture.
+        private bool SpawnFurniture(Vector2Int cell, SchoolFurniture prefab)
+        {
+            if (!map.IsInteriorFloor(cell) || !map.RegisterBlockedPosition(cell)) return false;
+            SchoolFurniture furniture = Instantiate(prefab, map.GridToWorld(cell), Quaternion.identity, transform);
+            furniture.name = prefab.name;
+            furniture.Build(map, cell, map.GetObstacleFacing(cell));
             return true;
         }
 

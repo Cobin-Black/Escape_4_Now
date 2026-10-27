@@ -42,6 +42,8 @@ namespace Escape4Now.Player
         private bool hasReachedExit;
         private bool hasRolled;
         private int lastRoll;
+        private int firstDie;
+        private int secondDie;
         private int movesRemaining;
         private MapEventController mapEvents;
         private Vector2Int lastDirection = Vector2Int.up;
@@ -61,6 +63,9 @@ namespace Escape4Now.Player
         public bool HasReachedExit => hasReachedExit;
         public bool HasRolled => hasRolled;
         public int LastRoll => lastRoll;
+        //Each die from a Double Dice roll, so the HUD can show both. SecondDie is 0 for a normal roll.
+        public int FirstDie => firstDie;
+        public int SecondDie => secondDie;
         public int MovesRemaining => movesRemaining;
         internal bool IsResolvingEventStep => resolvingStep;
         public bool IsCurrentTurn => turnSystem == null || turnSystem.IsPlayersTurn(this);
@@ -133,6 +138,7 @@ namespace Escape4Now.Player
             && Time.realtimeSinceStartup - rollAnimStart < diceRollAnimationDuration;
         public bool HasKey => networkHasKey || (inventory != null && inventory.HasKey());
         public Color IdentityColor => playerColor;
+        public PlayerAppearance Appearance => appearance;
         public IPlayerGridMap GridMap => MovementMap;
 
         //Uses the scene's Inspector-assigned movement and roll actions.
@@ -171,6 +177,7 @@ namespace Escape4Now.Player
             bool bonus = eventState.HasRollBonus;
             int second = lucky || bad ? Random.Range(1, 7) : first;
             lastRoll = lucky ? Mathf.Max(first, second) : bad ? Mathf.Min(first, second) : first;
+            secondDie = 0;
             movesRemaining = eventState.UseRoll(first, second);
             if (roarSlowActive)
             {
@@ -232,6 +239,7 @@ namespace Escape4Now.Player
             Debug.Log($"[Turn Debug] BeginEventTurn called for {name}. Resetting hasRolled.");
             hasRolled = false;
             movesRemaining = 0;
+            secondDie = 0;
             bool canPlay = eventState.BeginTurn();
             if (!canPlay && mapEvents != null) mapEvents.ShowMessage(this, "Frozen: this turn was skipped.");
             return canPlay;
@@ -270,7 +278,10 @@ namespace Escape4Now.Player
         //Clients show confirmed state without running dice, pickups, or events again.
         public void ApplyNetworkState(Escape4Now.Multiplayer.LanPlayerState state, bool updateOccupancy = true)
         {
+            Vector2Int previousPosition = gridPosition;
             gridPosition = new Vector2Int(state.x, state.y);
+            if (appearance != null && previousPosition != gridPosition && MovementMap != null)
+                appearance.FaceToward(MovementMap.GridToWorld(gridPosition) - MovementMap.GridToWorld(previousPosition));
             lastRoll = state.roll;
             movesRemaining = state.moves;
             hasRolled = state.rolled;
@@ -510,6 +521,8 @@ namespace Escape4Now.Player
                 }
                 Vector3 targetPosition = MovementMap.GridToWorld(next);
                 targetPosition.z = -1f;
+                //Face the way this step goes on screen before sliding to the next tile.
+                if (appearance != null) appearance.FaceToward(targetPosition - MovementMap.GridToWorld(gridPosition));
                 while (Vector3.Distance(transform.position, targetPosition) > 0.01f)
                 {
                     transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
@@ -668,18 +681,32 @@ namespace Escape4Now.Player
         }
 
         // Gives the player a movement allowance from an item.
-        public void SetMovesFromItem(int moveAmount)
+        public bool SetMovesFromItem(int moveAmount)
         {
             if (!CanReadTurnInput || hasReachedExit || IsMoving || moveAmount <= 0)
             {
-                return;
+                return false;
             }
 
             lastRoll = moveAmount;
+            secondDie = 0;
             movesRemaining = moveAmount;
             hasRolled = true;
 
             Debug.Log($"Item gave the player {moveAmount} moves.");
+            return true;
+        }
+
+        // Gives the player the total of two dice and keeps each die so the HUD can show both.
+        public bool SetMovesFromDoubleDice(int first, int second)
+        {
+            if (!SetMovesFromItem(first + second))
+                return false;
+
+            firstDie = first;
+            secondDie = second;
+            rollAnimStart = Time.realtimeSinceStartup;
+            return true;
         }
 
         // Checks whether the player has stepped onto an item and collects it.

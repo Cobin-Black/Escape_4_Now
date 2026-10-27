@@ -21,6 +21,8 @@ namespace Escape4Now.GameModes
         [SerializeField] private ObstacleSpawner obstacleSpawner;
         [SerializeField] private ItemSpawner itemSpawner;
         [SerializeField] private PlayerCharacter player;
+        [SerializeField, Tooltip("The tutorial player uses the first skin.")]
+        private Skin_Handler skinHandler;
 
         //Section used when Play mode starts, so a single section can be tested.
         [SerializeField] private TutorialSection startingSection = TutorialSection.Movement;
@@ -59,6 +61,8 @@ namespace Escape4Now.GameModes
         [SerializeField] private bool isLastTutorialScene;
         //Places every event type in the Event Triggers section, and any of them ends the lesson, instead of only the Warp.
         [SerializeField] private bool showAllEventTypes;
+        //The Obstacles section's locker. Uses the same blue hallway Lockers as Race mode.
+        [SerializeField] private SchoolFurniture lessonLockerPrefab;
 
         //Section to load next. It survives the scene reload, and is cleared when Play mode starts.
         private static TutorialSection? pendingSection;
@@ -128,6 +132,7 @@ namespace Escape4Now.GameModes
         //Gives the section's starting item once the inventory is ready, then announces the section.
         private void Start()
         {
+            if (skinHandler != null) skinHandler.ApplyTo(player, 0);
             //The tutorial has no gamemode script, so the exit is open and no key is needed to leave.
             if (currentSection == TutorialSection.Exit && startWithKey) GiveTutorialKey();
             if (currentSection == TutorialSection.Items)
@@ -281,6 +286,7 @@ namespace Escape4Now.GameModes
                     obstacleSpawner.SetObstacleCount(1);
                     obstacleSpawner.SetInteractableChance(1f);
                     obstacleSpawner.ForceObstacleTile(start + obstacleOffset);
+                    if (lessonLockerPrefab != null) obstacleSpawner.ForceObstaclePrefab(lessonLockerPrefab);
                 }
             }
 
