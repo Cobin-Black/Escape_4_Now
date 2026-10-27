@@ -14,6 +14,7 @@ namespace Escape4Now.UI
         [SerializeField] private PlayerCharacter standalonePlayer;
         [SerializeField, Tooltip("Used by standalone scenes; matches use their mode's turn system.")]
         private TurnSystemController turns;
+        [SerializeField] private MonsterCharacter monster;
         [SerializeField, Tooltip("Used by standalone scenes; matches use their mode's timer.")]
         private GameTimer timer;
         [SerializeField] private MapEventController mapEvents;
@@ -23,6 +24,8 @@ namespace Escape4Now.UI
         public GameTimer Timer => session != null && session.Mode != null ? session.Mode.Timer : timer;
         public MapEventController Events => mapEvents;
         public Camera WorldCamera => worldCamera;
+        // Provides the Monster reference for the match HUD.
+        public MonsterCharacter Monster => monster;
         public bool Playing => session == null || session.MatchStarted;
         public bool Finished => LocalMultiplayerSession.MatchHasEnded;
         public PlayerCharacter ActivePlayer
