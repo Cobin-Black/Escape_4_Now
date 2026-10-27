@@ -16,7 +16,8 @@ namespace Escape4Now.UI
             public InputField name;
             public Image swatch;
             public Toggle bot;
-            public Toggle monster;
+            [Tooltip("Survival only. Click to make this player the Monster; click again to clear it.")]
+            public Button monster;
         }
         [Header("Unity UI References")]
         [SerializeField] private MatchUIContext context;
@@ -27,6 +28,9 @@ namespace Escape4Now.UI
         [SerializeField] private PlayerSlot[] slots;
         [SerializeField, Tooltip("Opens the skin picking menu. Hidden when the scene has no Skin Handler.")]
         private Button skinsButton;
+        [Header("Monster Selection")]
+        [SerializeField] private Color monsterSelectedColor = new Color(0.75f, 0.2f, 0.2f, 1f);
+        [SerializeField] private Color monsterUnselectedColor = new Color(0.2f, 0.3f, 0.25f, 1f);
         private SkinSelectionUI skinMenu;
 
         private void Start()
@@ -47,14 +51,9 @@ namespace Escape4Now.UI
                 slot.name.onValueChanged.AddListener(value => session.SetPlayerName(index, value));
                 slot.bot.SetIsOnWithoutNotify(session.IsBotPlayer(i));
                 slot.bot.onValueChanged.AddListener(value => session.SetBotPlayer(index, value));
+                //SetMonsterPlayer picks this slot, or clears it when it was already the Monster.
                 if (slot.monster != null)
-                {
-                    slot.monster.onValueChanged.AddListener(value =>
-                    {
-                        if (value)
-                            session.SetMonsterPlayer(index);
-                    });
-                }
+                    slot.monster.onClick.AddListener(() => session.SetMonsterPlayer(index));
             }
             if (skinsButton != null) skinsButton.onClick.AddListener(OpenSkins);
         }
@@ -95,9 +94,9 @@ namespace Escape4Now.UI
                 {
                     slot.monster.gameObject.SetActive(isMonsterMode);
                     slot.monster.interactable = i < session.PlayerCount;
-
-                    slot.monster.SetIsOnWithoutNotify(
-                        session.IsMonsterPlayer(i));
+                    if (slot.monster.targetGraphic != null)
+                        slot.monster.targetGraphic.color = session.IsMonsterPlayer(i)
+                            ? monsterSelectedColor : monsterUnselectedColor;
                 }
             }
             for (int i = 0; i < playerCounts.Length; i++)
