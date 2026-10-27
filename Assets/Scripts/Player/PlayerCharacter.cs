@@ -42,6 +42,8 @@ namespace Escape4Now.Player
         private bool hasReachedExit;
         private bool hasRolled;
         private int lastRoll;
+        private int firstDie;
+        private int secondDie;
         private int movesRemaining;
         private MapEventController mapEvents;
         private Vector2Int lastDirection = Vector2Int.up;
@@ -56,10 +58,14 @@ namespace Escape4Now.Player
         private bool isUsingItem;
         private bool isInMenu;
         private bool isBotControlled;
+        private bool roarSlowActive;
         public PlayerInventory Inventory => inventory;
         public bool HasReachedExit => hasReachedExit;
         public bool HasRolled => hasRolled;
         public int LastRoll => lastRoll;
+        //Each die from a Double Dice roll, so the HUD can show both. SecondDie is 0 for a normal roll.
+        public int FirstDie => firstDie;
+        public int SecondDie => secondDie;
         public int MovesRemaining => movesRemaining;
         internal bool IsResolvingEventStep => resolvingStep;
         public bool IsCurrentTurn => turnSystem == null || turnSystem.IsPlayersTurn(this);
@@ -73,6 +79,7 @@ namespace Escape4Now.Player
         public Vector2Int GridPosition => gridPosition;
         public bool IsMoving => moveRoutine != null;
         public bool IsBotControlled => isBotControlled;
+
 
         //The scene's gamemode decides who may leave. With no gamemode (such as the tutorial) the exit is open.
         private bool CanUseExit
@@ -131,6 +138,7 @@ namespace Escape4Now.Player
             && Time.realtimeSinceStartup - rollAnimStart < diceRollAnimationDuration;
         public bool HasKey => networkHasKey || (inventory != null && inventory.HasKey());
         public Color IdentityColor => playerColor;
+        public PlayerAppearance Appearance => appearance;
         public IPlayerGridMap GridMap => MovementMap;
 
         //Uses the scene's Inspector-assigned movement and roll actions.
@@ -169,7 +177,13 @@ namespace Escape4Now.Player
             bool bonus = eventState.HasRollBonus;
             int second = lucky || bad ? Random.Range(1, 7) : first;
             lastRoll = lucky ? Mathf.Max(first, second) : bad ? Mathf.Min(first, second) : first;
+            secondDie = 0;
             movesRemaining = eventState.UseRoll(first, second);
+            if (roarSlowActive)
+            {
+                movesRemaining = Mathf.Max(1, movesRemaining / 2);
+                roarSlowActive = false;
+            }
             rollAnimStart = Time.realtimeSinceStartup;
             hasRolled = true;
             if (mapEvents != null && (lucky || bad || bonus))
@@ -225,6 +239,7 @@ namespace Escape4Now.Player
             Debug.Log($"[Turn Debug] BeginEventTurn called for {name}. Resetting hasRolled.");
             hasRolled = false;
             movesRemaining = 0;
+            secondDie = 0;
             bool canPlay = eventState.BeginTurn();
             if (!canPlay && mapEvents != null) mapEvents.ShowMessage(this, "Frozen: this turn was skipped.");
             return canPlay;
@@ -263,7 +278,10 @@ namespace Escape4Now.Player
         //Clients show confirmed state without running dice, pickups, or events again.
         public void ApplyNetworkState(Escape4Now.Multiplayer.LanPlayerState state, bool updateOccupancy = true)
         {
+            Vector2Int previousPosition = gridPosition;
             gridPosition = new Vector2Int(state.x, state.y);
+            if (appearance != null && previousPosition != gridPosition && MovementMap != null)
+                appearance.FaceToward(MovementMap.GridToWorld(gridPosition) - MovementMap.GridToWorld(previousPosition));
             lastRoll = state.roll;
             movesRemaining = state.moves;
             hasRolled = state.rolled;
@@ -503,6 +521,8 @@ namespace Escape4Now.Player
                 }
                 Vector3 targetPosition = MovementMap.GridToWorld(next);
                 targetPosition.z = -1f;
+                //Face the way this step goes on screen before sliding to the next tile.
+                if (appearance != null) appearance.FaceToward(targetPosition - MovementMap.GridToWorld(gridPosition));
                 while (Vector3.Distance(transform.position, targetPosition) > 0.01f)
                 {
                     transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
@@ -588,8 +608,17 @@ namespace Escape4Now.Player
             registeredPosition = newPosition;
             //Rebuild the occupied set so leaving a shared tile does not mark it empty.
             var occupied = new List<Vector2Int>();
+
+            // Only living players count as occupying a tile.
             foreach (PlayerCharacter player in FindObjectsByType<PlayerCharacter>(FindObjectsSortMode.None))
-                if (player.isActiveAndEnabled && player.MovementMap == MovementMap) occupied.Add(player.gridPosition);
+            {
+                if (player.isActiveAndEnabled && player.Health > 0
+                    && player.MovementMap == MovementMap)
+                {
+                    occupied.Add(player.gridPosition);
+                }
+            }
+
             MovementMap.ReplacePlayerOccupants(occupied);
 
             RefreshSharedTilePositions(oldPosition);
@@ -652,18 +681,32 @@ namespace Escape4Now.Player
         }
 
         // Gives the player a movement allowance from an item.
-        public void SetMovesFromItem(int moveAmount)
+        public bool SetMovesFromItem(int moveAmount)
         {
             if (!CanReadTurnInput || hasReachedExit || IsMoving || moveAmount <= 0)
             {
-                return;
+                return false;
             }
 
             lastRoll = moveAmount;
+            secondDie = 0;
             movesRemaining = moveAmount;
             hasRolled = true;
 
             Debug.Log($"Item gave the player {moveAmount} moves.");
+            return true;
+        }
+
+        // Gives the player the total of two dice and keeps each die so the HUD can show both.
+        public bool SetMovesFromDoubleDice(int first, int second)
+        {
+            if (!SetMovesFromItem(first + second))
+                return false;
+
+            firstDie = first;
+            secondDie = second;
+            rollAnimStart = Time.realtimeSinceStartup;
+            return true;
         }
 
         // Checks whether the player has stepped onto an item and collects it.
@@ -695,6 +738,35 @@ namespace Escape4Now.Player
         public void SetBotControlled(bool value)
         {
             isBotControlled = value;
+        }
+
+        // Gets the player's current health.
+        public int Health => health;
+
+        // Removes one heart and eliminates the player when health reaches zero.
+        public void TakeDamage()
+        {
+            if (health <= 0)
+                return;
+
+            health--;
+            Debug.Log(name + " has " + health + " hearts remaining.");
+
+            if (health == 0)
+            {
+                Debug.Log(name + " has been eliminated!");
+
+                UpdateMapOccupancy(gridPosition);
+
+                // Deactivate the character while retaining its health for match results.
+                gameObject.SetActive(false);
+            }
+        }
+
+        // Applies the Monster's Roar effect to the player's next dice roll.
+        public void ApplyMonsterSlow()
+        {
+            roarSlowActive = true;
         }
 
         //Stops tracking this player when the scene or participant is removed.

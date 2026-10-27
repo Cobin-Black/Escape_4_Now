@@ -44,23 +44,47 @@ namespace Escape4Now.UI
             }
         }
 
+
+        //Shared by every gamemode. Monster health and abilities live in MonsterHudUI so this HUD
+        //never depends on Monster-only references.
         private void LateUpdate()
         {
             var player = context.ActivePlayer;
-            panel.SetActive(player != null && !context.Finished);
+            var monster = context.Monster;
+            bool monsterTurn = monster != null && context.Turns != null
+                && context.Turns.CurrentTurnOwner == Escape4Now.TurnSystem.TurnOwner.Enemy;
+            panel.SetActive((player != null || monsterTurn) && !context.Finished);
             if (!panel.activeSelf) return;
             turn.text = string.Format(turnFormat, context.Turns != null ? context.Turns.TurnNumber : 1);
-            playerName.text = (context.Turns != null ? context.Turns.CurrentTurnName : player.name).ToUpperInvariant();
-            var roll = player.InputBindings != null ? player.InputBindings.RollDice : null;
-            action.text = player.IsRollAnimating ? rollingText : player.HasRolled
-                ? string.Format(movesFormat, player.MovesRemaining)
-                : string.Format(rollFormat, roll != null ? roll.GetBindingDisplayString(0).ToUpperInvariant() : rollFallback);
-            dice.Show(player.HasRolled ? player.LastRoll : 1, player.IsRollAnimating);
             bool hasTimer = context.Timer != null;
             timerSection.SetActive(hasTimer);
             timerDivider.SetActive(hasTimer);
-            if (context.Timer != null) time.text = MatchUIContext.FormatTime(context.Timer.TimeRemaining);
-            string text = player.Mode != null ? player.Mode.GetObjective(player) : "";
+            if (hasTimer) time.text = MatchUIContext.FormatTime(context.Timer.TimeRemaining);
+
+            string text = "";
+            if (monsterTurn)
+            {
+                playerName.text = "MONSTER";
+                var monsterRoll = monster.RollDiceAction;
+                action.text = monster.HasRolled ? string.Format(movesFormat, monster.MovesRemaining)
+                    : monster.IsRolling || monster.IsAIControlled ? rollingText
+                    : string.Format(rollFormat, monsterRoll != null ? monsterRoll.GetBindingDisplayString(0).ToUpperInvariant() : rollFallback);
+                dice.Show(monster.HasRolled ? monster.LastRoll : 1, monster.IsRolling);
+            }
+            else
+            {
+                playerName.text = (context.Turns != null ? context.Turns.CurrentTurnName : player.name).ToUpperInvariant();
+                var roll = player.InputBindings != null ? player.InputBindings.RollDice : null;
+                action.text = player.IsRollAnimating ? rollingText : player.HasRolled
+                    ? string.Format(movesFormat, player.MovesRemaining)
+                    : string.Format(rollFormat, roll != null ? roll.GetBindingDisplayString(0).ToUpperInvariant() : rollFallback);
+                //Double Dice shows both dice it rolled; every other roll shows one die.
+                if (player.HasRolled && player.SecondDie > 0)
+                    dice.Show(player.FirstDie, player.SecondDie, player.IsRollAnimating);
+                else
+                    dice.Show(player.HasRolled ? player.LastRoll : 1, player.IsRollAnimating);
+                text = player.Mode != null ? player.Mode.GetObjective(player) : "";
+            }
             bool hasObjective = !string.IsNullOrEmpty(text);
             objectiveSection.SetActive(hasObjective);
             objective.text = text;

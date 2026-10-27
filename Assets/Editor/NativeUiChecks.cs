@@ -176,15 +176,7 @@ public static class NativeUiChecks
         {
             Require(new SerializedObject(context.ActivePlayer).FindProperty("health").intValue == 7,
                 "Tutorial respects Inspector-configured health");
-            var eventToggle = (Toggle)new SerializedObject(context.GetComponentInChildren<EventFeedbackUI>())
-                .FindProperty("tutorialEventLocations").objectReferenceValue;
-            Require(eventToggle.gameObject.activeInHierarchy && eventToggle.isOn == context.Events.EventLocationsVisible,
-                "Tutorial has a native event visibility toggle");
-            bool originalVisibility = eventToggle.isOn;
-            yield return Click(eventToggle);
-            Require(context.Events.EventLocationsVisible != originalVisibility, "Pointer toggle changes tutorial event visibility");
-            yield return Click(eventToggle);
-            Require(context.Events.EventLocationsVisible == originalVisibility, "Tutorial event visibility can be restored");
+            Require(context.Events.EventLocationsVisible, "Tutorial always shows its event tiles without a visibility toggle");
             CheckHudLayout(context);
             CheckActivePlayerName(context, true);
             yield return CheckEventNotice(context, prefix);

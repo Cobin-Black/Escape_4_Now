@@ -99,9 +99,10 @@ namespace Escape4Now.Items
             int secondRoll = Random.Range(1, 7);
             int totalRoll = firstRoll + secondRoll;
 
-            hasBeenUsed = true;
+            if (!inventory.Player.SetMovesFromDoubleDice(firstRoll, secondRoll))
+                return;
 
-            inventory.Player.SetMovesFromItem(totalRoll);
+            hasBeenUsed = true;
 
             Debug.Log($"Double Dice rolled {firstRoll} and {secondRoll}. Total: {totalRoll}");
 
