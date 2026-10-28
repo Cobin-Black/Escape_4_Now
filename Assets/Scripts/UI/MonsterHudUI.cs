@@ -1,3 +1,4 @@
+
 using Escape4Now.GameModes;
 using Escape4Now.Player;
 using UnityEngine;
@@ -6,22 +7,20 @@ using UnityEngine.UI;
 
 namespace Escape4Now.UI
 {
-    //Monster gamemode only: a small panel under the match HUD showing the active survivor's health,
-    //or the Monster's ability cooldowns on the Monster's turn. Stays hidden in every other gamemode.
+    // Displays survivor health or Monster abilities inside the Survival Mode HUD.
     [DisallowMultipleComponent]
     public sealed class MonsterHudUI : MonoBehaviour
     {
         [Header("Unity UI References")]
         [SerializeField] private MatchUIContext context;
-        [SerializeField, Tooltip("The match HUD panel this panel sits under.")]
-        private RectTransform hud;
-        [SerializeField, Tooltip("Text whose font and style the panel copies.")]
-        private Text styleSource;
+        [SerializeField] private RectTransform hud;
+        [SerializeField] private Text styleSource;
+
         [Header("Layout")]
-        [SerializeField, Min(0f)] private float gap = 8f;
         [SerializeField, Min(0f)] private float padding = 14f;
         [SerializeField, Min(1f)] private float healthHeight = 40f;
         [SerializeField, Min(1f)] private float abilitiesHeight = 92f;
+
         [Header("Copy")]
         [SerializeField, Min(1)] private int maxHearts = 5;
         [SerializeField] private string healthFormat = "HEALTH  {0}";
@@ -29,104 +28,321 @@ namespace Escape4Now.UI
         [SerializeField] private string readyText = "READY";
         [SerializeField] private string cooldownFormat = "{0} TURNS";
 
-        private RectTransform panel;
+        private RectTransform section;
         private Text health;
-        private Text abilities;
+        private RectTransform abilitiesPanel;
 
+        private Text chargeLabel;
+        private Text chargeStatus;
+        private Text roarLabel;
+        private Text roarStatus;
+        private Text stompLabel;
+        private Text stompStatus;
+
+        private RectTransform eventNotice;
+        private Image divider;
+
+        // Updates the Survival Mode HUD each frame.
         private void LateUpdate()
         {
             var session = context != null ? context.Session : null;
-            bool monsterMode = session != null && session.Mode is SurvivalModeController;
-            bool show = monsterMode && context.Playing && !context.Finished
-                && hud != null && hud.gameObject.activeInHierarchy;
+
+            bool survivalMode = session != null
+                && session.Mode is SurvivalModeController;
+
+            bool show = survivalMode
+                && context.Playing
+                && !context.Finished
+                && hud != null
+                && hud.gameObject.activeInHierarchy;
+
             if (!show)
             {
-                if (panel != null) panel.gameObject.SetActive(false);
+                if (section != null)
+                    section.gameObject.SetActive(false);
+
+                if (divider != null)
+                    divider.gameObject.SetActive(false);
+
                 return;
             }
-            if (panel == null) Build();
+
+            if (section == null)
+                Build();
 
             MonsterCharacter monster = context.Monster;
             PlayerCharacter player = context.ActivePlayer;
-            bool monsterTurn = monster != null && context.Turns != null
-                && context.Turns.CurrentTurnOwner == Escape4Now.TurnSystem.TurnOwner.Enemy;
+
+            bool monsterTurn = monster != null
+                && context.Turns != null
+                && context.Turns.CurrentTurnOwner ==
+                    Escape4Now.TurnSystem.TurnOwner.Enemy;
+
             if (!monsterTurn && player == null)
             {
-                panel.gameObject.SetActive(false);
+                section.gameObject.SetActive(false);
+
+                if (divider != null)
+                    divider.gameObject.SetActive(false);
+
                 return;
             }
-            panel.gameObject.SetActive(true);
+
+            section.gameObject.SetActive(true);
             health.gameObject.SetActive(!monsterTurn);
-            abilities.gameObject.SetActive(monsterTurn);
+            abilitiesPanel.gameObject.SetActive(monsterTurn);
+
             if (monsterTurn)
-                abilities.text = Ability("CHARGE", monster.ChargeAction, monster) + "   " + Cooldown(monster.ChargeCooldownRemaining)
-                    + "\n" + Ability("ROAR", monster.RoarAction, monster) + "   " + Cooldown(monster.RoarCooldownRemaining)
-                    + "\n" + Ability("STOMP", monster.StompAction, monster) + "   " + Cooldown(monster.StompCooldownRemaining);
+            {
+                chargeLabel.text = Ability(
+                    "CHARGE", monster.ChargeAction, monster);
+
+                roarLabel.text = Ability(
+                    "ROAR", monster.RoarAction, monster);
+
+                stompLabel.text = Ability(
+                    "STOMP", monster.StompAction, monster);
+
+                UpdateStatus(chargeStatus,
+                    monster.ChargeCooldownRemaining);
+
+                UpdateStatus(roarStatus,
+                    monster.RoarCooldownRemaining);
+
+                UpdateStatus(stompStatus,
+                    monster.StompCooldownRemaining);
+            }
             else
-                health.text = string.Format(healthFormat, Hearts(player.Health));
+            {
+                health.text = string.Format(
+                    healthFormat, Hearts(player.Health));
+            }
 
-            panel.anchoredPosition = hud.anchoredPosition - new Vector2(0f, hud.rect.height + gap);
-            panel.sizeDelta = new Vector2(hud.rect.width, monsterTurn ? abilitiesHeight : healthHeight);
+            // Keep the section at the bottom of the main HUD.
+            float sectionHeight = monsterTurn
+                ? abilitiesHeight
+                : healthHeight;
+
+            section.anchorMin = new Vector2(0f, 0f);
+            section.anchorMax = new Vector2(1f, 0f);
+            section.pivot = new Vector2(0.5f, 0f);
+            section.anchoredPosition = Vector2.zero;
+            section.sizeDelta = new Vector2(0f, sectionHeight);
+
+            // Move Event Notice above Health or Abilities.
+            if (eventNotice != null)
+            {
+                eventNotice.anchoredPosition = new Vector2(
+                    eventNotice.anchoredPosition.x,
+                    sectionHeight + 8f);
+            }
+
+            // Position the divider above the section.
+            if (divider != null)
+            {
+                RectTransform dividerRect =
+                    (RectTransform)divider.transform;
+
+                dividerRect.anchoredPosition = new Vector2(
+                    0f, sectionHeight + 4f);
+
+                dividerRect.sizeDelta = new Vector2(-28f, 1f);
+                divider.gameObject.SetActive(true);
+            }
         }
 
-        //Shows the key from the Monster action map, e.g. "CHARGE (Q)". The AI Monster has no key to show.
-        private static string Ability(string label, InputAction action, MonsterCharacter monster)
+        // Returns an ability label with its keyboard binding.
+        private static string Ability(
+            string label, InputAction action, MonsterCharacter monster)
         {
-            if (monster.IsAIControlled || action == null) return label;
+            if (monster.IsAIControlled || action == null)
+                return label;
+
             string binding = action.GetBindingDisplayString();
-            return string.IsNullOrEmpty(binding) ? label : label + " (" + binding.ToUpperInvariant() + ")";
+
+            return string.IsNullOrEmpty(binding)
+                ? label
+                : label + " (" + binding.ToUpperInvariant() + ")";
         }
 
-        private string Cooldown(int turns) => turns <= 0 ? readyText : string.Format(cooldownFormat, turns);
+        // Returns READY or the remaining cooldown.
+        private string Cooldown(int turns)
+        {
+            return turns <= 0
+                ? readyText
+                : string.Format(cooldownFormat, turns);
+        }
 
-        //Filled hearts for remaining health and dimmed hearts for lost health.
+        // Updates the cooldown text and its color.
+        private void UpdateStatus(Text status, int turns)
+        {
+            status.text = Cooldown(turns);
+
+            status.color = turns <= 0
+                ? new Color(0.45f, 0.85f, 0.64f)
+                : new Color(1f, 0.75f, 0.35f);
+        }
+
+        // Creates filled and dimmed hearts based on health.
         private string Hearts(int remaining)
         {
             remaining = Mathf.Clamp(remaining, 0, maxHearts);
+
             string lost = new string('♥', maxHearts - remaining);
-            return new string('♥', remaining) + (lost.Length > 0 ? "<color=" + lostHeartColor + ">" + lost + "</color>" : "");
+
+            return new string('♥', remaining)
+                + (lost.Length > 0
+                    ? "<color=" + lostHeartColor + ">"
+                      + lost + "</color>"
+                    : "");
         }
 
-        //Built at runtime next to the HUD and styled from it, so no scene needs extra authored objects.
+        // Creates the section, ability rows, and divider.
         private void Build()
         {
-            var go = new GameObject("Monster Mode Panel", typeof(RectTransform), typeof(CanvasRenderer), typeof(Image));
-            panel = (RectTransform)go.transform;
-            panel.SetParent(hud.parent, false);
-            panel.anchorMin = hud.anchorMin;
-            panel.anchorMax = hud.anchorMax;
-            panel.pivot = hud.pivot;
-            var background = go.GetComponent<Image>();
-            var hudBackground = hud.GetComponent<Image>();
-            if (hudBackground != null)
-            {
-                background.sprite = hudBackground.sprite;
-                background.type = hudBackground.type;
-                background.color = hudBackground.color;
-            }
-            else background.color = new Color(0.1f, 0.12f, 0.14f, 0.92f);
-            background.raycastTarget = false;
-            health = AddText("Health", TextAnchor.MiddleLeft);
-            abilities = AddText("Abilities", TextAnchor.MiddleLeft);
+            var go = new GameObject(
+                "Survival HUD Section",
+                typeof(RectTransform));
+
+            section = (RectTransform)go.transform;
+            section.SetParent(hud, false);
+
+            health = AddText("Health", section);
+
+            var abilitiesObject = new GameObject(
+                "Monster Abilities",
+                typeof(RectTransform));
+
+            abilitiesPanel =
+                (RectTransform)abilitiesObject.transform;
+
+            abilitiesPanel.SetParent(section, false);
+            abilitiesPanel.anchorMin = Vector2.zero;
+            abilitiesPanel.anchorMax = Vector2.one;
+            abilitiesPanel.offsetMin = Vector2.zero;
+            abilitiesPanel.offsetMax = Vector2.zero;
+
+            // Create three evenly spaced ability rows.
+            CreateAbilityRow("Charge", 0,
+                out chargeLabel, out chargeStatus);
+
+            CreateAbilityRow("Roar", 1,
+                out roarLabel, out roarStatus);
+
+            CreateAbilityRow("Stomp", 2,
+                out stompLabel, out stompStatus);
+
+            eventNotice = hud.Find("Event Notice") as RectTransform;
+
+            var dividerObject = new GameObject(
+                "Survival Divider",
+                typeof(RectTransform),
+                typeof(CanvasRenderer),
+                typeof(Image));
+
+            var dividerRect =
+                (RectTransform)dividerObject.transform;
+
+            dividerRect.SetParent(hud, false);
+
+            dividerRect.anchorMin = new Vector2(0f, 0f);
+            dividerRect.anchorMax = new Vector2(1f, 0f);
+            dividerRect.pivot = new Vector2(0.5f, 0.5f);
+
+            divider = dividerObject.GetComponent<Image>();
+            divider.color = new Color(0.25f, 0.36f, 0.42f);
+            divider.raycastTarget = false;
         }
 
-        private Text AddText(string name, TextAnchor alignment)
+        // Creates one row with an ability name and cooldown.
+        private void CreateAbilityRow(
+            string name, int index,
+            out Text label, out Text status)
         {
-            var go = new GameObject(name, typeof(RectTransform), typeof(CanvasRenderer), typeof(Text));
-            var rect = (RectTransform)go.transform;
-            rect.SetParent(panel, false);
+            var rowObject = new GameObject(
+                name + " Row",
+                typeof(RectTransform));
+
+            RectTransform row =
+                (RectTransform)rowObject.transform;
+
+            row.SetParent(abilitiesPanel, false);
+
+            float top = -12f - index * 25f;
+
+            row.anchorMin = new Vector2(0f, 1f);
+            row.anchorMax = new Vector2(1f, 1f);
+            row.pivot = new Vector2(0.5f, 1f);
+            row.anchoredPosition = new Vector2(0f, top);
+            row.sizeDelta = new Vector2(0f, 24f);
+
+            label = AddText(name + " Label", row);
+            status = AddText(name + " Status", row);
+
+            // Use a smaller font for Monster abilities.
+            label.fontSize = 14;
+            status.fontSize = 14;
+
+            RectTransform labelRect =
+                (RectTransform)label.transform;
+
+            RectTransform statusRect =
+                (RectTransform)status.transform;
+
+            // Ability name occupies the left side.
+            labelRect.anchorMin = new Vector2(0f, 0f);
+            labelRect.anchorMax = new Vector2(0.65f, 1f);
+            labelRect.offsetMin = new Vector2(padding, 0f);
+            labelRect.offsetMax = Vector2.zero;
+
+            // Cooldown status occupies the right side.
+            statusRect.anchorMin = new Vector2(0.65f, 0f);
+            statusRect.anchorMax = Vector2.one;
+            statusRect.offsetMin = Vector2.zero;
+            statusRect.offsetMax = new Vector2(-padding, 0f);
+
+            status.alignment = TextAnchor.MiddleRight;
+        }
+
+        // Creates text matching the main HUD style.
+        private Text AddText(string name, RectTransform parent)
+        {
+            var go = new GameObject(
+                name,
+                typeof(RectTransform),
+                typeof(CanvasRenderer),
+                typeof(Text));
+
+            RectTransform rect =
+                (RectTransform)go.transform;
+
+            rect.SetParent(parent, false);
+
             rect.anchorMin = Vector2.zero;
             rect.anchorMax = Vector2.one;
             rect.offsetMin = new Vector2(padding, 0f);
             rect.offsetMax = new Vector2(-padding, 0f);
-            var text = go.GetComponent<Text>();
-            text.font = styleSource != null ? styleSource.font : Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
-            text.fontSize = styleSource != null ? styleSource.fontSize : 16;
-            text.color = styleSource != null ? styleSource.color : Color.white;
-            text.alignment = alignment;
+
+            Text text = go.GetComponent<Text>();
+
+            text.font = styleSource != null
+                ? styleSource.font
+                : Resources.GetBuiltinResource<Font>(
+                    "LegacyRuntime.ttf");
+
+            text.fontSize = styleSource != null
+                ? styleSource.fontSize
+                : 16;
+
+            text.color = styleSource != null
+                ? styleSource.color
+                : Color.white;
+
+            text.alignment = TextAnchor.MiddleLeft;
             text.supportRichText = true;
             text.raycastTarget = false;
             text.lineSpacing = 1.15f;
+
             return text;
         }
     }

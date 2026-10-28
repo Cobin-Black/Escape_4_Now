@@ -90,9 +90,23 @@ namespace Escape4Now.UI
             bool hasObjective = !string.IsNullOrEmpty(text);
             objectiveSection.SetActive(hasObjective);
             objective.text = text;
-            ((RectTransform)panel.transform).SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical,
-                hasObjective ? heightWithObjective : attachedNotice != null && attachedNotice.gameObject.activeSelf
-                    ? heightWithoutObjectiveWithNotice : heightWithoutObjective);
+            float panelHeight = hasObjective ? heightWithObjective
+            : attachedNotice != null && attachedNotice.gameObject.activeSelf ? heightWithoutObjectiveWithNotice
+            : heightWithoutObjective;
+
+            // Add space for Health or Abilities only in Survival Mode.
+            bool survivalMode = context.Session != null
+                && context.Session.Mode is Escape4Now.GameModes.SurvivalModeController;
+
+            if (survivalMode)
+            {
+                bool isMonsterTurn = monsterTurn;
+
+                panelHeight += isMonsterTurn ? 92f : 40f;
+            }
+
+            ((RectTransform)panel.transform).SetSizeWithCurrentAnchors(
+                RectTransform.Axis.Vertical, panelHeight);
         }
     }
 }
