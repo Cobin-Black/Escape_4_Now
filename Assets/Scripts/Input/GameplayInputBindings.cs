@@ -1,3 +1,5 @@
+// Stores references to the project's input actions so gameplay can use editable bindings instead of fixed keys.
+
 using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;

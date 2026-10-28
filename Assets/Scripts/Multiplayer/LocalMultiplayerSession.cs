@@ -1,3 +1,5 @@
+// Manages shared-device player setup, starts the chosen mode and coordinates Pause and match results.
+
 using System.Collections.Generic;
 using Escape4Now.Map;
 using Escape4Now.Player;
@@ -43,7 +45,7 @@ namespace Escape4Now.Multiplayer
         private PlayerCharacter sourcePlayer;
         private PlayerCharacter[] participants;
         [Header("Lobby Defaults")]
-        [SerializeField, Range(2, 4)] private int playerCount = 2;
+        [SerializeField, Range(1, 4)] private int playerCount = 2;
         [SerializeField] private string[] playerNames = { "Player 1", "Player 2", "Player 3", "Player 4" };
         [Header("Local Player Controllers")]
         [SerializeField, Tooltip("Default Human/Bot choices for the four lobby slots. Bots are supported in Race Mode only.")]
@@ -53,6 +55,8 @@ namespace Escape4Now.Multiplayer
 
         [Header("Monster Mode")]
         [SerializeField] private MonsterCharacter monster;
+        [SerializeField, Tooltip("Use the existing AI monster when no lobby slot selects Monster. Turn off for survivor-only map and puzzle tests.")]
+        private bool spawnAIMonsterWhenUnassigned = true;
         public IReadOnlyList<PlayerCharacter> Participants => participants;
         private string status = "";
         private bool pauseMenuOpen;
@@ -77,7 +81,7 @@ namespace Escape4Now.Multiplayer
                 System.Array.Resize(ref playerColors, 4);
             if (playerNames == null || playerNames.Length != 4)
                 System.Array.Resize(ref playerNames, 4);
-            playerCount = Mathf.Clamp(playerCount, 2, 4);
+            playerCount = Mathf.Clamp(playerCount, gameMode != null ? gameMode.MinimumPlayers : 2, 4);
         }
 
         public Color GetPlayerColor(int index)
@@ -160,10 +164,13 @@ namespace Escape4Now.Multiplayer
         //Updates the lobby player count and clears invalid Monster selections.
         public void SetPlayerCount(int count)
         {
-            playerCount = Mathf.Clamp(count, 2, 4);
+            playerCount = Mathf.Clamp(count, gameMode != null ? gameMode.MinimumPlayers : 2, gameMode != null ? gameMode.MaximumPlayers : 4);
 
             if (monsterPlayerIndex >= playerCount)
+            {
+                if (gameMode is SurvivalModeController survival) survival.SetSetupRole(monsterPlayerIndex, SurvivalRole.Survivor);
                 monsterPlayerIndex = -1;
+            }
         }
 
         //A replacement UI can turn off the placeholder panel without changing gameplay.
@@ -184,16 +191,19 @@ namespace Escape4Now.Multiplayer
 
 
         // Creates the players and Monster for the selected game mode.
+        // Check setup and prepare the chosen mode before cloning players or starting the timer.
         private bool CreateParticipants(int count)
         {
             if (MatchStarted) return false;
-            if (count < 2 || count > 4)
+            if (gameMode == null || count < gameMode.MinimumPlayers || count > gameMode.MaximumPlayers)
             {
-                status = "Choose two to four players.";
+                status = "Choose a supported player count for this mode.";
                 return false;
             }
 
             var usedNames = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
+            if (skinHandler != null && !skinHandler.AllAssigned(count))
+            { status = "Each player needs to pick a skin."; return false; }
             for (int i = 0; i < count; i++)
             {
                 if (!usedNames.Add(GetPlayerName(i)))
@@ -203,14 +213,17 @@ namespace Escape4Now.Multiplayer
                 }
             }
 
-            if (skinHandler != null && !skinHandler.AllAssigned(count))
+            if (gameMode == null)
             {
-                status = "Each player needs to pick a skin.";
+                status = "Assign a game mode component in the Inspector.";
                 return false;
             }
-
-            if (gameMode == null || !gameMode.ValidateConfiguration(out _)
-                || ActiveMap == null || turns == null || sourcePlayer == null)
+            if (!gameMode.ValidateConfiguration(out string configurationError))
+            {
+                status = configurationError;
+                return false;
+            }
+            if (ActiveMap == null || turns == null || sourcePlayer == null)
             {
                 status = "The scene needs a map, player, turn system, and input actions.";
                 return false;
@@ -222,11 +235,15 @@ namespace Escape4Now.Multiplayer
                 return false;
             }
 
-            bool monsterMode = gameMode is SurvivalModeController;
-            //No player picked (or the pick is outside the player count) means the AI controls the Monster.
-            int monsterSlot = monsterMode && monsterPlayerIndex >= 0 && monsterPlayerIndex < count
-                ? monsterPlayerIndex : -1;
+            var survival = gameMode as SurvivalModeController;
+            int monsterSlot = survival != null ? monsterPlayerIndex : -1;
             bool monsterIsPlayer = monsterSlot >= 0;
+            bool monsterMode = monsterIsPlayer || survival != null && spawnAIMonsterWhenUnassigned && monster != null && !survival.HasExternalMonsterConfiguration;
+            if (monsterIsPlayer && (monsterSlot >= count || count < 2 || monster == null))
+            {
+                status = "Assign a Monster and at least one survivor for the selected role.";
+                return false;
+            }
 
             try
             {
@@ -237,6 +254,9 @@ namespace Escape4Now.Multiplayer
                 status = error.Message;
                 return false;
             }
+
+            if (survival != null) survival.ConfigureMonster(monsterMode ? monster : null);
+            if (!gameMode.PrepareMatch(count, out status)) return false;
 
             // Removes the hidden template from its previous tile.
             ActiveMap.RemoveOccupant(sourcePlayer.GridPosition);
@@ -271,51 +291,7 @@ namespace Escape4Now.Multiplayer
                 }
 
 
-                bool foundSpawn = false;
-
-                foreach (Vector2Int cell in survivalMap.GetSpawnCandidates())
-                {
-                    bool validSpawn = true;
-
-                    // Checks all four tiles occupied by the Monster.
-                    for (int x = 0; x < 2 && validSpawn; x++)
-                    {
-                        for (int y = 0; y < 2 && validSpawn; y++)
-                        {
-                            Vector2Int footprintCell = cell + new Vector2Int(x, y);
-
-                            if (!survivalMap.IsWalkable(footprintCell))
-                            {
-                                validSpawn = false;
-                                break;
-                            }
-
-                            // Prevents the Monster from overlapping a player spawn.
-                            foreach (Vector2Int playerCell in cells)
-                            {
-                                if (footprintCell == playerCell)
-                                {
-                                    validSpawn = false;
-                                    break;
-                                }
-                            }
-                        }
-                    }
-
-                    if (!validSpawn)
-                        continue;
-
-                    monsterSpawn = cell;
-                    foundSpawn = true;
-                    break;
-                }
-
-                if (!foundSpawn)
-                {
-                    status = "There is no available spawn area for the Monster.";
-                    return false;
-                }
-
+                monsterSpawn = survival.Objectives.MonsterSpawn;
             }
 
             int survivorCount = monsterIsPlayer ? count - 1 : count;
@@ -377,7 +353,10 @@ namespace Escape4Now.Multiplayer
                     renderer.enabled = true;
             }
 
-            turns.SetPlayers(participants, ActiveMap.LayoutSeed);
+            gameMode.BeginMatch(participants);
+            if (survival != null) showEventTiles = survival.Events.EventLocationsVisible;
+            turns.ConfigureEnemyTurn(matchMonster != null, matchMonster != null ? GetPlayerName(monsterSlot) : "", ActiveMap.LayoutSeed);
+            turns.SetPlayers(gameMode.BuildTurnParticipants(participants), ActiveMap.LayoutSeed);
 
             // Initializes the Monster with the surviving players.
             if (matchMonster != null)
@@ -428,6 +407,9 @@ namespace Escape4Now.Multiplayer
                 return;
 
             monsterPlayerIndex = monsterPlayerIndex == index ? -1 : index;
+            var survival = (SurvivalModeController)gameMode;
+            for (int slot = 0; slot < gameMode.MaximumPlayers; slot++)
+                survival.SetSetupRole(slot, slot == monsterPlayerIndex ? SurvivalRole.Monster : SurvivalRole.Survivor);
         }
 
         // Returns whether the specified player is selected as the Monster.
@@ -480,10 +462,12 @@ namespace Escape4Now.Multiplayer
             if (!MatchStarted && index >= 0 && index < playerNames.Length) playerNames[index] = value;
         }
 
+        // Forward the reveal choice to the current mode's event source without changing event placement.
         public void SetEventTilesVisible(bool value)
         {
             showEventTiles = value;
             map?.GetComponent<MapEventController>()?.SetEventLocationsVisible(value);
+            if (gameMode is SurvivalModeController survival) survival.Events.SetEventLocationsVisible(value);
         }
 
         public void SetItemObstaclesVisible(bool value) { showItemObstacles = value; }
@@ -505,6 +489,7 @@ namespace Escape4Now.Multiplayer
         }
 
         //A new match reloads the scene and gets a new school floor plan.
+        // Reload setup instead of carrying a finished match's objects and progress into the next match.
         public void ReturnToSetup()
         {
             if (lan != null) lan.Disconnect();

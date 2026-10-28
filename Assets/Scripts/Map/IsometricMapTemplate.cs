@@ -1,3 +1,5 @@
+// Connects the generated indoor school layout to tiles, room furniture, entrances and player movement.
+
 using System.Collections.Generic;
 using UnityEngine;
 
@@ -138,6 +140,8 @@ namespace Escape4Now.Map
         }
 
         //Creates grid data before player placement. Drawing later uses this same layout.
+        // Prepare the indoor layout once so player spawns, furniture and events all use the same generated data.
+        // Prepare the indoor layout once so player spawns, furniture and events all use the same generated data.
         public void PrepareLayout()
         {
             if (layout != null)
@@ -152,6 +156,8 @@ namespace Escape4Now.Map
         }
 
         //Loads local prefab assets and reserves furniture before players, items, and events start.
+        // Build the furniture plan before turning it into scene objects.
+        // Build the furniture plan before turning it into scene objects.
         private void PrepareFurniture()
         {
             if (furniturePlan != null)
@@ -232,6 +238,8 @@ namespace Escape4Now.Map
         }
 
         //The shuffled room order assigns each player a different room and reserved start.
+        // Read a valid spawn from the prepared map rather than assuming a fixed room or coordinate.
+        // Read a valid spawn from the prepared map rather than assuming a fixed room or coordinate.
         public bool TryGetPlayerSpawn(int playerIndex, out Vector2Int cell)
         {
             PrepareLayout();

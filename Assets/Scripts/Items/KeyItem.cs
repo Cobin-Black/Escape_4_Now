@@ -1,3 +1,5 @@
+// Stores the Race key in a player's inventory; the Race mode decides whether that player may escape.
+
 using UnityEngine;
 
 namespace Escape4Now.Items

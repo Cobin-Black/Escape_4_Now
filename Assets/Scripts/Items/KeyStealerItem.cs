@@ -1,3 +1,5 @@
+// Uses the existing inventory to transfer a key from another player when the item can be used.
+
 using UnityEngine;
 using Escape4Now.Map;
 

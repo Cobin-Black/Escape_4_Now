@@ -5,6 +5,7 @@ namespace Escape4Now.Map
     //Stores the grid address of one generated tile.
     public sealed class IsometricMapTile : MonoBehaviour
     {
+        // Store the logical tile coordinate independently of its drawn world position.
         [SerializeField] private Vector2Int gridPosition;
 
         private Renderer wallRenderer;

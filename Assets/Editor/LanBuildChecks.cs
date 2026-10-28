@@ -1,3 +1,5 @@
+// Builds the LAN test scenes so multiplayer can also be checked outside the Unity Editor.
+
 using UnityEditor;
 using UnityEditor.Build.Reporting;
 

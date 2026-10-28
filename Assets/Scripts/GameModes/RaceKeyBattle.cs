@@ -1,3 +1,5 @@
+// Handles Race battles for the key; other game modes keep their own rules.
+
 using System.Collections.Generic;
 using Escape4Now.Bots;
 using Escape4Now.Items;

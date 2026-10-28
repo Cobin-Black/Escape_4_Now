@@ -1,3 +1,5 @@
+// Counts down the configured match time. The game mode decides what happens when it reaches zero.
+
 using UnityEngine;
 
 namespace Escape4Now.TurnSystem
@@ -50,6 +52,7 @@ namespace Escape4Now.TurnSystem
         }
 
         //Guests display the host's clock instead of starting their own countdown.
+        // A client displays the host's remaining time instead of deciding its own match expiry.
         public void ApplyNetworkTime(float seconds)
         {
             if (!Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) return;

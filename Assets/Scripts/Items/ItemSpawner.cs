@@ -165,6 +165,7 @@ namespace Escape4Now.Items
 
                 //Shuffle containers so items do not always go to the same obstacles.
                 int ordinaryItems = 0;
+                // This limit applies only to ordinary items; guaranteed mode items and special-room rewards were handled first.
                 while (containers.Count > 0 && ordinaryItems < maximumOrdinaryItems)
                 {
                     int index = Random.Range(0, containers.Count);

@@ -1,3 +1,5 @@
+// Adds the map preview controls to the Survival map's Inspector.
+
 using Escape4Now.Map;
 using UnityEditor;
 using UnityEngine;

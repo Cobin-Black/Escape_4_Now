@@ -1,3 +1,5 @@
+// Builds readable control hints from the actual Input System bindings instead of fixed key names.
+
 using System.Collections.Generic;
 using UnityEngine.InputSystem;
 

@@ -1,3 +1,5 @@
+// Draws and hides an event's floor marker without removing the event's gameplay effect.
+
 using UnityEngine;
 
 namespace Escape4Now.Map

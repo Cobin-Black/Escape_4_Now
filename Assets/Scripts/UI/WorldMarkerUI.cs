@@ -1,3 +1,5 @@
+// Displays one compact screen-space marker and lets the marker manager position it.
+
 using UnityEngine;
 using UnityEngine.UI;
 

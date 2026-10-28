@@ -1,3 +1,5 @@
+// Plans furniture arrangements for indoor rooms while keeping doors and important routes clear.
+
 using System;
 using System.Collections.Generic;
 using Escape4Now.Obstacles;
@@ -345,6 +347,8 @@ namespace Escape4Now.Map
                 throw new InvalidOperationException("The furnished school has an inaccessible walking route or container.");
         }
 
+        // Keep the route through each room's entrances free before placing its furniture.
+        // Keep the route through each room's entrances free before placing its furniture.
         private void ReserveRoomRoutes(SchoolRoom room)
         {
             int start = room.CenterY * SchoolMapLayout.Size + room.CenterX;
@@ -372,6 +376,8 @@ namespace Escape4Now.Map
                     }
         }
 
+        // Choose one of the room's allowed arrangement patterns, then fit its furniture around reserved routes.
+        // Choose one of the room's allowed arrangement patterns, then fit its furniture around reserved routes.
         private void FurnishRoom(SchoolRoom room)
         {
             SchoolRoomPatternSettings profile = Array.Find(settings.RoomPatterns, value => value.Room == room.Type);
@@ -517,6 +523,8 @@ namespace Escape4Now.Map
         }
 
         //Small rooms get one or two matching obstacles, away from their entrance.
+        // Give small room types their own furniture choices instead of using a main-classroom layout.
+        // Give small room types their own furniture choices instead of using a main-classroom layout.
         private void PlaceSpecialRooms()
         {
             foreach (SchoolSecondarySpace space in map.SecondarySpaces)
@@ -658,6 +666,8 @@ namespace Escape4Now.Map
             return count;
         }
 
+        // Every searchable furniture piece needs a usable neighboring floor tile.
+        // Every searchable furniture piece needs a usable neighboring floor tile.
         private bool AllFurnitureAccessible(int candidate = -1)
         {
             bool Accessible(int cell)
@@ -676,6 +686,8 @@ namespace Escape4Now.Map
             return true;
         }
 
+        // Reject a furniture position that would leave a nearby ordinary floor tile with only one way out.
+        // Reject a furniture position that would leave a nearby ordinary floor tile with only one way out.
         private bool CreatesDeadEnd(int candidate)
         {
             for (int d = 0; d < Dx.Length; d++)

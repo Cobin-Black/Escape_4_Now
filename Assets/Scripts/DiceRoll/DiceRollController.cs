@@ -1,3 +1,5 @@
+// Connects the assigned Roll action to the scene's dice text and turn system.
+
 using Escape4Now.TurnSystem;
 using TMPro;
 using UnityEngine;

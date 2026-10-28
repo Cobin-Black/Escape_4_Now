@@ -1,3 +1,5 @@
+// Connects saved lobby controls to player setup and shows the player slots supported by the selected mode.
+
 using System;
 using Escape4Now.GameModes;
 using Escape4Now.Player;
@@ -25,6 +27,7 @@ namespace Escape4Now.UI
         [SerializeField] private Text title;
         [SerializeField] private Text status;
         [SerializeField] private Toggle[] playerCounts;
+        [SerializeField] private Toggle singlePlayer;
         [SerializeField] private PlayerSlot[] slots;
         [SerializeField, Tooltip("Opens the skin picking menu. Hidden when the scene has no Skin Handler.")]
         private Button skinsButton;
@@ -34,6 +37,8 @@ namespace Escape4Now.UI
         {
             var session = context.Session;
             if (session == null) return;
+            if (singlePlayer != null)
+                singlePlayer.onValueChanged.AddListener(value => { if (value) session.SetPlayerCount(1); });
             for (int i = 0; i < playerCounts.Length; i++)
             {
                 int count = i + 2;
@@ -78,6 +83,12 @@ namespace Escape4Now.UI
             if (!panel.activeSelf) return;
             title.text = session.SetupTitle;
             status.text = session.Status;
+            status.gameObject.SetActive(!string.IsNullOrWhiteSpace(session.Status));
+            if (singlePlayer != null)
+            {
+                singlePlayer.gameObject.SetActive(session.Mode.MinimumPlayers == 1);
+                singlePlayer.SetIsOnWithoutNotify(session.PlayerCount == 1);
+            }
             for (int i = 0; i < slots.Length; i++)
             {
                 var slot = slots[i];

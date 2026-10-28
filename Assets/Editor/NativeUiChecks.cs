@@ -1,3 +1,5 @@
+// Editor checks that use the saved UI to test setup, controls, HUD, inventory and match screens.
+
 using System;
 using System.Collections;
 using System.IO;
@@ -52,6 +54,18 @@ public static class NativeUiChecks
     {
         string scene = Argument("-uiScene", "Race_Gamemode");
         EditorSceneManager.OpenScene("Assets/Scenes/" + scene + ".unity");
+        var survivalEvents = Object.FindFirstObjectByType<SurvivalEventController>();
+        if (survivalEvents != null)
+        {
+            var sessionFields = new SerializedObject(Object.FindFirstObjectByType<LocalMultiplayerSession>());
+            sessionFields.FindProperty("spawnAIMonsterWhenUnassigned").boolValue = false;
+            sessionFields.ApplyModifiedPropertiesWithoutUndo();
+            var eventFields = new SerializedObject(survivalEvents);
+            var configuration = Object.Instantiate((SurvivalEventSettings)eventFields.FindProperty("settings").objectReferenceValue);
+            configuration.globalEventChance = configuration.environmentalEventChance = 0;
+            eventFields.FindProperty("settings").objectReferenceValue = configuration;
+            eventFields.ApplyModifiedPropertiesWithoutUndo();
+        }
         var playerSettings = new SerializedObject(Object.FindFirstObjectByType<Escape4Now.Player.PlayerCharacter>());
         Require(playerSettings.FindProperty("health").intValue == 5, "Scene retains main's serialized starting health");
         playerSettings.FindProperty("health").intValue = 7;
@@ -167,6 +181,8 @@ public static class NativeUiChecks
         {
             var type = script.GetClass();
             if (type == null || type.Assembly != typeof(MatchUIContext).Assembly) continue;
+            //Main's standalone menu screens have their own UI implementation; this checks gameplay views.
+            if (type.Namespace == "Escape4Now.Menus") continue;
             Require(type.GetMethod("OnGUI", BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public | BindingFlags.DeclaredOnly) == null,
                 type.Name + " has no immediate-mode gameplay UI");
         }
@@ -202,6 +218,49 @@ public static class NativeUiChecks
 
         CheckActivePlayerName(context, false);
         var lobby = context.transform.Find("Lobby View/Lobby/Content");
+        if (Argument("-soloRace", "false") == "true")
+        {
+            var race = (Race_Gamemode)session.Mode;
+            var single = (Toggle)new SerializedObject(lobby.GetComponentInParent<LobbyUI>()).FindProperty("singlePlayer").objectReferenceValue;
+            Require(single != null && single.gameObject.activeInHierarchy, "Race exposes its native one-player option");
+            foreach (int count in new[] { 1, 2, 3, 4, 1 })
+            {
+                yield return Click(count == 1 ? single : lobby.Find(count.ToString()).GetComponent<Toggle>());
+                Require(session.PlayerCount == count, "Race pointer setup selects " + count + " players");
+            }
+            session.SetPlayerName(0, "Solo Player");
+            session.Skins?.FillMissing();
+            yield return Capture("Race-solo-lobby");
+            yield return Click(lobby.Find("Start Match").GetComponent<Button>());
+            Require(session.MatchStarted && session.Participants.Count == 1, "Native Start creates one Race participant");
+            yield return null; yield return null;
+            var soloPlayer = session.Participants[0];
+            Require(context.ActivePlayer == soloPlayer && !race.CanUseExit(soloPlayer), "Solo HUD tracks the player and exit still requires the key");
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Space));
+            yield return null; yield return null;
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState());
+            Require(soloPlayer.HasRolled && soloPlayer.MovesRemaining > 0, "Solo Race rolls using the existing Input System action");
+            yield return new WaitForSeconds(1.1f);
+            for (int cycle = 0; cycle < 3; cycle++)
+            {
+                int previousRound = race.Turns.TurnNumber;
+                race.Turns.EndTurnAfterBattleLoss(soloPlayer);
+                yield return null;
+                Require(context.ActivePlayer == soloPlayer && race.Turns.TurnNumber == previousRound + 1, "Solo turns repeat and advance the counter");
+            }
+            yield return Capture("Race-solo-gameplay");
+            var raceSettings = new SerializedObject(race);
+            raceSettings.FindProperty("player1HasKey").boolValue = true;
+            raceSettings.ApplyModifiedPropertiesWithoutUndo();
+            yield return null; yield return null;
+            Require(soloPlayer.HasKey && race.CanUseExit(soloPlayer), "Solo inventory receives the existing Race key");
+            var indoor = (IsometricMapTemplate)race.GridMap;
+            Require(soloPlayer.SetGridPosition(indoor.ExitPosition), "Solo player reaches the unlocked Race exit");
+            yield return null; yield return null;
+            Require(session.TryGetResult(out var soloResult) && soloResult.Won && !soloResult.Message.Contains("other players"), "Solo escape wins with the appropriate result message");
+            Debug.Log("RACE SOLO UI CHECKS PASSED: native 1/2/3/4 selection, solo startup, Input System roll, repeating turns, HUD, key inventory and escape.");
+            yield break;
+        }
         foreach (int count in new[] { 2, 3, 4 })
         {
             var toggle = lobby.Find(count.ToString()).GetComponent<Toggle>();
@@ -220,6 +279,18 @@ public static class NativeUiChecks
             Require(!session.IsBotPlayer(3), "Native bot toggle returns the slot to human control");
         }
         yield return Capture(prefix + "-lobby");
+        if (session.Skins != null)
+        {
+            var skinsButton = lobby.Find("Skins").GetComponent<Button>();
+            Require(((RectTransform)skinsButton.transform).rect.height > 1, "Skins button retains height inside the lobby layout");
+            yield return Click(skinsButton);
+            var menu = context.GetComponentInChildren<SkinSelectionUI>();
+            Require(menu != null && menu.gameObject.activeInHierarchy, "Native Skins button opens the imported selector");
+            for (int skin = 1; skin <= 4; skin++) yield return Click(menu.transform.Find("Skin " + skin).GetComponent<Button>());
+            Require(session.Skins.AllAssigned(4), "Native skin cards assign all four players");
+            yield return Click(menu.transform.Find("Done").GetComponent<Button>());
+            Require(!menu.gameObject.activeSelf, "Native Done button returns to the lobby");
+        }
         yield return Click(lobby.Find("Start Match").GetComponent<Button>());
         Require(session.MatchStarted && session.Participants.Count == 4, "Native Start button creates four participants");
         yield return null; yield return null;
@@ -235,7 +306,8 @@ public static class NativeUiChecks
         firstHealth.ApplyModifiedPropertiesWithoutUndo();
         var turnControls = context.GetComponentInChildren<TurnControlsUI>();
         var endTurn = (Button)new SerializedObject(turnControls).FindProperty("endTurn").objectReferenceValue;
-        Require(!endTurn.gameObject.activeSelf, "Optional End Turn button is hidden by default");
+        Require(!endTurn.gameObject.activeSelf || session.Mode is SurvivalModeController,
+            "End Turn is optional in Race and available for Survival's task decision");
         var turnSettings = new SerializedObject(context.Turns);
         turnSettings.FindProperty("showEndTurnButton").boolValue = true;
         turnSettings.ApplyModifiedPropertiesWithoutUndo();
@@ -284,6 +356,8 @@ public static class NativeUiChecks
         yield return new WaitForSecondsRealtime(0.1f);
         CheckActivePlayerName(context, false);
         Require(context.Timer.TimeRemaining == frozen, "Countdown freezes while native menu is open");
+        if (session.Mode is SurvivalModeController survivalVisibility)
+            yield return CheckSurvivalVisibility(context, survivalVisibility);
         yield return Capture(prefix + "-pause");
         var resume = context.transform.Find("Pause View/Pause Backdrop/Pause Menu/Resume Game").GetComponent<Button>();
         yield return Click(resume);
@@ -464,6 +538,58 @@ public static class NativeUiChecks
         yield return Capture(prefix + "-result");
         CheckActivePlayerName(context, false);
         Debug.Log("NATIVE UI CHECKS PASSED: " + prefix + ", pointer lobby/start/pause/resume, shared actions, randomized HUD, native result sizing.");
+    }
+
+    private static IEnumerator CheckSurvivalVisibility(MatchUIContext context, SurvivalModeController mode)
+    {
+        var view = new SerializedObject(context.GetComponentInChildren<PauseMenuUI>(true));
+        var events = (Toggle)view.FindProperty("events").objectReferenceValue;
+        var tasks = (Toggle)view.FindProperty("tasks").objectReferenceValue;
+        Require(events.gameObject.activeInHierarchy && tasks != null && tasks.gameObject.activeInHierarchy,
+            "Survival Pause exposes native event and task toggles");
+        Require(!((Toggle)view.FindProperty("items").objectReferenceValue).gameObject.activeInHierarchy &&
+            !((Toggle)view.FindProperty("key").objectReferenceValue).gameObject.activeInHierarchy,
+            "Survival omits Race-only reveal options");
+        bool originalEvents = mode.Events.EventLocationsVisible;
+        int eventCount = mode.Events.Tiles.Count;
+        yield return Click(events);
+        Require(mode.Events.EventLocationsVisible != originalEvents, "Input System pointer toggles event markers");
+        var markers = (System.Collections.Generic.List<SurvivalWorldMarker>)typeof(SurvivalEventController)
+            .GetField("markers", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(mode.Events);
+        foreach (var marker in markers)
+            foreach (var renderer in marker.GetComponentsInChildren<Renderer>())
+                Require(renderer.enabled == mode.Events.EventLocationsVisible, "Event marker visibility follows toggle");
+        yield return Click(events);
+        Require(mode.Events.Tiles.Count == eventCount, "Hiding events preserves placed gameplay events");
+        bool originalTasks = mode.Tasks.TaskNamesVisible;
+        var stations = (System.Collections.Generic.List<SurvivalWorldMarker>)typeof(Escape4Now.Puzzles.SurvivalTaskController)
+            .GetField("stationMarkers", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(mode.Tasks);
+        var captions = System.Array.ConvertAll(stations.ToArray(), station => station.GetComponentInChildren<TextMesh>());
+        foreach (var task in mode.Objectives.Tasks)
+            Require(System.Array.Exists(captions, label => label.text.Contains(task.Definition.MapLabel)),
+                "Generated task displays its editable compact map label");
+        foreach (var caption in captions)
+        {
+            var background = caption.GetComponentInChildren<SpriteRenderer>();
+            Require(background != null && background.enabled && background.size.x > 0 && background.size.y > 0,
+                "Task names have fitted contrast backgrounds");
+        }
+        yield return Click(tasks);
+        Require(mode.Tasks.TaskNamesVisible != originalTasks, "Input System pointer toggles task names");
+        foreach (var caption in captions)
+            if (caption.text != mode.Rules.exitLabel)
+            {
+                bool expected = mode.Tasks.ShouldShowTaskName(stations.FindIndex(marker => marker.GetComponentInChildren<TextMesh>() == caption));
+                Require(caption.GetComponent<Renderer>().enabled == expected, "Task captions follow debug/proximity visibility");
+                Require(caption.GetComponentInChildren<SpriteRenderer>().enabled == expected,
+                    "Task backgrounds hide with their names");
+            }
+        foreach (var collider in mode.Tasks.GetComponentsInChildren<Collider2D>())
+            Require(collider.enabled, "Reveal toggles retain station interaction colliders");
+        yield return Click(tasks);
+        Require(mode.Tasks.TaskNamesVisible == originalTasks && mode.Events.EventLocationsVisible == originalEvents,
+            "Visibility toggles restore independently while paused");
+        Debug.Log("SURVIVAL VISIBILITY CHECKS PASSED: native event/task toggles, named stations, preserved gameplay and shared Pause.");
     }
 
     private static IEnumerator CheckStorageHints(MatchUIContext context)
@@ -726,12 +852,13 @@ public static class NativeUiChecks
         foreach (var participant in session.Participants)
         {
             var body = participant.GetComponent<SpriteRenderer>();
-            Require(body.enabled && body.sprite != null && body.color == participant.IdentityColor && body.color.a > 0f &&
+            bool skinned = participant.Appearance != null && participant.Appearance.HasSkin;
+            Require(body.enabled && body.sprite != null && body.color == (skinned ? Color.white : participant.IdentityColor) && body.color.a > 0f &&
                 body.bounds.size.x > 0f && body.bounds.size.y > 0f,
                 participant.name + " has its own visible body, not only a turn ring");
             var appearance = new SerializedObject(participant.GetComponent<Escape4Now.Player.PlayerAppearance>());
             var outline = (SpriteRenderer)appearance.FindProperty("outline").objectReferenceValue;
-            Require(outline.enabled, participant.name + " retains its body outline between turns");
+            Require(outline.enabled == !skinned, participant.name + " uses the outline appropriate to its sprite");
         }
     }
 
@@ -745,6 +872,8 @@ public static class NativeUiChecks
             var camera = Camera.main;
             foreach (var participant in session.Participants)
             {
+                //The flat identity-color pixel check applies to placeholder bodies. Skin visibility is checked against its assigned renderer and bounds above.
+                if (participant.Appearance != null && participant.Appearance.HasSkin) continue;
                 var body = participant.GetComponent<SpriteRenderer>();
                 Vector3 min = camera.WorldToScreenPoint(body.bounds.min);
                 Vector3 max = camera.WorldToScreenPoint(body.bounds.max);

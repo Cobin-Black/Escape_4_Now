@@ -1,8 +1,11 @@
+// The map operations shared by movement, pathfinding and player placement, regardless of game mode.
+
 using System.Collections.Generic;
 using UnityEngine;
 
 namespace Escape4Now.Map
 {
+    public interface IWeightedPlayerGridMap { int TraversalCost(Vector2Int cell); }
     //Movement and turn setup need grid data, not a particular map generator.
     public interface IPlayerGridMap
     {

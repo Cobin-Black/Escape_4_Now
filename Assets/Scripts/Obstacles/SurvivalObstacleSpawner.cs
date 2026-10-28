@@ -1,3 +1,5 @@
+// Uses the area's assigned prefab lists to draw the outdoor props already chosen by the map generator.
+
 using System;
 using System.Collections.Generic;
 using Escape4Now.Map;
@@ -19,6 +21,9 @@ namespace Escape4Now.Obstacles
         [SerializeField] private SurvivalPropVisual[] gardenPrefabs;
         [SerializeField] private SurvivalPropVisual[] maintenancePrefabs;
         [SerializeField] private SurvivalPropVisual[] parkingPrefabs;
+        [Header("Area Fence Styles")]
+        [SerializeField] private SurvivalPropVisual[] sportsFencePrefabs;
+        [SerializeField] private SurvivalPropVisual[] serviceFencePrefabs;
         [Header("Paths and Boundaries")]
         [SerializeField, Tooltip("Trees, bushes, flowers, and planters outside named areas.")]
         private SurvivalPropVisual[] pathPrefabs;
@@ -31,6 +36,9 @@ namespace Escape4Now.Obstacles
         [Tooltip("Counts, chances, footprints, spacing, and allowed areas. Every requested kind must also have a prefab in that area's section above.")]
         [SerializeField] private SurvivalObstacleSettings placement = new SurvivalObstacleSettings();
         private GameObject spawnedRoot;
+        private readonly Dictionary<Vector2Int, SurvivalPropVisual> fences = new Dictionary<Vector2Int, SurvivalPropVisual>();
+        private readonly Dictionary<Vector2Int, SurvivalPropVisual> spawnedProps = new Dictionary<Vector2Int, SurvivalPropVisual>();
+        public bool TryGetSpawnedProp(Vector2Int cell, out SurvivalPropVisual prop) => spawnedProps.TryGetValue(cell, out prop);
         private bool previewDirty;
         public SurvivalMap Map => map;
         public bool HasSpawnedObstacles { get; private set; }
@@ -131,14 +139,17 @@ namespace Escape4Now.Obstacles
             foreach (OutdoorAreaKind area in Enum.GetValues(typeof(OutdoorAreaKind)))
                 foreach (SurvivalPropVisual prefab in GetAreaPrefabs(area))
                     if (prefab != null && seen.Add(prefab)) yield return prefab;
-            foreach (SurvivalPropVisual prefab in boundaryPrefabs ?? Array.Empty<SurvivalPropVisual>())
-                if (prefab != null && seen.Add(prefab)) yield return prefab;
+            foreach (var catalog in new[] { boundaryPrefabs, sportsFencePrefabs, serviceFencePrefabs })
+                foreach (SurvivalPropVisual prefab in catalog ?? Array.Empty<SurvivalPropVisual>())
+                    if (prefab != null && seen.Add(prefab)) yield return prefab;
         }
 
         private SurvivalPropVisual[] Choices(OutdoorPropKind kind, OutdoorAreaKind area)
         {
             InitializeAreaSections();
-            return Array.FindAll((kind == OutdoorPropKind.Fence ? boundaryPrefabs : GetSection(area))
+            var fenceChoices = area == OutdoorAreaKind.Courts ? sportsFencePrefabs : area == OutdoorAreaKind.Maintenance ? serviceFencePrefabs : null;
+            if (fenceChoices == null || fenceChoices.Length == 0) fenceChoices = boundaryPrefabs;
+            return Array.FindAll((kind == OutdoorPropKind.Fence ? fenceChoices : GetSection(area))
                 ?? Array.Empty<SurvivalPropVisual>(), prefab => prefab != null && prefab.Kind == kind);
         }
 
@@ -155,6 +166,7 @@ namespace Escape4Now.Obstacles
         }
 
         //The map first accepts a connected layout, then this component creates its reserved obstacles.
+        //Draw the prop placements accepted by the generator instead of scattering a second set of obstacles.
         internal void SpawnObstacles(SurvivalMapLayout layout, Transform parent, Vector2 tileSize, Material material)
         {
             ValidateForLayout(layout);
@@ -165,7 +177,7 @@ namespace Escape4Now.Obstacles
             //Boundary and area fences belong to terrain, even when optional obstacle spawning is disabled.
             for (int y = 0; y < layout.Height; y++) for (int x = 0; x < layout.Width; x++)
                 if (layout.GetSurface(x, y) == OutdoorSurface.Fence)
-                    Spawn(OutdoorPropKind.Fence, OutdoorAreaKind.None, x, y, 1, 1, random, tileSize, material);
+                    Spawn(OutdoorPropKind.Fence, layout.GetArea(x, y), x, y, 1, 1, random, tileSize, material);
             foreach (OutdoorPropPlacement obstacle in layout.Props)
                 Spawn(obstacle.Kind, layout.GetArea(obstacle.X, obstacle.Y), obstacle.X, obstacle.Y, obstacle.Width, obstacle.Height,
                     random, tileSize, material, obstacle.QuarterTurns);
@@ -181,6 +193,16 @@ namespace Escape4Now.Obstacles
             copy.name = kind + " " + x + "," + y;
             copy.transform.position = map.GridToWorld(new Vector2(x + (width - 1) * .5f, y + (height - 1) * .5f));
             copy.Build(tileSize, new Vector2(width, height), material, 500 - (x + y) * 10, quarterTurns: quarterTurns);
+            if (kind == OutdoorPropKind.Fence) fences[new Vector2Int(x, y)] = copy;
+            else spawnedProps[new Vector2Int(x, y)] = copy;
+        }
+
+        // Remove the fence piece at the generated gate so its visible opening agrees with the escape location.
+        // Remove the fence piece at the generated gate so its visible opening agrees with the escape location.
+        public void ReplaceFenceWithExit(Vector2Int boundary)
+        {
+            if (fences.TryGetValue(boundary, out var fence) && fence != null)
+                fence.gameObject.SetActive(false);
         }
 
         [ContextMenu("Regenerate Map and Obstacles")]
@@ -192,6 +214,8 @@ namespace Escape4Now.Obstacles
 
         public void ClearSpawnedObstacles()
         {
+            fences.Clear();
+            spawnedProps.Clear();
             if (spawnedRoot != null)
             {
                 if (Application.isPlaying) Destroy(spawnedRoot); else DestroyImmediate(spawnedRoot);

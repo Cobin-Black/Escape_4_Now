@@ -54,6 +54,7 @@ namespace Escape4Now.UI
 
         private void ShowFace(int number)
         {
+            //Fall back to a number when no saved face sprite exists for this value.
             bool supported = number >= 1 && faces != null && number <= faces.Length;
             face.enabled = supported;
             if (supported) face.sprite = faces[number - 1];

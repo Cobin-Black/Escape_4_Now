@@ -1,3 +1,5 @@
+// Finds available LAN hosts on the local network so players do not need to type an address every time.
+
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;

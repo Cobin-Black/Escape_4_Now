@@ -1,3 +1,5 @@
+// Shows the game mode's Inspector fields in the Unity Editor.
+
 using Escape4Now.GameModes;
 using UnityEditor;
 using UnityEngine;

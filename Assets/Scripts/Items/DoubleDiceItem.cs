@@ -93,6 +93,7 @@ namespace Escape4Now.Items
                 return;
             }
 
+            // Do not consume the item when it is not this player's valid item-use phase.
             if (!inventory.Player.CanUseItem()) return;
 
             int firstRoll = Random.Range(1, 7);
