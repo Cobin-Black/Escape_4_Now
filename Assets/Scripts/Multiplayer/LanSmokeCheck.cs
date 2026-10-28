@@ -1,3 +1,5 @@
+// Runs a small host/client check to catch basic LAN connection and match startup problems.
+
 #if UNITY_EDITOR || DEVELOPMENT_BUILD
 using System;
 using System.Collections;

@@ -1,3 +1,5 @@
+// Shows the active player's inventory and short notices when items are collected or used.
+
 using System.Collections.Generic;
 using Escape4Now.Items;
 using Escape4Now.Player;
@@ -58,6 +60,7 @@ namespace Escape4Now.UI
             hint.text = item != null && bindingLabels.Count > 0 ? string.Format(useFormat, string.Join(" / ", bindingLabels)) : "";
         }
 
+        // Compare this player's inventory with its last displayed state to identify pickups and item use.
         private void TrackItems(PlayerCharacter player)
         {
             if (player == null || player.Inventory == null) return;

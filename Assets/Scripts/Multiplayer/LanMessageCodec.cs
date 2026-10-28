@@ -1,3 +1,5 @@
+// Turns LAN messages into JSON, leaving large map data out of small control messages.
+
 using System;
 using UnityEngine;
 
@@ -22,6 +24,7 @@ namespace Escape4Now.Multiplayer
             }
         }
 
+        // Only state messages need full map and player data; ordinary commands stay small.
         public static string Serialize(LanMessage message)
         {
             if (message == null) throw new ArgumentNullException(nameof(message));

@@ -1,3 +1,5 @@
+// Repeats the match's chosen turn order, counts rounds and skips participants who can no longer play.
+
 using Escape4Now.Player;
 using UnityEngine;
 
@@ -31,18 +33,43 @@ namespace Escape4Now.TurnSystem
         private int turnStartedFrame;
         private int[] turnOrder;
         private bool hasNetworkTurnOrder;
+        private int enemyOrderPosition, enemyResumePosition, enemySeed;
+        public void ConfigureEnemyTurn(bool enabled, string name, int seed)
+        {
+            includeEnemyTurn = enabled;
+            if (!string.IsNullOrWhiteSpace(name)) enemyTurnName = name;
+            enemySeed = seed;
+        }
+        private readonly System.Collections.Generic.HashSet<PlayerCharacter> removed = new System.Collections.Generic.HashSet<PlayerCharacter>();
+        private bool Eligible(PlayerCharacter player) => player != null && player.isActiveAndEnabled && player.Health > 0
+            && !player.HasReachedExit && !removed.Contains(player) && (gameMode == null || gameMode.IsParticipantActive(player));
+        // Retire this participant without reshuffling the order of everyone who remains.
+        public void RemoveFromTurnCycle(PlayerCharacter player)
+        {
+            if (player == null || !removed.Add(player)) return;
+            if (currentTurnOwner != TurnOwner.Player || currentPlayerIndex < 0 || currentPlayerIndex >= GetPlayerCount() || players[currentPlayerIndex] != player) return;
+            PlayerTurnEnded?.Invoke();
+            EnsureTurnOrder();
+            int next = System.Array.IndexOf(turnOrder, currentPlayerIndex) + 1;
+            ContinueCycle(next);
+        }
 
         //Registers the separate players created for this local match.
+        // Copy the participant list and choose the fixed order for this match.
         public void SetPlayers(PlayerCharacter[] participants, int? seed = null)
         {
-            if (participants == null || participants.Length < 1 || participants.Length > 4)
-                throw new System.ArgumentException("A local match needs one to four players.");
+            if (participants == null || participants.Length < (gameMode != null ? gameMode.MinimumPlayers : 1)
+                || participants.Length > (gameMode != null ? gameMode.MaximumTurnParticipants : 4))
+                throw new System.ArgumentException("Unsupported participant count for this mode.");
             var unique = new System.Collections.Generic.HashSet<PlayerCharacter>();
             foreach (PlayerCharacter participant in participants)
                 if (participant == null || !unique.Add(participant))
                     throw new System.ArgumentException("Each player must be assigned once.");
             players = (PlayerCharacter[])participants.Clone();
+            removed.Clear();
             turnOrder = PlayerTurnOrder.Create(players.Length, seed ?? GetMatchSeed(), randomizeStartingOrder);
+            enemyOrderPosition = includeEnemyTurn && randomizeStartingOrder
+                ? new System.Random(unchecked(enemySeed ^ 0x45A1)).Next(players.Length + 1) : players.Length;
             hasNetworkTurnOrder = false;
             currentPlayerIndex = turnOrder[0];
             currentTurnOwner = TurnOwner.Player;
@@ -51,6 +78,7 @@ namespace Escape4Now.TurnSystem
         }
 
         //A key used on the previous turn must not also control the next player.
+        // Wait until the frame after a turn changes so one button press cannot control two players.
         public bool CanReadInput(PlayerCharacter player)
         {
             return Time.timeScale > 0f
@@ -112,6 +140,7 @@ namespace Escape4Now.TurnSystem
 
         private void EnsureTurnOrder()
         {
+            if (GetPlayerCount() == 0) { turnOrder = new int[0]; return; }
             if (turnOrder == null || turnOrder.Length != GetPlayerCount())
                 turnOrder = PlayerTurnOrder.Create(GetPlayerCount(), GetMatchSeed(), randomizeStartingOrder);
         }
@@ -195,39 +224,37 @@ namespace Escape4Now.TurnSystem
                 }
             }
 
-            if (currentTurnOwner == TurnOwner.Player)
-            {
-                PlayerTurnEnded?.Invoke();
-            }
+            PlayerTurnEnded?.Invoke();
 
             if (currentTurnOwner == TurnOwner.Enemy)
             {
-                turnNumber++;
-                StartPlayerTurn(0);
+                int next = enemyResumePosition;
+                if (next >= playerCount) { next = 0; turnNumber++; }
+                StartPlayerTurn(next, true);
                 return;
             }
 
             EnsureTurnOrder();
             int nextOrderPosition = System.Array.IndexOf(turnOrder, currentPlayerIndex) + 1;
 
-            if (nextOrderPosition < playerCount)
-            {
-                StartPlayerTurn(nextOrderPosition);
-                return;
-            }
+            ContinueCycle(nextOrderPosition);
+        }
 
-            if (includeEnemyTurn)
+        private void ContinueCycle(int next)
+        {
+            if (next >= GetPlayerCount())
             {
-                StartEnemyTurn();
-                return;
+                if (includeEnemyTurn && enemyOrderPosition == GetPlayerCount())
+                { enemyResumePosition = next; StartEnemyTurn(); return; }
+                next = 0;
+                turnNumber++;
             }
-
-            turnNumber++;
-            StartPlayerTurn(0);
+            StartPlayerTurn(next);
         }
 
         //Restarts the chosen sequence without reshuffling it.
         [ContextMenu("Restart Turn Cycle")]
+        // Restart the existing turn cycle; this is not a fresh random shuffle.
         public void RestartTurnCycle()
         {
             foreach (PlayerCharacter player in players ?? new PlayerCharacter[0])
@@ -244,26 +271,33 @@ namespace Escape4Now.TurnSystem
         {
             return currentTurnOwner == TurnOwner.Player
                 && player != null
+                && !removed.Contains(player)
+                && (gameMode == null || gameMode.IsParticipantActive(player))
                 && currentPlayerIndex >= 0
                 && currentPlayerIndex < GetPlayerCount()
                 && players[currentPlayerIndex] == player;
         }
 
         //Selects a turn position while keeping participant slots unchanged.
-        private void StartPlayerTurn(int orderPosition)
+        // Walk through the saved order, skipping inactive or frozen participants without getting stuck.
+        private void StartPlayerTurn(int orderPosition, bool resumeEnemy = false)
         {
             turnStartedFrame = Time.frameCount;
             currentTurnOwner = TurnOwner.Player;
             int count = GetPlayerCount();
             EnsureTurnOrder();
             if (count == 0) { RefreshCurrentTurnName(); return; }
+            if (!System.Array.Exists(players, Eligible)) { currentPlayerIndex = -1; currentTurnName = ""; return; }
             orderPosition = Mathf.Clamp(orderPosition, 0, count - 1);
             currentPlayerIndex = turnOrder[orderPosition];
             //Two passes allow every frozen player to skip once, even in a one-player game.
             for (int attempts = 0; attempts < count * 2; attempts++)
             {
+                if (includeEnemyTurn && orderPosition == enemyOrderPosition && !resumeEnemy)
+                { enemyResumePosition = orderPosition; StartEnemyTurn(); return; }
+                resumeEnemy = false;
                 PlayerCharacter player = players[currentPlayerIndex];
-                if (player != null && player.isActiveAndEnabled && player.Health > 0 && !player.HasReachedExit)
+                if (Eligible(player))
                 {
                     if (player.BeginEventTurn())
                     {
@@ -277,8 +311,9 @@ namespace Escape4Now.TurnSystem
                 if (orderPosition >= count)
                 {
                     orderPosition = 0;
-                    if (includeEnemyTurn)
+                    if (includeEnemyTurn && enemyOrderPosition == count)
                     {
+                        enemyResumePosition = count;
                         StartEnemyTurn();
                         return;
                     }

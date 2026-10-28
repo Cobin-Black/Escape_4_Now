@@ -285,6 +285,11 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a5aaacb43ece46a59b6f9644251a6b70, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  mainMenuScene: MainMenu
+  background: {r: 0.561, g: 0.816, b: 1, a: 1}
+  tapeStripe: {r: 0.831, g: 0.941, b: 1, a: 1}
+  accent: {r: 0.9433962, g: 0.93973154, b: 0.9211463, a: 1}
+  dieRollSeconds: 0.7
 --- !u!4 &1200000003
 Transform:
   m_ObjectHideFlags: 0

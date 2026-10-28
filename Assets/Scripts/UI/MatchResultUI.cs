@@ -1,3 +1,5 @@
+// Shows the result supplied by the mode and lets the player return to setup.
+
 using UnityEngine;
 using UnityEngine.UI;
 

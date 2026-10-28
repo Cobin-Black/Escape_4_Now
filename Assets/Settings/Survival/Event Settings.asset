@@ -1,0 +1,359 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 349d1f589c6d0914c8783fb85dd8ca36, type: 3}
+  m_Name: Event Settings
+  m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Map.SurvivalEventSettings
+  eventCount: 10
+  showEventLocations: 0
+  events:
+  - type: 0
+    enabled: 1
+    title: Lucky Roll
+    feedback: 'Lucky Roll: keep the higher die next turn.'
+    category: 0
+    weight: 1
+    instancesPerMatch: {x: 1, y: 3}
+    randomEffectWeight: 1
+    amount: 2
+    durationTurns: 3
+    compatibleAreas: 
+    prefab: {fileID: 6178891851063451343, guid: c354d89b88be5f448b2a79088e7963ab, type: 3}
+    activationChance: 1
+  - type: 1
+    enabled: 1
+    title: Adrenaline Rush
+    feedback: 'Adrenaline Rush: {2} moves left.'
+    category: 0
+    weight: 1
+    instancesPerMatch: {x: 1, y: 3}
+    randomEffectWeight: 1
+    amount: 2
+    durationTurns: 3
+    compatibleAreas: 
+    prefab: {fileID: 1879934603251980111, guid: 06173dfc4f5bbb64aa85b4fd6558e67d, type: 3}
+    activationChance: 1
+  - type: 2
+    enabled: 1
+    title: Second Chance
+    feedback: 'Second Chance: the next negative event is blocked.'
+    category: 0
+    weight: 1
+    instancesPerMatch: {x: 1, y: 3}
+    randomEffectWeight: 0
+    amount: 2
+    durationTurns: 3
+    compatibleAreas: 
+    prefab: {fileID: 5787388975558388756, guid: 812045ceee57b974ea68e4527271f9bc, type: 3}
+    activationChance: 1
+  - type: 3
+    enabled: 1
+    title: Track Boost
+    feedback: 'Track Boost: {2} moves left.'
+    category: 0
+    weight: 1
+    instancesPerMatch: {x: 1, y: 2}
+    randomEffectWeight: 0
+    amount: 2
+    durationTurns: 3
+    compatibleAreas: 01000000
+    prefab: {fileID: 9073901665199694607, guid: bc668d8627db2e34f85284bbfc6fa90c, type: 3}
+    activationChance: 1
+  - type: 4
+    enabled: 1
+    title: Energy Drink
+    feedback: 'Energy Drink: +{0} movement next turn.'
+    category: 0
+    weight: 1
+    instancesPerMatch: {x: 1, y: 2}
+    randomEffectWeight: 0
+    amount: 2
+    durationTurns: 3
+    compatibleAreas: 
+    prefab: {fileID: 8646033310530793251, guid: 4fb01be4f5c386645a3a28d7359def00, type: 3}
+    activationChance: 1
+  - type: 5
+    enabled: 1
+    title: Trip
+    feedback: 'Trip: remaining movement lost.'
+    category: 1
+    weight: 1
+    instancesPerMatch: {x: 1, y: 3}
+    randomEffectWeight: 0
+    amount: 2
+    durationTurns: 3
+    compatibleAreas: 
+    prefab: {fileID: 8507101159724407776, guid: eddaec705d4ab934aab23579c9eb897f, type: 3}
+    activationChance: 1
+  - type: 6
+    enabled: 1
+    title: Exhausted
+    feedback: 'Exhausted: -{0} movement next turn.'
+    category: 1
+    weight: 1
+    instancesPerMatch: {x: 1, y: 3}
+    randomEffectWeight: 1
+    amount: 2
+    durationTurns: 3
+    compatibleAreas: 
+    prefab: {fileID: 5430097287816627526, guid: 7dc08d8307007104e8ec1c8350574fba, type: 3}
+    activationChance: 1
+  - type: 7
+    enabled: 1
+    title: Bad Roll
+    feedback: 'Bad Roll: keep the lower die next turn.'
+    category: 1
+    weight: 1
+    instancesPerMatch: {x: 1, y: 3}
+    randomEffectWeight: 1
+    amount: 2
+    durationTurns: 3
+    compatibleAreas: 
+    prefab: {fileID: 7815295751880811893, guid: ea643e184dbf3b0438776c9833f28d8a, type: 3}
+    activationChance: 1
+  - type: 8
+    enabled: 1
+    title: Freeze
+    feedback: 'Freeze: skip the next turn once.'
+    category: 1
+    weight: 0.2
+    instancesPerMatch: {x: 0, y: 1}
+    randomEffectWeight: 0.15
+    amount: 2
+    durationTurns: 3
+    compatibleAreas: 
+    prefab: {fileID: 2011450986643015423, guid: f59b91b9e0f73064ab1958d8206c5f12, type: 3}
+    activationChance: 1
+  - type: 9
+    enabled: 1
+    title: Poolside Slip
+    feedback: 'Poolside Slip: {2} moves left.'
+    category: 1
+    weight: 1
+    instancesPerMatch: {x: 1, y: 1}
+    randomEffectWeight: 0
+    amount: 2
+    durationTurns: 3
+    compatibleAreas: 02000000
+    prefab: {fileID: 2797628612235619828, guid: 7b1fb266d813c6b44a2a608810a497b7, type: 3}
+    activationChance: 0.2
+  - type: 10
+    enabled: 1
+    title: Mud
+    feedback: 'Mud: marked ground costs +{0} for {1} turns.'
+    category: 1
+    weight: 1
+    instancesPerMatch: {x: 1, y: 3}
+    randomEffectWeight: 0
+    amount: 1
+    durationTurns: 3
+    compatibleAreas: 000000000500000006000000
+    prefab: {fileID: 4768313844538394893, guid: 3a8aa673f15809f41a46ec10a2b38a35, type: 3}
+    activationChance: 1
+  - type: 11
+    enabled: 1
+    title: Warp
+    feedback: 'Warp: teleported. Unused moves kept.'
+    category: 2
+    weight: 1
+    instancesPerMatch: {x: 1, y: 3}
+    randomEffectWeight: 0
+    amount: 2
+    durationTurns: 3
+    compatibleAreas: 
+    prefab: {fileID: 7849657677951339095, guid: 19007cf63d9f72f42a83b62ff4d08d51, type: 3}
+    activationChance: 1
+  - type: 12
+    enabled: 1
+    title: Area Switch
+    feedback: 'Area Switch: moved to another campus area.'
+    category: 2
+    weight: 1
+    instancesPerMatch: {x: 1, y: 3}
+    randomEffectWeight: 0
+    amount: 2
+    durationTurns: 3
+    compatibleAreas: 
+    prefab: {fileID: 7280930312800330195, guid: e5b4440619ed90b4e9c6660a97c1b98c, type: 3}
+    activationChance: 1
+  - type: 13
+    enabled: 1
+    title: Random Event
+    feedback: 
+    category: 2
+    weight: 1
+    instancesPerMatch: {x: 1, y: 3}
+    randomEffectWeight: 0
+    amount: 2
+    durationTurns: 3
+    compatibleAreas: 
+    prefab: {fileID: 7592071339867448343, guid: e5db9031ae8a25d4fa7aa122478897c7, type: 3}
+    activationChance: 1
+  - type: 14
+    enabled: 1
+    title: Location Switch
+    feedback: Survivors exchanged positions. Unused moves kept.
+    category: 2
+    weight: 1
+    instancesPerMatch: {x: 1, y: 3}
+    randomEffectWeight: 0
+    amount: 2
+    durationTurns: 3
+    compatibleAreas: 
+    prefab: {fileID: 399174273329449635, guid: 7d904bb598be6d5418564ff179f01765, type: 3}
+    activationChance: 1
+  - type: 15
+    enabled: 1
+    title: Fallen Branch
+    feedback: 'Fallen Branch: use another route for {1} turns.'
+    category: 2
+    weight: 0.3
+    instancesPerMatch: {x: 0, y: 1}
+    randomEffectWeight: 0
+    amount: 2
+    durationTurns: 3
+    compatibleAreas: 
+    prefab: {fileID: 957522350927666711, guid: 19e28e96587018a4c93abf54d6fb6cb4, type: 3}
+    activationChance: 1
+  - type: 16
+    enabled: 0
+    title: Open Gate
+    feedback: 
+    category: 2
+    weight: 1
+    instancesPerMatch: {x: 1, y: 3}
+    randomEffectWeight: 0
+    amount: 2
+    durationTurns: 3
+    compatibleAreas: 
+    prefab: {fileID: 0}
+    activationChance: 1
+  - type: 17
+    enabled: 1
+    title: Blackout
+    feedback: 
+    category: 3
+    weight: 0.2
+    instancesPerMatch: {x: 0, y: 1}
+    randomEffectWeight: 0
+    amount: 2
+    durationTurns: 3
+    compatibleAreas: 
+    prefab: {fileID: 0}
+    activationChance: 1
+  - type: 18
+    enabled: 1
+    title: Rain Storm
+    feedback: 'Rain Storm: -{0} roll movement for {1} turns.'
+    category: 3
+    weight: 1
+    instancesPerMatch: {x: 1, y: 2}
+    randomEffectWeight: 0
+    amount: 1
+    durationTurns: 3
+    compatibleAreas: 
+    prefab: {fileID: 0}
+    activationChance: 1
+  - type: 19
+    enabled: 1
+    title: School Bell
+    feedback: 'School Bell: all survivors get +{0} next turn.'
+    category: 3
+    weight: 1
+    instancesPerMatch: {x: 1, y: 4}
+    randomEffectWeight: 0
+    amount: 1
+    durationTurns: 3
+    compatibleAreas: 
+    prefab: {fileID: 0}
+    activationChance: 1
+  - type: 20
+    enabled: 1
+    title: Sprinklers
+    feedback: 'Sprinklers: marked area costs +{0} for {1} turns.'
+    category: 3
+    weight: 1
+    instancesPerMatch: {x: 1, y: 2}
+    randomEffectWeight: 0
+    amount: 1
+    durationTurns: 3
+    compatibleAreas: 050000000400000001000000
+    prefab: {fileID: 597868912524501276, guid: 9ad8d1c18ed87c14da786a33991cf7ed, type: 3}
+    activationChance: 1
+  - type: 21
+    enabled: 1
+    title: Location Shuffle
+    feedback: Survivors exchanged positions. Unused moves kept.
+    category: 3
+    weight: 0.2
+    instancesPerMatch: {x: 0, y: 1}
+    randomEffectWeight: 0
+    amount: 2
+    durationTurns: 3
+    compatibleAreas: 
+    prefab: {fileID: 0}
+    activationChance: 1
+  - type: 22
+    enabled: 1
+    title: Car Alarm
+    feedback: 
+    category: 3
+    weight: 1
+    instancesPerMatch: {x: 1, y: 2}
+    randomEffectWeight: 0
+    amount: 2
+    durationTurns: 3
+    compatibleAreas: 07000000
+    prefab: {fileID: 0}
+    activationChance: 1
+  useAllEnabledEventsForDebugging: 0
+  tileTypesPerMatch: {x: 4, y: 6}
+  environmentalTypesPerMatch: {x: 2, y: 4}
+  globalTypesPerMatch: {x: 1, y: 2}
+  pickupTypesPerMatch: {x: 0, y: 1}
+  eventTilesPerMatch: {x: 6, y: 10}
+  maximumEventTileDensity: 0.02
+  minimumEventTileDistance: 2
+  globalIntervalTurns: {x: 3, y: 6}
+  globalEventChance: 0.5
+  environmentalIntervalTurns: {x: 2, y: 4}
+  environmentalEventChance: 0.65
+  safePlacementAttempts: 64
+  maximumActiveEnvironmentalEffects: 4
+  initialMudPatches: 2
+  mudPatchTiles: {x: 3, y: 7}
+  maximumSprinklerTiles: 32
+  trackBoostSectionTiles: 3
+  maximumTrackBoostSections: 2
+  minimumTrackSectionSpacing: 4
+  preferTrackStraights: 1
+  trackPropClearance: 2
+  poolWetWaterDistance: 2
+  preferLandscapedMud: 1
+  mudLandscapeDistance: 2
+  maximumSprinklerHeads: 3
+  sprinklerHeadSpacing: 3
+  maximumPoolWetZones: 2
+  poolWetPatchTiles: {x: 3, y: 5}
+  poolSlipOncePerTurn: 1
+  energyDrinkPickups: 2
+  rainEffectPrefab: {fileID: 3147653418524682873, guid: dfeb5f1068ae67d4d966aa51af109d0f, type: 3}
+  schoolBellEffectPrefab: {fileID: 8906042768207779562, guid: 0a6de2916c33d0647886bc2def60b68f, type: 3}
+  carAlarmEffectPrefab: {fileID: 8194144148180948782, guid: c2896c5719cb6644b94a19eee82b8c4c, type: 3}
+  minimumRollMovement: 1
+  maximumTileCost: 3
+  blackoutTurns: 04000000040000000300000002000000
+  immediateNotificationSeconds: 4
+  visibleNotifications: 2
+  moreNotificationsFormat: +{0} other active effects
+  blockedEventFormat: Second Chance blocked {0}.
+  skippedEventFormat: '{0}: no new effect; no safe change is available or the effect
+    is already active.'

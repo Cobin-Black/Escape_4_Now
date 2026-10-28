@@ -15,22 +15,30 @@ namespace Escape4Now.GameModes
         [SerializeField] private Escape4Now.Map.IsometricMapTemplate map;
         [SerializeField] private bool enableLanSupport = true;
         [SerializeField] private bool enableBots = true;
+        [Header("Player Setup")]
+        [SerializeField, Tooltip("Allow one player to find the key and escape against the timer.")]
+        // The lobby and turn setup read this option; solo play still uses the normal Race key and timer rules.
+        private bool allowSoloPlay = true;
         [Header("Results")]
         [SerializeField] private string escapedTitleSuffix = "ESCAPED";
         [SerializeField] private string otherPlayersLoseMessage = "All other players lose.";
+        [SerializeField] private string soloEscapeMessage = "You found the key and escaped.";
         [SerializeField] private string timeoutTitle = "EVERYONE LOSES";
         [SerializeField, TextArea] private string timeoutMessage = "Time ran out before anyone escaped.";
 
         public override Escape4Now.Map.IPlayerGridMap GridMap => map;
         public override bool SupportsLan => enableLanSupport;
         public override bool SupportsBots => enableBots;
+        public override int MinimumPlayers => allowSoloPlay ? 1 : base.MinimumPlayers;
         public override bool TimerExpirationIsWin => false;
 
+        // Keep Race results separate from Survival, including a suitable message when only one player is playing.
         public override bool TryGetResult(IReadOnlyList<PlayerCharacter> participants, out MatchResult result)
         {
             if (TryGetWinner(participants, out PlayerCharacter winner))
             {
-                result = new MatchResult(true, winner.name.ToUpperInvariant() + " " + escapedTitleSuffix, otherPlayersLoseMessage);
+                result = new MatchResult(true, winner.name.ToUpperInvariant() + " " + escapedTitleSuffix,
+                    participants.Count == 1 ? soloEscapeMessage : otherPlayersLoseMessage);
                 return true;
             }
             if (Timer != null && Timer.HasExpired)

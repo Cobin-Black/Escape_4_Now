@@ -1,3 +1,5 @@
+// Editor checks for the Race bot integration. These checks do not control bots during a normal match.
+
 using System;
 using System.Collections;
 using System.Collections.Generic;

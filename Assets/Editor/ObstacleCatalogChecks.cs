@@ -1,3 +1,5 @@
+// Checks that the map's obstacle lists contain usable prefabs for the intended rooms and areas.
+
 using System;
 using System.Collections.Generic;
 using System.Reflection;

@@ -1,3 +1,5 @@
+// Connects the outdoor layout to its drawing, movement checks, spawn locations and temporary blocks.
+
 using System;
 using System.Collections.Generic;
 using Escape4Now.Obstacles;
@@ -7,7 +9,7 @@ using UnityEngine.Serialization;
 namespace Escape4Now.Map
 {
     [ExecuteAlways, RequireComponent(typeof(SurvivalObstacleSpawner))]
-    public sealed class SurvivalMap : MonoBehaviour, IPlayerGridMap
+    public sealed class SurvivalMap : MonoBehaviour, IPlayerGridMap, IWeightedPlayerGridMap
     {
         [Serializable]
         private struct SurfaceStyle { public OutdoorSurface surface; public Color color; }
@@ -24,9 +26,13 @@ namespace Escape4Now.Map
         [SerializeField] private Vector2 tileSize = new Vector2(1.2f, .6f);
         [SerializeField, Min(.01f)] private float tileDepth = .12f;
         [SerializeField, Range(.5f, 1f)] private float alternatingTileBrightness = .94f;
+        [Header("Campus Presentation")]
+        [SerializeField] private SurvivalCampusVisuals campusVisuals;
         [SerializeField] private SurfaceStyle[] surfaces;
         [Header("System References")]
         [SerializeField] private SurvivalObstacleSpawner obstacleSpawner;
+        [SerializeField] private SurvivalEventController eventController;
+        public int TraversalCost(Vector2Int cell) => eventController != null ? eventController.MovementCost(cell) : 1;
         [SerializeField, HideInInspector, FormerlySerializedAs("obstaclePrefabs")]
         private SurvivalPropVisual[] previousObstaclePrefabs;
         [SerializeField, Range(0, 31)] private int blockedTileLayer;
@@ -72,6 +78,26 @@ namespace Escape4Now.Map
         public int Width => Layout?.Width ?? generation.Width;
         public int Height => Layout?.Height ?? generation.Height;
         public float TileHeight => tileSize.y;
+        public Vector2 TileSize => tileSize;
+        public float TrackWidth => generation.TrackWidth;
+        public Material MapMaterial => mapMaterial;
+        public SurvivalObjectiveLayout Objectives { get; private set; }
+        private readonly HashSet<Vector2Int> temporaryBlocks = new HashSet<Vector2Int>();
+        private readonly HashSet<Vector2Int> forcedMovementHazards = new HashSet<Vector2Int>();
+        public void SetForcedMovementHazards(IEnumerable<Vector2Int> cells)
+        { forcedMovementHazards.Clear(); foreach(var cell in cells) forcedMovementHazards.Add(cell); }
+        public void SetObjectives(SurvivalObjectiveLayout layout) { Objectives = layout; temporaryBlocks.Clear(); forcedMovementHazards.Clear(); }
+        // Test the block against current objectives and hazards before keeping it; reject it if any required route is lost.
+        // Test the block against current objectives and hazards before keeping it; reject it if any required route is lost.
+        public bool TryBlockTemporarily(Vector2Int cell)
+        {
+            if (Objectives == null || Objectives.IsReserved(cell) || IsOccupied(cell) || !IsWalkable(cell)) return false;
+            temporaryBlocks.Add(cell);
+            var unsafeCells = new HashSet<Vector2Int>(temporaryBlocks); unsafeCells.UnionWith(forcedMovementHazards);
+            if (Objectives.ValidateConnectivity(unsafeCells)) return true;
+            temporaryBlocks.Remove(cell); return false;
+        }
+        public void RemoveTemporaryBlock(Vector2Int cell) { temporaryBlocks.Remove(cell); }
         public string LastGenerationError { get; private set; }
         public void RequestPreviewRefresh() { previewDirty = true; }
 
@@ -100,6 +126,8 @@ namespace Escape4Now.Map
         [ContextMenu("Generate Map")]
         public void Generate() => GenerateWithSeed(useFixedSeed ? fixedSeed : Guid.NewGuid().GetHashCode());
 
+        // Choose the match layout separately from the edit-mode preview so a preview does not consume the match's seed choice.
+        // Choose the match layout separately from the edit-mode preview so a preview does not consume the match's seed choice.
         public void PrepareLayout()
         {
             //An editor preview must not choose the seed for a new match.
@@ -107,6 +135,8 @@ namespace Escape4Now.Map
                 throw new InvalidOperationException(LastGenerationError);
         }
 
+        // Generate and validate the data before drawing it; do not rebuild an active match underneath its players.
+        // Generate and validate the data before drawing it; do not rebuild an active match underneath its players.
         public bool GenerateWithSeed(int seed)
         {
             if (Application.isPlaying && Escape4Now.Multiplayer.LocalMultiplayerSession.MatchIsRunning)
@@ -120,7 +150,7 @@ namespace Escape4Now.Map
                 PrepareObstacleSpawner();
                 var next = new SurvivalMapLayout(seed, generation, obstacleSpawner.PlacementSettings);
                 ValidateVisuals(next);
-                ClearPreview(); occupants.Clear(); Layout = next;
+                ClearPreview(); occupants.Clear(); Layout = next; Objectives = null; temporaryBlocks.Clear();
                 generatedRoot = new GameObject("Generated Survival Map") { hideFlags = HideFlags.HideAndDontSave };
                 generatedRoot.transform.SetParent(transform, false);
                 DrawMap(); FitCamera(); LastGenerationError = null;
@@ -174,9 +204,15 @@ namespace Escape4Now.Map
 #endif
         }
 
-        public bool IsWalkable(Vector2Int cell) => Layout != null && Layout.IsWalkable(cell.x, cell.y);
-        public bool IsExit(Vector2Int cell) => false;
-        public bool IsOccupied(Vector2Int cell) => occupants.Contains(cell);
+        // Tasks and temporary blocks can make a tile unavailable even when its underlying ground is walkable.
+        // Tasks and temporary blocks can make a tile unavailable even when its underlying ground is walkable.
+        public bool IsWalkable(Vector2Int cell) => Layout != null && Layout.IsWalkable(cell.x, cell.y)
+            && (Objectives == null || !Objectives.IsTaskObject(cell)) && !temporaryBlocks.Contains(cell);
+        public bool IsExit(Vector2Int cell)
+        { if (Objectives != null) foreach (var exit in Objectives.Exits) if (exit == cell) return true; return false; }
+        private System.Func<Vector2Int, bool> monsterOccupancy;
+        public void SetMonsterOccupancy(System.Func<Vector2Int, bool> occupancy) { monsterOccupancy = occupancy; }
+        public bool IsOccupied(Vector2Int cell) => occupants.Contains(cell) || monsterOccupancy != null && monsterOccupancy(cell);
         public void SetOccupantPosition(Vector2Int previous, Vector2Int next)
         { occupants.Remove(previous); occupants.Add(next); }
         public void RemoveOccupant(Vector2Int cell) => occupants.Remove(cell);
@@ -221,10 +257,14 @@ namespace Escape4Now.Map
             {
                 OutdoorSurface surface = Layout.GetSurface(x, y);
                 Color color = Array.Find(surfaces, style => style.surface == surface).color;
-                if ((x + y) % 2 == 0) { color *= alternatingTileBrightness; color.a = 1f; }
+                if (campusVisuals != null && campusVisuals.enabled && campusVisuals.Settings != null)
+                    color = campusVisuals.GroundColor(Layout, x, y, color);
+                else if ((x + y) % 2 == 0) { color *= alternatingTileBrightness; color.a = 1f; }
                 Renderer floor = AddBlock(generatedRoot.transform, "Tile " + x + "," + y, Vector2.zero, 1f, 1f,
                     -tileDepth, tileDepth, color, -10000 - (x + y));
                 floor.transform.position = GridToWorld(new Vector2(x, y));
+                var surfaceMaterial = campusVisuals != null && campusVisuals.enabled ? campusVisuals.GroundMaterial(surface) : null;
+                if (surfaceMaterial != null) floor.sharedMaterial = surfaceMaterial;
                 floor.gameObject.AddComponent<IsometricMapTile>().SetGridPosition(new Vector2Int(x, y));
                 if (!Layout.IsWalkable(x, y))
                 {
@@ -235,6 +275,7 @@ namespace Escape4Now.Map
             }
             obstacleSpawner.SpawnObstacles(Layout, generatedRoot.transform, tileSize, mapMaterial);
             foreach (OutdoorArea area in Layout.Areas) DrawMarkings(area);
+            if (campusVisuals != null) campusVisuals.Build(this, generatedRoot.transform);
             foreach (OutdoorParkingBay bay in Layout.ParkingBays)
                 DrawRectangle(bay.X - .5f + parkingMarkingInset, bay.Y - .5f + parkingMarkingInset,
                     bay.X + bay.Width - .5f - parkingMarkingInset, bay.Y + bay.Height - .5f - parkingMarkingInset);
@@ -371,6 +412,7 @@ namespace Escape4Now.Map
         [ContextMenu("Clear Generated Preview")]
         public void ClearPreview()
         {
+            if (campusVisuals != null) campusVisuals.Clear();
             if (obstacleSpawner != null) obstacleSpawner.ClearSpawnedObstacles();
             if (generatedRoot != null) Release(generatedRoot);
             foreach (Mesh mesh in meshes) if (mesh != null) Release(mesh);

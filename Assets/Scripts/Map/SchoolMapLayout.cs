@@ -1,3 +1,5 @@
+// Builds the indoor school layout from a seed and checks that its rooms and routes connect.
+
 using System;
 using System.Collections.Generic;
 
@@ -201,6 +203,8 @@ namespace Escape4Now.Map
         }
 
         //Keeps layout checks in one place for both normal generation and the backup.
+        // Accept the indoor layout only after room connections and usable floor-space checks pass.
+        // Accept the indoor layout only after room connections and usable floor-space checks pass.
         private bool TryBuildLayout()
         {
             ClearLayout();
@@ -289,6 +293,8 @@ namespace Escape4Now.Map
         }
 
         //Occasionally uses a spare pocket beside a hallway for one small school space.
+        // Use suitable spare space for the smaller room types without replacing the main rooms.
+        // Use suitable spare space for the smaller room types without replacing the main rooms.
         private void AddSecondarySpace()
         {
             bool skipSecondaryRoom = settings.SecondaryRoomChance <= 0f
@@ -448,6 +454,8 @@ namespace Escape4Now.Map
         }
 
         //Mixes rectangles and L shapes, then redraws their floor data after growing them.
+        // Vary room outlines while keeping the room placement and hallway rules.
+        // Vary room outlines while keeping the room placement and hallway rules.
         private void ShapeRooms()
         {
             Array.Clear(floor, 0, floor.Length);
@@ -531,6 +539,8 @@ namespace Escape4Now.Map
         }
 
         //Builds one shared hallway network, then gives some rooms a second entrance.
+        // Add valid entrances and hallway links before the map is considered playable.
+        // Add valid entrances and hallway links before the map is considered playable.
         private bool ConnectRooms()
         {
             for (int i = 0; i < rooms.Count; i++)
@@ -651,6 +661,8 @@ namespace Escape4Now.Map
         }
 
         //Flood-fills the floor and accepts it only when every floor tile is reachable.
+        // Visit neighboring floor tiles to check that no room or hallway is cut off from the rest.
+        // Visit neighboring floor tiles to check that no room or hallway is cut off from the rest.
         public bool AllFloorConnected()
         {
             int total = 0;

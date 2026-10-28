@@ -1,3 +1,5 @@
+// Stores editable lesson text and targets, looked up by their tutorial step identifier.
+
 using System;
 using UnityEngine;
 

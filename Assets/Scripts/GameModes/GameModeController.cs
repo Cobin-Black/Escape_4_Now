@@ -1,3 +1,5 @@
+// Shared match setup and input references. Each game mode supplies its own objective, exit rules and result.
+
 using System.Collections.Generic;
 using Escape4Now.Input;
 using Escape4Now.Map;
@@ -38,12 +40,25 @@ namespace Escape4Now.GameModes
         public abstract IPlayerGridMap GridMap { get; }
         public virtual bool SupportsLan => false;
         public virtual bool SupportsBots => false;
+        public virtual int MinimumPlayers => 2;
+        public virtual int MaximumPlayers => 4;
+        public virtual int MaximumTurnParticipants => MaximumPlayers;
+        public virtual PlayerCharacter[] BuildTurnParticipants(PlayerCharacter[] participants) => participants;
+        public virtual bool PrepareMatch(int count, out string error) { error = ""; return true; }
+        public virtual void BeginMatch(IReadOnlyList<PlayerCharacter> participants) { }
+        public virtual bool IsParticipantActive(PlayerCharacter player) => player != null && !player.HasReachedExit;
+        public virtual bool OnPlayerEscaped(PlayerCharacter player) => false;
+        public virtual int MovementCost(Vector2Int cell) => 1;
+        public virtual int AdjustRollMovement(PlayerCharacter player, int movement) => movement;
+        public virtual bool FinishMovementTurn(PlayerCharacter player) => true;
+        public virtual bool AutoEndStrandedTurn => false;
         public abstract bool TimerExpirationIsWin { get; }
         public abstract override string GetObjective(PlayerCharacter player);
         public abstract override bool CanUseExit(PlayerCharacter player);
         public abstract bool TryGetResult(IReadOnlyList<PlayerCharacter> participants, out MatchResult result);
 
-        public bool ValidateConfiguration(out string error)
+        // Check the mode's assigned scene references before trying to start a match.
+        public virtual bool ValidateConfiguration(out string error)
         {
             if (GridMap == null || turns == null || timer == null || playerTemplate == null)
             { error = "Assign the mode's map, turn system, timer and player template in the Inspector."; return false; }
@@ -58,6 +73,7 @@ namespace Escape4Now.GameModes
             return true;
         }
 
+        // Remember which actions this component enabled so cleanup does not disable actions owned by another system.
         public void EnableMatchInputs()
         {
             foreach (InputAction action in inputBindings.Actions)

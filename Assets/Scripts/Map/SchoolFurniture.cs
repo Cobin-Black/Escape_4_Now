@@ -1,3 +1,5 @@
+// Draws a school furniture prefab from its Inspector parts and fades it when it would hide a player.
+
 using System;
 using System.Collections.Generic;
 using Escape4Now.Obstacles;
@@ -124,6 +126,8 @@ namespace Escape4Now.Map
         }
 
         //The editor preview and the game use the same parts and drawing order.
+        // Order the editable parts before drawing them so overlapping isometric faces look consistent.
+        // Order the editable parts before drawing them so overlapping isometric faces look consistent.
         private void DrawParts(ObstacleFacing facing, Action<Part, int> draw)
         {
             var remaining = new List<Part>();
@@ -174,6 +178,8 @@ namespace Escape4Now.Map
         }
 
         //Fade room obstacles when they hide a player, like the hallway lockers.
+        // Fade only the obstructing furniture drawing; its grid blocking and stored item stay unchanged.
+        // Fade only the obstructing furniture drawing; its grid blocking and stored item stay unchanged.
         private void RefreshFade()
         {
             if (owner == null || renderers == null) return;

@@ -1,3 +1,5 @@
+// Provides the shared UI with the active session, player, map, camera and timer.
+
 using Escape4Now.GameModes;
 using Escape4Now.Multiplayer;
 using Escape4Now.Player;
@@ -22,7 +24,7 @@ namespace Escape4Now.UI
         public LocalMultiplayerSession Session => session;
         public TurnSystemController Turns => session != null && session.Mode != null ? session.Mode.Turns : turns;
         public GameTimer Timer => session != null && session.Mode != null ? session.Mode.Timer : timer;
-        public MapEventController Events => mapEvents;
+        public IMapEventSource Events => session != null && session.Mode is SurvivalModeController survival ? survival.Events : mapEvents;
         public Camera WorldCamera => worldCamera;
         // Provides the Monster reference for the match HUD.
         public MonsterCharacter Monster => monster;
@@ -34,6 +36,7 @@ namespace Escape4Now.UI
             {
                 if (!Playing) return null;
                 if (session == null) return standalonePlayer;
+                if (session.Mode is SurvivalModeController survival) return survival.ActiveTurnParticipant;
                 var players = session.Participants;
                 if (players == null) return null;
                 foreach (var player in players)

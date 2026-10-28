@@ -1,3 +1,5 @@
+// Shows the current turn, player, dice, time and mode-specific objective in the shared HUD.
+
 using Escape4Now.Multiplayer;
 using UnityEngine;
 using UnityEngine.UI;

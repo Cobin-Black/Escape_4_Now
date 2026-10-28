@@ -1,3 +1,5 @@
+// Manages the LAN lobby and match messages, with the host deciding the shared gameplay state.
+
 using System;
 using System.Collections.Generic;
 using System.Net;

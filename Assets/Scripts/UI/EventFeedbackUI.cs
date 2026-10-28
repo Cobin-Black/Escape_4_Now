@@ -1,3 +1,5 @@
+// Displays event messages and blackout shading using the event information supplied by the active mode.
+
 using UnityEngine;
 using UnityEngine.UI;
 

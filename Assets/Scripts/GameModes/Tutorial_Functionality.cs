@@ -111,6 +111,7 @@ namespace Escape4Now.GameModes
             //Reaching the exit pauses the game, so undo that from any earlier section.
             Time.timeScale = 1f;
             currentSection = pendingSection ?? startingSection;
+            // Reuse the configured Interact action so the lesson does not depend on a fixed keyboard key.
             interactAction = Escape4Now.Input.GameplayInputContext.Current != null
                 ? Escape4Now.Input.GameplayInputContext.Current.Interact : null;
             if (interactAction == null) Debug.LogWarning($"{name}: Input action 'Player/Interact' was not found.");

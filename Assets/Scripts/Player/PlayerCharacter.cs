@@ -1,3 +1,5 @@
+// Connects the active player's input to dice, grid movement, inventory and the current mode's rules.
+
 using Escape4Now.Map;
 using Escape4Now.TurnSystem;
 using Escape4Now.Items;
@@ -45,7 +47,7 @@ namespace Escape4Now.Player
         private int firstDie;
         private int secondDie;
         private int movesRemaining;
-        private MapEventController mapEvents;
+        private IMapEventSource mapEvents;
         private Vector2Int lastDirection = Vector2Int.up;
         private bool resolvingStep;
         private bool networkHasKey;
@@ -71,6 +73,7 @@ namespace Escape4Now.Player
         public bool IsCurrentTurn => turnSystem == null || turnSystem.IsPlayersTurn(this);
         //Blocks the previous player's last key press from reaching this player.
         public bool CanReadTurnInput => Time.timeScale > 0f
+            && (gameMode == null || gameMode.IsParticipantActive(this))
             && !Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused
             && (turnSystem == null || turnSystem.CanReadInput(this));
         private Coroutine sharedTilePositionRoutine;
@@ -101,7 +104,7 @@ namespace Escape4Now.Player
             registeredPosition = gridPosition;
             if (MovementMap != null)
             {
-                mapEvents = mapTemplate != null ? mapTemplate.GetComponent<MapEventController>() : null;
+                mapEvents = MovementMap.transform.GetComponent<IMapEventSource>();
                 MovementMap.SetOccupantPosition(gridPosition, gridPosition);
             }
         }
@@ -124,6 +127,12 @@ namespace Escape4Now.Player
 
             HandleDiceRollInput();
             if (IsRollAnimating) return;
+            if (hasRolled && !IsMoving && gameMode != null && gameMode.AutoEndStrandedTurn
+                && gameMode.FinishMovementTurn(this) && !HasAffordableStep())
+            {
+                turnSystem.AdvanceTurn();
+                return;
+            }
 
             Vector2Int direction = ReadDirectionPressedThisFrame();
             if (direction != Vector2Int.zero)
@@ -179,6 +188,7 @@ namespace Escape4Now.Player
             lastRoll = lucky ? Mathf.Max(first, second) : bad ? Mathf.Min(first, second) : first;
             secondDie = 0;
             movesRemaining = eventState.UseRoll(first, second);
+            if (gameMode != null) movesRemaining = gameMode.AdjustRollMovement(this, movesRemaining);
             if (roarSlowActive)
             {
                 movesRemaining = Mathf.Max(1, movesRemaining / 2);
@@ -233,6 +243,17 @@ namespace Escape4Now.Player
             return MoveToGridPosition(gridPosition + direction);
         }
 
+        private bool HasAffordableStep()
+        {
+            foreach (var step in new[] { Vector2Int.right, Vector2Int.up, Vector2Int.left, Vector2Int.down })
+            {
+                var next = gridPosition + step;
+                if (MovementMap.IsWalkable(next) && (!MovementMap.IsExit(next) || CanUseExit)
+                    && movesRemaining >= gameMode.MovementCost(next)) return true;
+            }
+            return false;
+        }
+
         //Starts a fresh movement budget, or consumes one frozen turn.
         public bool BeginEventTurn()
         {
@@ -260,6 +281,7 @@ namespace Escape4Now.Player
             mapTemplate = map as IsometricMapTemplate;
             configuredMap = map;
             if (mode != null) gameMode = mode;
+            mapEvents = map.transform.GetComponent<IMapEventSource>();
             SetupInputActions();
             turnSystem = turns;
             gridPosition = cell;
@@ -311,9 +333,11 @@ namespace Escape4Now.Player
         }
 
         //Places the player on an open tile without playing a movement animation.
+        // Move directly to a validated tile without an animation, such as for a safe teleport or placement.
         public bool SetGridPosition(Vector2Int newGridPosition)
         {
             if (Time.timeScale <= 0f || Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused
+                || gameMode != null && !gameMode.IsParticipantActive(this)
                 || (IsMoving && !resolvingStep) || hasReachedExit || MovementMap == null || !MovementMap.IsWalkable(newGridPosition))
             {
                 return false;
@@ -327,6 +351,7 @@ namespace Escape4Now.Player
         }
 
         //Checks the whole swap before moving anyone. Items, turns, and movement stay with their owners.
+        // Validate all participants before moving any of them, so a failed swap cannot leave a partial result.
         internal static bool SwitchLocations(IReadOnlyList<PlayerCharacter> participants, int[] destinations)
         {
             if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient || participants == null
@@ -358,7 +383,7 @@ namespace Escape4Now.Player
                 player.SnapToGridPosition();
             }
             //Shared destinations keep their player offsets after everyone has moved.
-            map.ReplacePlayerOccupants(cells);
+            RebuildMapOccupants(map);
             foreach (Vector2Int cell in cells) participants[0].RefreshSharedTilePositions(cell);
             return true;
         }
@@ -367,7 +392,7 @@ namespace Escape4Now.Player
         internal void ChangeEventMovement(int amount)
         {
             if (!resolvingStep || MovementMap == null) return;
-            movesRemaining = Mathf.Clamp(movesRemaining + Mathf.Clamp(amount, -2, 2), 0, MovementMap.Width * MovementMap.Height);
+            movesRemaining = Mathf.Clamp(movesRemaining + amount, 0, MovementMap.Width * MovementMap.Height);
         }
 
         //Checks all destinations before moving the group, without changing inventory or moves.
@@ -393,8 +418,17 @@ namespace Escape4Now.Player
                 participants[i].registeredPosition = targets[i];
                 participants[i].SnapToGridPosition();
             }
-            map.ReplacePlayerOccupants(targets);
+            RebuildMapOccupants(map);
             return true;
+        }
+
+        private static void RebuildMapOccupants(IPlayerGridMap map)
+        {
+            var occupied = new List<Vector2Int>();
+            foreach (var player in FindObjectsByType<PlayerCharacter>(FindObjectsSortMode.None))
+                if (player.isActiveAndEnabled && !player.hasReachedExit && player.MovementMap == map
+                    && (player.gameMode == null || player.gameMode.IsParticipantActive(player))) occupied.Add(player.gridPosition);
+            map.ReplacePlayerOccupants(occupied);
         }
 
         //Starts a move only when the player is ready and a valid route exists.
@@ -412,7 +446,10 @@ namespace Escape4Now.Player
                 return false;
             }
 
-            if (path.Count > movesRemaining) return false;
+            // Pay for every tile on the route, including the current mode's extra ground costs.
+            int totalCost = 0;
+            foreach (var cell in path) totalCost += gameMode != null ? gameMode.MovementCost(cell) : 1;
+            if (totalCost > movesRemaining) return false;
             //Players may share a tile; walls and the movement budget still limit the route.
             if (path.Count == 0 || (MovementMap.IsExit(path[0]) && !CanUseExit)) return false;
             moveRoutine = StartCoroutine(MoveAlongPath(path));
@@ -531,12 +568,13 @@ namespace Escape4Now.Player
                     break;
                 }
 
-                if (!MovementMap.IsWalkable(next) || movesRemaining <= 0)
-                    break;
+                int stepCost = gameMode != null ? gameMode.MovementCost(next) : 1;
 
+                if (!MovementMap.IsWalkable(next) || movesRemaining < stepCost)
+                    break;
                 if (MovementMap.IsExit(next) && !CanUseExit)
                 {
-                    Debug.Log("The exit is locked. Go find a key.");
+                    Debug.Log(gameMode != null ? gameMode.GetObjective(this) : "The exit is locked.");
                     break;
                 }
 
@@ -566,7 +604,8 @@ namespace Escape4Now.Player
                 transform.position = targetPosition;
                 lastDirection = next - gridPosition;
                 gridPosition = next;
-                movesRemaining--;
+
+                movesRemaining -= stepCost;
 
                 UpdateMapOccupancy(next);
                 CheckForItem(next);
@@ -579,7 +618,7 @@ namespace Escape4Now.Player
                         yield break;
                     }
 
-                    Debug.Log("The exit is locked. Go find a key.");
+                    Debug.Log(gameMode != null ? gameMode.GetObjective(this) : "The exit is locked.");
                 }
 
                 // Resolve each crossed tile before starting the next step.
@@ -611,7 +650,8 @@ namespace Escape4Now.Player
             moveRoutine = null;
             RefreshSharedTilePositions(gridPosition);
 
-            if (movesRemaining == 0)
+
+            if (movesRemaining == 0 && (gameMode == null || gameMode.FinishMovementTurn(this)))
             {
                 if (turnSystem != null)
                     turnSystem.AdvanceTurn();
@@ -676,6 +716,7 @@ namespace Escape4Now.Player
             if (gameTimer != null && gameTimer.HasExpired) return;
             hasReachedExit = true;
             moveRoutine = null;
+            if (gameMode != null && gameMode.OnPlayerEscaped(this)) return;
             Debug.Log($"{name} reached the exit. You win!");
             Time.timeScale = 0f;
         }

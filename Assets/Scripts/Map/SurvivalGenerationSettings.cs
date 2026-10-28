@@ -1,3 +1,5 @@
+// Inspector rules for outdoor map sizes, possible areas, paths, obstacles and placement chances.
+
 using System;
 
 namespace Escape4Now.Map
@@ -304,6 +306,7 @@ namespace Escape4Now.Map
 #endif
         private OutdoorPropRule[] previousProps;
 
+        //Move older saved obstacle settings to the spawner once, without discarding the existing choices.
         internal bool TryTakePreviousObstacles(out SurvivalObstacleSettings settings)
         {
             settings = null;

@@ -1,3 +1,5 @@
+// Shows the current lesson, its control hint and target highlight while the tutorial manages progress.
+
 using System.Collections.Generic;
 using Escape4Now.GameModes;
 using Escape4Now.Map;
@@ -132,6 +134,7 @@ namespace Escape4Now.UI
             PositionCard(id, placementTarget, player);
         }
 
+        // Place the lesson card around its current target instead of covering the area being demonstrated.
         private void PositionCard(string id, Rect? target, PlayerCharacter player)
         {
             var rect = (RectTransform)panel.transform;
@@ -201,6 +204,7 @@ namespace Escape4Now.UI
             }
         }
 
+        // Read lesson controls from the same action references as gameplay so rebinding also updates the tutorial.
         private InputAction ResolveAction(TutorialAction action)
         {
             var input = GameplayInputContext.Current;

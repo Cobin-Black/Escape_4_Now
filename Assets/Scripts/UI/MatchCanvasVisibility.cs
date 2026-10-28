@@ -1,3 +1,5 @@
+// Hides match UI outside Play Mode unless the Inspector preview option is enabled.
+
 using UnityEngine;
 
 namespace Escape4Now.UI

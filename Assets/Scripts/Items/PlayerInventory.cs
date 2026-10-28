@@ -16,6 +16,7 @@ namespace Escape4Now.Items
         private readonly List<Item> items = new List<Item>();
 
         //List of important items currently owned by this player.
+        // Keep the Race key separate from normal inventory slots so it does not replace an ordinary item.
         private readonly List<KeyItem> keyItems = new List<KeyItem>();
 
         //Use Item action from the project-wide Input System asset.

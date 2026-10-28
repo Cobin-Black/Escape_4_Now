@@ -1,3 +1,5 @@
+// Keeps a saved UI panel inside the available screen space without changing gameplay.
+
 using UnityEngine;
 
 namespace Escape4Now.UI

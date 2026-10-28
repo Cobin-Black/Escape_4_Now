@@ -1,3 +1,5 @@
+// Shows a compact name above the current player and keeps the Race key badge clear of that name.
+
 using Escape4Now.Multiplayer;
 using Escape4Now.GameModes;
 using Escape4Now.Player;
@@ -76,6 +78,7 @@ namespace Escape4Now.UI
                 keyIcon.sprite = keyLook.sprite;
                 keyIcon.color = keyLook.color;
             }
+            // Reserve extra label space for the key icon so it cannot overlap the player's name.
             float keySpace = hasKey ? keyIcon.rectTransform.rect.width + keyIconSpacing : 0f;
             var textRect = label.rectTransform;
             textRect.offsetMin = new Vector2(textPadding.x + keySpace, textRect.offsetMin.y);

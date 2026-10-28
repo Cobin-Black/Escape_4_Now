@@ -1,3 +1,5 @@
+// Draws the player's visible body and turn marker while keeping the player's identity color.
+
 using UnityEngine;
 using Escape4Now.Multiplayer;
 

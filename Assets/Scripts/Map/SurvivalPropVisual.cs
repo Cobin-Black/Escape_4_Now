@@ -1,3 +1,5 @@
+// Draws an outdoor prop from its editable parts and lines, using the map's size and drawing order.
+
 using System;
 using System.Collections.Generic;
 using UnityEngine;
@@ -53,6 +55,7 @@ namespace Escape4Now.Map
         }
 #endif
 
+        //Turn the prefab's saved parts and lines into a drawing at the current map's tile size.
         public void Build(Vector2 tileSize, Vector2 footprint, Material sharedMaterial, int order, bool generated = true, int quarterTurns = -1)
         {
             Clear();

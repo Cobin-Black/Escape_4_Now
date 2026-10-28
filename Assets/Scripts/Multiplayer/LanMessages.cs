@@ -1,3 +1,5 @@
+// Data sent between the LAN host and clients for setup, player actions and shared match state.
+
 using System;
 using Escape4Now.Map;
 

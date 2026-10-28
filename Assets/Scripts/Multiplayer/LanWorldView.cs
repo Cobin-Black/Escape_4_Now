@@ -1,3 +1,5 @@
+// Copies the host's shared match state into the client's map, players, inventory and event display.
+
 using System;
 using System.Collections.Generic;
 using Escape4Now.Items;
@@ -32,6 +34,7 @@ namespace Escape4Now.Multiplayer
             : item is KeyStealerItem ? 3 : item is KeyItem ? 4 : 0;
 
         //The host sends results, never another player's requested dice value or position.
+        // Collect the host's current state into one message that clients can display.
         public LanSnapshot Capture()
         {
             var state = new LanSnapshot { seed = map.LayoutSeed, exitX = map.ExitPosition.x,
@@ -98,6 +101,7 @@ namespace Escape4Now.Multiplayer
         }
 
         //Rejects malformed state before creating any objects.
+        // Check received map and player data before using it to create or update client objects.
         public static bool IsValid(LanSnapshot state)
         {
             if (state == null || state.mapSettings == null || !state.mapSettings.IsValid
@@ -133,6 +137,7 @@ namespace Escape4Now.Multiplayer
         private static bool Cell(int x, int y) => x >= 0 && y >= 0 && x < SchoolMapLayout.Size && y < SchoolMapLayout.Size;
 
         //Only the first snapshot creates the map. Later snapshots update confirmed results.
+        // Apply the host's result; clients do not rerun item placement or event randomness.
         public bool Apply(LanSnapshot state)
         {
             if (!IsValid(state)) return false;

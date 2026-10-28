@@ -1,3 +1,5 @@
+// Highlights the current lesson's target using the tutorial's existing screen-space UI.
+
 using UnityEngine;
 using UnityEngine.UI;
 

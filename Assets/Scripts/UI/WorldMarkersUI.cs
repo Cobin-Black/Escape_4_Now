@@ -1,3 +1,5 @@
+// Places key and stored-item markers on screen and spaces them so they do not cover names or one another.
+
 using System.Collections.Generic;
 using Escape4Now.GameModes;
 using Escape4Now.Multiplayer;
@@ -75,6 +77,7 @@ namespace Escape4Now.UI
             ArrangeStorageMarkers();
         }
 
+        // Spread visible storage labels apart so nearby item containers do not cover one another.
         private void ArrangeStorageMarkers()
         {
             visibleStorageMarkers.Clear();
