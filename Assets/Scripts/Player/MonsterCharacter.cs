@@ -319,9 +319,29 @@ namespace Escape4Now.Player
                         && cell.y >= previousAnchor.y && cell.y <= previousAnchor.y + 1)
                         continue;
 
-                    if (DamagePlayersAt(cell))
+                    if (DamagePlayersAt(cell, newAnchor - previousAnchor))
                         hitPlayer = true;
                 }
+            }
+
+            return hitPlayer;
+        }
+
+        // Damages and knocks back a player hit by the Monster's movement.
+        private bool DamagePlayersAt(Vector2Int position, Vector2Int monsterDirection)
+        {
+            bool hitPlayer = false;
+
+            foreach (PlayerCharacter player in players)
+            {
+                if (player == null || !player.isActiveAndEnabled || player.Health <= 0)
+                    continue;
+
+                if (player.GridPosition != position)
+                    continue;
+
+                player.TakeMonsterCollision(monsterDirection);
+                hitPlayer = true;
             }
 
             return hitPlayer;
