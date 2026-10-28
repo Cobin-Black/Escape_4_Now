@@ -424,10 +424,10 @@ namespace Escape4Now.Player
 
         private static void RebuildMapOccupants(IPlayerGridMap map)
         {
-            var occupied=new List<Vector2Int>();
-            foreach(var player in FindObjectsByType<PlayerCharacter>(FindObjectsSortMode.None))
-                if(player.isActiveAndEnabled && !player.hasReachedExit && player.MovementMap==map
-                    && (player.gameMode==null || player.gameMode.IsParticipantActive(player))) occupied.Add(player.gridPosition);
+            var occupied = new List<Vector2Int>();
+            foreach (var player in FindObjectsByType<PlayerCharacter>(FindObjectsSortMode.None))
+                if (player.isActiveAndEnabled && !player.hasReachedExit && player.MovementMap == map
+                    && (player.gameMode == null || player.gameMode.IsParticipantActive(player))) occupied.Add(player.gridPosition);
             map.ReplacePlayerOccupants(occupied);
         }
 
@@ -550,28 +550,63 @@ namespace Escape4Now.Player
             // Move through the grid one tile at a time.
             foreach (Vector2Int next in path)
             {
+                // Check for the Monster before checking tile walkability.
+                if (IsMonsterTile(next))
+                {
+                    Vector2Int attemptedDirection = next - gridPosition;
+
+                    // The collision consumes one movement point.
+                    movesRemaining--;
+
+                    // Push the player away, using fallback directions if necessary.
+                    PushPlayerBack(attemptedDirection);
+
+                    // The player takes one heart of damage.
+                    TakeDamage();
+
+                    // Stop the current movement route after the collision.
+                    break;
+                }
+
                 int stepCost = gameMode != null ? gameMode.MovementCost(next) : 1;
-                if (!MovementMap.IsWalkable(next) || movesRemaining < stepCost) break;
+
+                if (!MovementMap.IsWalkable(next) || movesRemaining < stepCost)
+                    break;
                 if (MovementMap.IsExit(next) && !CanUseExit)
                 {
                     Debug.Log(gameMode != null ? gameMode.GetObjective(this) : "The exit is locked.");
                     break;
                 }
+
                 Vector3 targetPosition = MovementMap.GridToWorld(next);
                 targetPosition.z = -1f;
-                //Face the way this step goes on screen before sliding to the next tile.
-                if (appearance != null) appearance.FaceToward(targetPosition - MovementMap.GridToWorld(gridPosition));
+
+                // Face the way this step goes on screen before sliding to the next tile.
+                if (appearance != null)
+                {
+                    appearance.FaceToward(
+                        targetPosition - MovementMap.GridToWorld(gridPosition));
+                }
+
                 while (Vector3.Distance(transform.position, targetPosition) > 0.01f)
                 {
-                    transform.position = Vector3.MoveTowards(transform.position, targetPosition, moveSpeed * Time.deltaTime);
-                    float row = (transform.position.y - MovementMap.transform.position.y) / (MovementMap.TileHeight * 0.5f);
+                    transform.position = Vector3.MoveTowards(
+                        transform.position, targetPosition, moveSpeed * Time.deltaTime);
+
+                    float row = (transform.position.y - MovementMap.transform.position.y)
+                        / (MovementMap.TileHeight * 0.5f);
+
                     spriteRenderer.sortingOrder = 505 - Mathf.RoundToInt(row * 10f);
+
                     yield return null;
                 }
+
                 transform.position = targetPosition;
                 lastDirection = next - gridPosition;
                 gridPosition = next;
+
                 movesRemaining -= stepCost;
+
                 UpdateMapOccupancy(next);
                 CheckForItem(next);
 
@@ -586,32 +621,42 @@ namespace Escape4Now.Player
                     Debug.Log(gameMode != null ? gameMode.GetObjective(this) : "The exit is locked.");
                 }
 
-                //Resolve each crossed tile before starting the next step.
+                // Resolve each crossed tile before starting the next step.
                 bool endTurn = false;
                 resolvingStep = true;
+
                 try
                 {
-                    if (mapEvents != null) endTurn = mapEvents.ResolveStep(this, lastDirection);
+                    if (mapEvents != null)
+                        endTurn = mapEvents.ResolveStep(this, lastDirection);
                 }
                 finally
                 {
                     resolvingStep = false;
                 }
-                if (hasReachedExit) yield break;
-                if (endTurn) movesRemaining = 0;
-                //A teleport or extra move cancels the old route from this point.
-                if (endTurn || gridPosition != next) break;
+
+                if (hasReachedExit)
+                    yield break;
+
+                if (endTurn)
+                    movesRemaining = 0;
+
+                // A teleport or extra move cancels the old route from this point.
+                if (endTurn || gridPosition != next)
+                    break;
             }
+
             SnapToGridPosition();
             moveRoutine = null;
             RefreshSharedTilePositions(gridPosition);
+
+
             if (movesRemaining == 0 && (gameMode == null || gameMode.FinishMovementTurn(this)))
             {
-                if (turnSystem != null) turnSystem.AdvanceTurn();
+                if (turnSystem != null)
+                    turnSystem.AdvanceTurn();
                 else
-                {
                     BeginEventTurn();
-                }
             }
         }
 
@@ -806,6 +851,102 @@ namespace Escape4Now.Player
         public void ApplyMonsterSlow()
         {
             roarSlowActive = true;
+        }
+
+        //Checks whether a tile belongs to the Monster's 2x2 footprint.
+        private bool IsMonsterTile(Vector2Int position)
+        {
+            MonsterCharacter monster = FindFirstObjectByType<MonsterCharacter>();
+
+            if (monster == null || !monster.isActiveAndEnabled)
+            {
+                return false;
+            }
+
+            Vector2Int anchor = monster.GridPosition;
+
+            return position.x >= anchor.x
+                && position.x <= anchor.x + 1
+                && position.y >= anchor.y
+                && position.y <= anchor.y + 1;
+        }
+
+        //Pushes the player up to two tiles away from the Monster, trying fallback directions only when the first tile in the previous direction is blocked.
+        private void PushPlayerBack(Vector2Int attemptedDirection)
+        {
+            Vector2Int backward = -attemptedDirection;
+            Vector2Int sideOne;
+            Vector2Int sideTwo;
+
+            if (attemptedDirection.x != 0)
+            {
+                sideOne = Vector2Int.up;
+                sideTwo = Vector2Int.down;
+            }
+            else
+            {
+                sideOne = Vector2Int.left;
+                sideTwo = Vector2Int.right;
+            }
+
+            Vector2Int[] directions =
+            {
+        backward,
+        sideOne,
+        sideTwo,
+        attemptedDirection
+    };
+
+            foreach (Vector2Int direction in directions)
+            {
+                Vector2Int firstPosition = gridPosition + direction;
+
+                // Try another direction if the first tile is blocked.
+                if (MovementMap == null
+                    || !MovementMap.IsWalkable(firstPosition)
+                    || IsMonsterTile(firstPosition))
+                {
+                    continue;
+                }
+
+                // This direction works. Move up to two tiles, stopping if blocked.
+                for (int i = 0; i < 2; i++)
+                {
+                    Vector2Int nextPosition = gridPosition + direction;
+
+                    if (!MovementMap.IsWalkable(nextPosition)
+                        || IsMonsterTile(nextPosition))
+                    {
+                        break;
+                    }
+
+                    gridPosition = nextPosition;
+
+                    Vector3 worldPosition = MovementMap.GridToWorld(gridPosition);
+                    transform.position = new Vector3(worldPosition.x, worldPosition.y, -1f);
+
+                    UpdateMapOccupancy(gridPosition);
+                }
+
+                RefreshSharedTilePositions(gridPosition);
+                return;
+            }
+
+            // No safe direction was available, so leave the player in place.
+            RefreshSharedTilePositions(gridPosition);
+        }
+
+        // Handles a collision caused by the Monster moving into this player.
+        public void TakeMonsterCollision(Vector2Int monsterDirection)
+        {
+            if (health <= 0)
+                return;
+
+            // Push the player in the direction the Monster was moving.
+            PushPlayerBack(-monsterDirection);
+
+            // Apply one heart of damage using the existing health system.
+            TakeDamage();
         }
 
         //Stops tracking this player when the scene or participant is removed.

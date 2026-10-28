@@ -55,6 +55,7 @@ namespace Escape4Now.Map
     public sealed class SurvivalMapLayout
     {
         private const int Bands = 3;
+        private const int MonsterClearingSize = 4;
         private static readonly int[] StepX = { 1, 0, -1, 0 }, StepY = { 0, 1, 0, -1 };
         private readonly SurvivalGenerationSettings settings;
         private readonly SurvivalObstacleSettings obstacleSettings;
@@ -125,9 +126,9 @@ namespace Escape4Now.Map
             Array.Clear(parkingCells, 0, parkingCells.Length);
             areas.Clear(); props.Clear(); spawns.Clear(); spawnCandidates.Clear(); parkingBays.Clear();
             for (int y = 0; y < Height; y++)
-            for (int x = 0; x < Width; x++)
-                if (x == 0 || y == 0 || x == Width - 1 || y == Height - 1)
-                { surface[y * Width + x] = OutdoorSurface.Fence; blocked[y * Width + x] = true; }
+                for (int x = 0; x < Width; x++)
+                    if (x == 0 || y == 0 || x == Width - 1 || y == Height - 1)
+                    { surface[y * Width + x] = OutdoorSurface.Fence; blocked[y * Width + x] = true; }
 
             int[] widths = Partition(Width), heights = Partition(Height);
             if (widths == null || heights == null) return false;
@@ -141,13 +142,13 @@ namespace Escape4Now.Map
                 yy += heights[row] + settings.PathWidth;
             }
             for (int y = 1; y < Height - 1; y++)
-            for (int x = 1; x < Width - 1; x++)
-            {
-                bool insideSlot = false;
-                foreach (Rect slot in slots) if (slot.Contains(x, y)) { insideSlot = true; break; }
-                if (!insideSlot)
-                { int cell = y * Width + x; surface[cell] = OutdoorSurface.Path; protectedPath[cell] = mainPath[cell] = true; }
-            }
+                for (int x = 1; x < Width - 1; x++)
+                {
+                    bool insideSlot = false;
+                    foreach (Rect slot in slots) if (slot.Contains(x, y)) { insideSlot = true; break; }
+                    if (!insideSlot)
+                    { int cell = y * Width + x; surface[cell] = OutdoorSurface.Path; protectedPath[cell] = mainPath[cell] = true; }
+                }
 
             OutdoorAreaRule field = Array.Find(settings.Areas, rule => rule.Area == OutdoorAreaKind.TrackField);
             var pairs = new List<(int first, int second, bool vertical)>();
@@ -164,29 +165,36 @@ namespace Escape4Now.Map
             Shuffle(available);
             //Required areas get first choice; optional areas never crowd one out.
             foreach (bool required in new[] { true, false })
-            foreach (OutdoorAreaRule rule in settings.Areas)
-            {
-                if (rule.Area == OutdoorAreaKind.TrackField || rule.Required != required || (!required && random.NextDouble() >= rule.Chance)) continue;
-                int chosen = available.FindIndex(i => CanFit(rule, slots[i], false));
-                if (chosen < 0) { if (required) return false; continue; }
-                BuildArea(rule, slots[available[chosen]], false);
-                available.RemoveAt(chosen);
-            }
+                foreach (OutdoorAreaRule rule in settings.Areas)
+                {
+                    if (rule.Area == OutdoorAreaKind.TrackField || rule.Required != required || (!required && random.NextDouble() >= rule.Chance)) continue;
+                    int chosen = available.FindIndex(i => CanFit(rule, slots[i], false));
+                    if (chosen < 0) { if (required) return false; continue; }
+                    BuildArea(rule, slots[available[chosen]], false);
+                    available.RemoveAt(chosen);
+                }
             foreach (int unused in available)
                 if (random.NextDouble() < settings.CourtyardPocket.Chance && CanFit(settings.CourtyardPocket, slots[unused], false))
                 {
                     BuildArea(settings.CourtyardPocket, slots[unused], false);
                     areas[areas.Count - 1].IsPocket = true;
                 }
+            CreateMonsterClearing();
             if (!IsConnected()) return false;
+
             foreach (OutdoorPropRule rule in obstacleSettings.Rules)
             {
-                if (Array.IndexOf(rule.AllowedAreas, OutdoorAreaKind.None) >= 0 && !PlaceProps(rule, null)) return false;
+                if (Array.IndexOf(rule.AllowedAreas, OutdoorAreaKind.None) >= 0
+                    && !PlaceProps(rule, null)) return false;
+
                 foreach (OutdoorArea area in areas)
                     if (Array.IndexOf(rule.AllowedAreas, area.Kind) >= 0
-                        && (area.Kind != OutdoorAreaKind.Courts || rule.CourtSport == OutdoorCourtSport.Any || rule.CourtSport == area.CourtSport)
+                        && (area.Kind != OutdoorAreaKind.Courts
+                            || rule.CourtSport == OutdoorCourtSport.Any
+                            || rule.CourtSport == area.CourtSport)
                         && !PlaceProps(rule, area)) return false;
             }
+
             return ChooseSpawns();
         }
 
@@ -241,30 +249,30 @@ namespace Escape4Now.Map
             if (area.Kind == OutdoorAreaKind.Courts)
                 area.CourtSport = random.NextDouble() < settings.TennisCourtChance ? OutdoorCourtSport.Tennis : OutdoorCourtSport.Basketball;
             for (int y = area.Y; y < area.Y + height; y++)
-            for (int x = area.X; x < area.X + width; x++)
-            {
-                int cell = y * Width + x;
-                areaTypes[cell] = area.Kind; surface[cell] = AreaSurface(area.Kind);
-                if (area.CourtSport == OutdoorCourtSport.Tennis) surface[cell] = OutdoorSurface.TennisCourt;
-                mainPath[cell] = false; protectedPath[cell] = false;
-                bool fence = area.Fenced && (x == area.X || y == area.Y || x == area.X + width - 1 || y == area.Y + height - 1);
-                if (fence) { blocked[cell] = true; surface[cell] = OutdoorSurface.Fence; continue; }
-                int edge = Math.Min(Math.Min(x - area.X - inset, area.X + width - 1 - inset - x),
-                    Math.Min(y - area.Y - inset, area.Y + height - 1 - inset - y));
-                if (edge < settings.AreaWalkwayWidth) protectedPath[cell] = true;
-                if (area.Kind == OutdoorAreaKind.Pool && x >= area.WaterX && y >= area.WaterY
-                    && x < area.WaterX + area.WaterWidth && y < area.WaterY + area.WaterHeight)
-                { surface[cell] = OutdoorSurface.Water; blocked[cell] = true; }
-                if (area.Kind == OutdoorAreaKind.TrackField)
+                for (int x = area.X; x < area.X + width; x++)
                 {
-                    double dx = x + .5 - (area.X + width * .5), dy = y + .5 - (area.Y + height * .5);
-                    double outer = dx * dx / (width * width * .25) + dy * dy / (height * height * .25);
-                    double rx = Math.Max(.5, width * .5 - settings.TrackWidth), ry = Math.Max(.5, height * .5 - settings.TrackWidth);
-                    double inner = dx * dx / (rx * rx) + dy * dy / (ry * ry);
-                    surface[cell] = outer > 1 ? OutdoorSurface.Grass : inner >= 1 ? OutdoorSurface.Track : OutdoorSurface.Field;
-                    if (surface[cell] == OutdoorSurface.Field) protectedPath[cell] = true;
+                    int cell = y * Width + x;
+                    areaTypes[cell] = area.Kind; surface[cell] = AreaSurface(area.Kind);
+                    if (area.CourtSport == OutdoorCourtSport.Tennis) surface[cell] = OutdoorSurface.TennisCourt;
+                    mainPath[cell] = false; protectedPath[cell] = false;
+                    bool fence = area.Fenced && (x == area.X || y == area.Y || x == area.X + width - 1 || y == area.Y + height - 1);
+                    if (fence) { blocked[cell] = true; surface[cell] = OutdoorSurface.Fence; continue; }
+                    int edge = Math.Min(Math.Min(x - area.X - inset, area.X + width - 1 - inset - x),
+                        Math.Min(y - area.Y - inset, area.Y + height - 1 - inset - y));
+                    if (edge < settings.AreaWalkwayWidth) protectedPath[cell] = true;
+                    if (area.Kind == OutdoorAreaKind.Pool && x >= area.WaterX && y >= area.WaterY
+                        && x < area.WaterX + area.WaterWidth && y < area.WaterY + area.WaterHeight)
+                    { surface[cell] = OutdoorSurface.Water; blocked[cell] = true; }
+                    if (area.Kind == OutdoorAreaKind.TrackField)
+                    {
+                        double dx = x + .5 - (area.X + width * .5), dy = y + .5 - (area.Y + height * .5);
+                        double outer = dx * dx / (width * width * .25) + dy * dy / (height * height * .25);
+                        double rx = Math.Max(.5, width * .5 - settings.TrackWidth), ry = Math.Max(.5, height * .5 - settings.TrackWidth);
+                        double inner = dx * dx / (rx * rx) + dy * dy / (ry * ry);
+                        surface[cell] = outer > 1 ? OutdoorSurface.Grass : inner >= 1 ? OutdoorSurface.Track : OutdoorSurface.Field;
+                        if (surface[cell] == OutdoorSurface.Field) protectedPath[cell] = true;
+                    }
                 }
-            }
             int firstSide = random.Next(4);
             for (int entrance = 0; entrance < rule.EntranceCount; entrance++)
             {
@@ -346,23 +354,23 @@ namespace Escape4Now.Map
             bool farSide = !twoRows && random.Next(2) == 0;
             int aisleStart = farSide ? cross - depth - settings.ParkingAisleWidth : depth;
             for (int y = area.Y + margin; y < area.Y + area.Height - margin; y++)
-            for (int x = area.X + margin; x < area.X + area.Width - margin; x++)
-            {
-                int coordinate = alongX ? y - area.Y - margin : x - area.X - margin;
-                if (coordinate >= aisleStart && coordinate < aisleStart + settings.ParkingAisleWidth)
-                    protectedPath[y * Width + x] = true;
-            }
+                for (int x = area.X + margin; x < area.X + area.Width - margin; x++)
+                {
+                    int coordinate = alongX ? y - area.Y - margin : x - area.X - margin;
+                    if (coordinate >= aisleStart && coordinate < aisleStart + settings.ParkingAisleWidth)
+                        protectedPath[y * Width + x] = true;
+                }
             for (int row = 0; row < (twoRows ? 2 : 1); row++)
-            for (int position = 0; position + settings.ParkingBayWidth <= length; position += settings.ParkingBayWidth + settings.ParkingBaySpacing)
-            {
-                int offset = row == 1 || farSide ? cross - depth : 0;
-                var bay = new OutdoorParkingBay(area.X + margin + (alongX ? position : offset),
-                    area.Y + margin + (alongX ? offset : position), alongX ? settings.ParkingBayWidth : depth,
-                    alongX ? depth : settings.ParkingBayWidth, area);
-                parkingBays.Add(bay);
-                for (int y = bay.Y; y < bay.Y + bay.Height; y++) for (int x = bay.X; x < bay.X + bay.Width; x++)
-                    parkingCells[y * Width + x] = true;
-            }
+                for (int position = 0; position + settings.ParkingBayWidth <= length; position += settings.ParkingBayWidth + settings.ParkingBaySpacing)
+                {
+                    int offset = row == 1 || farSide ? cross - depth : 0;
+                    var bay = new OutdoorParkingBay(area.X + margin + (alongX ? position : offset),
+                        area.Y + margin + (alongX ? offset : position), alongX ? settings.ParkingBayWidth : depth,
+                        alongX ? depth : settings.ParkingBayWidth, area);
+                    parkingBays.Add(bay);
+                    for (int y = bay.Y; y < bay.Y + bay.Height; y++) for (int x = bay.X; x < bay.X + bay.Width; x++)
+                        parkingCells[y * Width + x] = true;
+                }
         }
 
         private bool PlaceProps(OutdoorPropRule rule, OutdoorArea area)
@@ -445,8 +453,8 @@ namespace Escape4Now.Map
                 {
                     bool nearEdge = false;
                     for (int dy = -rule.EdgeBandWidth; dy <= rule.EdgeBandWidth; dy++)
-                    for (int dx = -rule.EdgeBandWidth; dx <= rule.EdgeBandWidth; dx++)
-                        if (GetArea(x + dx, y + dy) != OutdoorAreaKind.None || IsMainPath(x + dx, y + dy)) nearEdge = true;
+                        for (int dx = -rule.EdgeBandWidth; dx <= rule.EdgeBandWidth; dx++)
+                            if (GetArea(x + dx, y + dy) != OutdoorAreaKind.None || IsMainPath(x + dx, y + dy)) nearEdge = true;
                     return nearEdge;
                 }
                 int side = random.Next(4), offset = random.Next(rule.EdgeBandWidth);
@@ -471,34 +479,97 @@ namespace Escape4Now.Map
         private void SetFootprint(int x, int y, int w, int h, bool value)
         { for (int yy = y; yy < y + h; yy++) for (int xx = x; xx < x + w; xx++) blocked[yy * Width + xx] = value; }
 
+        // Creates a 4x4 open clearing at the center of the Survival map.
+        // Keeps the clearing walkable and prevents props from spawning inside it.
+        private void CreateMonsterClearing()
+        {
+            int startX = (Width - MonsterClearingSize) / 2;
+            int startY = (Height - MonsterClearingSize) / 2;
+
+            for (int y = startY; y < startY + MonsterClearingSize; y++)
+            {
+                for (int x = startX; x < startX + MonsterClearingSize; x++)
+                {
+                    int cell = y * Width + x;
+
+                    surface[cell] = OutdoorSurface.Grass;
+                    areaTypes[cell] = OutdoorAreaKind.None;
+                    blocked[cell] = false;
+                    protectedPath[cell] = true;
+                    mainPath[cell] = true;
+                }
+            }
+        }
+
         // Pick separate walkable spawn cells from the completed layout.
         // Pick separate walkable spawn cells from the completed layout.
+
         private bool ChooseSpawns()
         {
-            for (int y = 1; y < Height - 1; y++) for (int x = 1; x < Width - 1; x++)
+            // Calculate the Monster's position in the center clearing.
+            int monsterX = (Width - 4) / 2 + 1;
+            int monsterY = (Height - 4) / 2 + 1;
+
+            for (int y = 1; y < Height - 1; y++)
             {
-                bool safe = IsWalkable(x, y) && !occupied[y * Width + x];
-                for (int dy = -settings.SpawnClearance; safe && dy <= settings.SpawnClearance; dy++)
-                for (int dx = -settings.SpawnClearance; safe && dx <= settings.SpawnClearance; dx++) safe = IsWalkable(x + dx, y + dy);
-                if (safe) spawnCandidates.Add(y * Width + x);
+                for (int x = 1; x < Width - 1; x++)
+                {
+                    // Keep players at least 8 tiles away from the Monster.
+                    int monsterDistance = Math.Abs(x - monsterX) + Math.Abs(y - monsterY);
+
+                    if (monsterDistance < 8)
+                        continue;
+
+                    bool safe = IsWalkable(x, y) && !occupied[y * Width + x];
+
+                    for (int dy = -settings.SpawnClearance; safe && dy <= settings.SpawnClearance; dy++)
+                    {
+                        for (int dx = -settings.SpawnClearance; safe && dx <= settings.SpawnClearance; dx++)
+                        {
+                            safe = IsWalkable(x + dx, y + dy);
+                        }
+                    }
+
+                    if (safe)
+                        spawnCandidates.Add(y * Width + x);
+                }
             }
+
             var candidates = new List<int>(spawnCandidates);
             Shuffle(candidates);
+
             while (spawns.Count < settings.PlayerSpawnCount)
             {
                 int best = -1, score = -1;
+
                 foreach (int cell in candidates)
                 {
-                    if (spawns.Contains(cell)) continue;
+                    if (spawns.Contains(cell))
+                        continue;
+
                     int separation = Width + Height;
-                    foreach (int spawn in spawns) separation = Math.Min(separation, Distance(cell, spawn));
-                    if (separation >= settings.MinimumSpawnDistance && separation > score) { score = separation; best = cell; }
+
+                    foreach (int spawn in spawns)
+                    {
+                        separation = Math.Min(separation, Distance(cell, spawn));
+                    }
+
+                    if (separation >= settings.MinimumSpawnDistance && separation > score)
+                    {
+                        score = separation;
+                        best = cell;
+                    }
                 }
-                if (best < 0) return false;
+
+                if (best < 0)
+                    return false;
+
                 spawns.Add(best);
             }
+
             return true;
         }
+
 
         private int Distance(int a, int b) => Math.Abs(a % Width - b % Width) + Math.Abs(a / Width - b / Width);
         private int Degree(int cell)

@@ -66,89 +66,151 @@ namespace Escape4Now.Map
             this.settings = settings;
             SurvivorCount = survivors;
             settings.Validate(survivors);
+
             var count = settings.ForSurvivors(survivors);
             Required = count.required;
+
             var random = new System.Random(unchecked(map.Seed ^ 0x17A5721));
+
             for (int attempt = 0; attempt < settings.placementAttempts; attempt++)
             {
                 tasks.Clear();
                 exits.Clear();
                 objects.Clear();
                 reserved.Clear();
+
                 foreach (var prop in map.Props)
+                {
                     for (int y = prop.Y; y < prop.Y + prop.Height; y++)
+                    {
                         for (int x = prop.X; x < prop.X + prop.Width; x++)
+                        {
                             reserved.Add(new Vector2Int(x, y));
+                        }
+                    }
+                }
+
                 foreach (int spawn in map.PlayerSpawns)
+                {
                     Reserve(Cell(spawn), settings.spawnClearance);
+                }
+
                 var available = AllCells();
                 Shuffle(available, random);
+
+                // Spawn the Monster in the center of the 4x4 clearing.
                 bool monsterFound = false;
-                int bestDistance = -1;
-                foreach (var cell in available)
+
+                int clearingStartX = (map.Width - 4) / 2;
+                int clearingStartY = (map.Height - 4) / 2;
+
+                Vector2Int centerSpawn = new Vector2Int(
+                    clearingStartX + (4 - settings.monsterFootprint.x) / 2,
+                    clearingStartY + (4 - settings.monsterFootprint.y) / 2
+                );
+
+                bool fits = true;
+
+                for (int y = 0; y < settings.monsterFootprint.y; y++)
                 {
-                    bool fits = true;
-                    for (int y = 0; y < settings.monsterFootprint.y; y++)
-                        for (int x = 0; x < settings.monsterFootprint.x; x++)
+                    for (int x = 0; x < settings.monsterFootprint.x; x++)
+                    {
+                        Vector2Int part = centerSpawn + new Vector2Int(x, y);
+
+                        if (!IsWalkable(part) || reserved.Contains(part))
                         {
-                            var part = cell + new Vector2Int(x, y);
-                            if (!IsWalkable(part) || reserved.Contains(part)) fits = false;
+                            fits = false;
                         }
-                    if (!fits)
-                        continue;
-                    int distance = int.MaxValue;
-                    foreach (int spawn in map.PlayerSpawns)
-                        distance = Math.Min(distance, Distance(cell, Cell(spawn)));
-                    if (distance <= bestDistance)
-                        continue;
-                    bestDistance = distance;
-                    MonsterSpawn = cell;
+                    }
+                }
+
+                if (fits)
+                {
+                    MonsterSpawn = centerSpawn;
                     monsterFound = true;
                 }
 
                 if (!monsterFound)
                     continue;
+
                 for (int y = 0; y < settings.monsterFootprint.y; y++)
+                {
                     for (int x = 0; x < settings.monsterFootprint.x; x++)
-                        Reserve(MonsterSpawn + new Vector2Int(x, y), settings.spawnClearance);
+                    {
+                        Reserve(
+                            MonsterSpawn + new Vector2Int(x, y),
+                            settings.spawnClearance
+                        );
+                    }
+                }
+
                 int exitSide = random.Next(4);
+
                 for (int exitIndex = 0; exitIndex < settings.escapeCount; exitIndex++)
                 {
-                    if (exitIndex > 0 && exitIndex % 2 == 0) exitSide = random.Next(4);
-                    // Each pair of exits uses opposite sides, so one camped gate does not remove the other escape option.
+                    if (exitIndex > 0 && exitIndex % 2 == 0)
+                        exitSide = random.Next(4);
+
+                    // Each pair of exits uses opposite sides.
                     int side = exitIndex % 2 == 0 ? exitSide : exitSide ^ 1;
+
                     foreach (var cell in available)
                     {
-                        if (reserved.Contains(cell) || !OnExitSide(cell, side)) continue;
+                        if (reserved.Contains(cell) || !OnExitSide(cell, side))
+                            continue;
+
                         bool far = true;
+
                         foreach (var exit in exits)
-                            if (Distance(exit, cell) < settings.minimumExitSeparation) far = false;
-                        if (!far) continue;
+                        {
+                            if (Distance(exit, cell) < settings.minimumExitSeparation)
+                                far = false;
+                        }
+
+                        if (!far)
+                            continue;
+
                         exits.Add(cell);
                         Reserve(cell, settings.taskProtectionRadius);
                         break;
                     }
-                    if (exits.Count != exitIndex + 1) break;
+
+                    if (exits.Count != exitIndex + 1)
+                        break;
                 }
 
                 if (exits.Count != settings.escapeCount)
                     continue;
+
                 var pool = new List<SurvivalPuzzleDefinition>();
+
                 foreach (var definition in settings.puzzles)
-                    if (definition != null && definition.enabledInPool && CompatibleExists(definition))
+                {
+                    if (definition != null
+                        && definition.enabledInPool
+                        && CompatibleExists(definition))
+                    {
                         pool.Add(definition);
+                    }
+                }
+
                 Shuffle(pool, random);
+
                 var usedTypes = new HashSet<SurvivalPuzzleType>();
                 int target = count.required + count.extraStations;
+
                 for (int i = 0; i < target; i++)
                 {
                     bool placed = false;
-                    // Try unused puzzle types first. Reuse a type only when another unique type cannot be placed.
+
+                    // Prefer unused puzzle types.
                     for (int pass = 0; pass < 2 && !placed; pass++)
+                    {
                         foreach (var definition in pool)
                         {
                             if (pass == 0 && usedTypes.Contains(definition.type))
                                 continue;
+
                             if (TryPlace(definition, available, random))
                             {
                                 usedTypes.Add(definition.type);
@@ -156,16 +218,23 @@ namespace Escape4Now.Map
                                 break;
                             }
                         }
+                    }
 
                     if (!placed)
                         break;
                 }
 
-                if (tasks.Count == target && usedTypes.Count > Required && ValidateConnectivity(null))
+                if (tasks.Count == target
+                    && usedTypes.Count > Required
+                    && ValidateConnectivity(null))
+                {
                     return;
+                }
             }
 
-            throw new InvalidOperationException("Could not place reachable Survival tasks and exits with at least one extra puzzle type. Check puzzle compatibility, clearances and count settings.");
+            throw new InvalidOperationException(
+                "Could not place reachable Survival tasks and exits with at least one extra puzzle type. Check puzzle compatibility, clearances and count settings."
+            );
         }
 
         // Solving one type completes all its duplicate stations; the same type cannot add to the team count twice.
