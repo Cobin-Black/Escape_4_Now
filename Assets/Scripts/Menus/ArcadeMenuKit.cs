@@ -138,27 +138,29 @@ namespace Escape4Now.Menus
             GUI.color = old;
         }
 
-        //Text with an optional outline and block shadow.
-        public static void Label(Rect r, string text, GUIStyle style, Color color, Color outline = default, float outlineWidth = 0f, Color shadow = default, float shadowOffset = 0f)
-        {
-            Color old = style.normal.textColor;
-            if (shadowOffset > 0f)
-            {
-                style.normal.textColor = shadow;
-                Rect s = new Rect(r.x + shadowOffset, r.y + shadowOffset, r.width, r.height);
-                if (outlineWidth > 0f)
-                    foreach (Vector2 o in OutlineOffsets) GUI.Label(new Rect(s.x + o.x * outlineWidth, s.y + o.y * outlineWidth, s.width, s.height), text, style);
-                GUI.Label(s, text, style);
-            }
-            if (outlineWidth > 0f)
-            {
-                style.normal.textColor = outline;
-                foreach (Vector2 o in OutlineOffsets) GUI.Label(new Rect(r.x + o.x * outlineWidth, r.y + o.y * outlineWidth, r.width, r.height), text, style);
-            }
-            style.normal.textColor = color;
-            GUI.Label(r, text, style);
-            style.normal.textColor = old;
-        }
+        
+public static void Label(Rect r, string text, GUIStyle style, Color color, Color outline = default, float outlineWidth = 0f, Color shadow = default, float shadowOffset = 0f)
+{
+    if (Event.current.type != EventType.Repaint) return;
+    Color old = style.normal.textColor;
+    GUIContent content = new GUIContent(text);
+    if (shadowOffset > 0f)
+    {
+        style.normal.textColor = shadow;
+        Rect s = new Rect(r.x + shadowOffset, r.y + shadowOffset, r.width, r.height);
+        if (outlineWidth > 0f)
+            foreach (Vector2 o in OutlineOffsets) style.Draw(new Rect(s.x + o.x * outlineWidth, s.y + o.y * outlineWidth, s.width, s.height), content, false, false, false, false);
+        style.Draw(s, content, false, false, false, false);
+    }
+    if (outlineWidth > 0f)
+    {
+        style.normal.textColor = outline;
+        foreach (Vector2 o in OutlineOffsets) style.Draw(new Rect(r.x + o.x * outlineWidth, r.y + o.y * outlineWidth, r.width, r.height), content, false, false, false, false);
+    }
+    style.normal.textColor = color;
+    style.Draw(r, content, false, false, false, false);
+    style.normal.textColor = old;
+}
 
         //Diagonal two-color stripes that scroll sideways, for the hazard tape.
         public static void Stripes(Rect r, Color a, Color b, float scroll, float stripeSize)

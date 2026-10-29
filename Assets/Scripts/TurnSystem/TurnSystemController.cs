@@ -37,9 +37,13 @@ namespace Escape4Now.TurnSystem
         public void ConfigureEnemyTurn(bool enabled, string name, int seed)
         {
             includeEnemyTurn = enabled;
-            if (!string.IsNullOrWhiteSpace(name)) enemyTurnName = name;
+
+            if (!string.IsNullOrWhiteSpace(name))
+                enemyTurnName = name;
+
             enemySeed = seed;
         }
+
         private readonly System.Collections.Generic.HashSet<PlayerCharacter> removed = new System.Collections.Generic.HashSet<PlayerCharacter>();
         private bool Eligible(PlayerCharacter player) => player != null && player.isActiveAndEnabled && player.Health > 0
             && !player.HasReachedExit && !removed.Contains(player) && (gameMode == null || gameMode.IsParticipantActive(player));
@@ -68,8 +72,12 @@ namespace Escape4Now.TurnSystem
             players = (PlayerCharacter[])participants.Clone();
             removed.Clear();
             turnOrder = PlayerTurnOrder.Create(players.Length, seed ?? GetMatchSeed(), randomizeStartingOrder);
-            enemyOrderPosition = includeEnemyTurn && randomizeStartingOrder
-                ? new System.Random(unchecked(enemySeed ^ 0x45A1)).Next(players.Length + 1) : players.Length;
+            // Survival Mode always places the Monster after every player.
+            enemyOrderPosition = gameMode is Escape4Now.GameModes.SurvivalModeController
+                ? players.Length
+                : includeEnemyTurn && randomizeStartingOrder
+                    ? new System.Random(unchecked(enemySeed ^ 0x45A1)).Next(players.Length + 1)
+                    : players.Length;
             hasNetworkTurnOrder = false;
             currentPlayerIndex = turnOrder[0];
             currentTurnOwner = TurnOwner.Player;

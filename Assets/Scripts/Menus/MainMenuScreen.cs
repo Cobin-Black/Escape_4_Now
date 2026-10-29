@@ -34,7 +34,7 @@ namespace Escape4Now.Menus
             "One key is hidden in a locker. Find it, battle other players for it on the same tile, and carry it out.",
             "Something is loose in the school. Stay alive together until the clock runs out."
         };
-        private static readonly string[] ModeWin = { "carry the key through the EXIT first", "survive until time is up" };
+        private static readonly string[] ModeWin = { "Carry the key through the EXIT first", "Survive until time is up or complete the tasks to escape" };
         private static readonly Color[] AvatarColors =
         {
             new Color(1f, 0.835f, 0f), new Color(0.212f, 0.945f, 0.804f), new Color(1f, 0.31f, 0.847f),
@@ -350,20 +350,7 @@ namespace Escape4Now.Menus
             DrawSlider(new Rect(inner.x, inner.y + 128f, inner.width, 44f), "Sound effects", ref sfx, SfxKey);
             AudioListener.volume = sfx / 8f;
 
-            Label(new Rect(inner.x, inner.y + 186f, 150f, 44f), "Fullscreen", Text(MonoFont, 16), Color.white);
-            if (Chip(new Rect(inner.x + 164f, inner.y + 186f, 80f, 44f), Screen.fullScreen ? "ON" : "OFF", Screen.fullScreen))
-                Screen.fullScreen = !Screen.fullScreen;
-
-            string[] keys = { "W A S D", "SPACE", "E", "ENTER" };
-            string[] what = { "move", "roll dice", "use item", "interact" };
-            float cw = (inner.width - 30f) / 4f;
-            for (int i = 0; i < 4; i++)
-            {
-                Rect c = new Rect(inner.x + i * (cw + 10f), inner.yMax - 70f, cw, 70f);
-                Outline(c, 2f, Line);
-                Label(new Rect(c.x, c.y + 12f, c.width, 22f), keys[i], keyName, Color.white);
-                Label(new Rect(c.x, c.y + 36f, c.width, 20f), what[i], Text(MonoFont, 13, TextAnchor.MiddleCenter), Muted);
-            }
+            
         }
 
         private void DrawSlider(Rect row, string label, ref int value, string key)
