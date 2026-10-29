@@ -43,6 +43,12 @@ MonoBehaviour:
   taskProtectionRadius: 1
   spawnClearance: 1
   monsterFootprint: {x: 2, y: 2}
+  minimumMonsterSpawnDistance: 8
+  monsterSpawnClearanceRadius: 0
+  minimumMonsterOpenDirections: 2
+  minimumMonsterReachablePositions: 12
+  monsterSpawnAttempts: 128
+  preferredMonsterSpawnAreas: 01000000040000000300000007000000
   minimumTaskSeparation: 5
   placementAttempts: 128
   candidatesPerTask: 128

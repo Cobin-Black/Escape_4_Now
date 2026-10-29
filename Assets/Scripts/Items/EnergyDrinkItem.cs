@@ -20,6 +20,7 @@ namespace Escape4Now.Items
         {
             if (collected || inventory == null || mode == null || !mode.IsActiveSurvivor(inventory.Player) || !inventory.AddItem(this)) return false;
             collected = true;
+            mode.Events.WorldFeedback?.Emit(Escape4Now.Map.SurvivalEventType.EnergyDrink,inventory.Player);
             gameObject.SetActive(false);
             return true;
         }

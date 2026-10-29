@@ -7,7 +7,8 @@ using UnityEngine.UI;
 namespace Escape4Now.UI
 {
     //The same authored token supports pointer dragging and UI navigation/click matching.
-    public sealed class PuzzleTokenUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler
+    public sealed class PuzzleTokenUI : MonoBehaviour, IBeginDragHandler, IDragHandler, IEndDragHandler, IDropHandler,
+        IPointerEnterHandler, IPointerExitHandler
     {
         [SerializeField]
         private Button button;
@@ -19,6 +20,16 @@ namespace Escape4Now.UI
         private Image[] circuitPorts;
         [SerializeField]
         private CanvasGroup dragGroup;
+        [Header("Matching and Physical Feedback")]
+        [SerializeField] private Image connector;
+        [SerializeField] private Outline interactionOutline;
+        [SerializeField] private PuzzlePieceMotion motion;
+        [SerializeField] private PuzzleMatchingPieceView matchingView;
+        [SerializeField] private Color selectedOutline = Color.white;
+        [SerializeField] private Color correctOutline = new Color(.3f,1,.65f,1);
+        [SerializeField] private Color wrongOutline = new Color(1,.3f,.25f,1);
+        [SerializeField] private Color poweredPortColor = new Color(.3f,1,.8f,1);
+        [SerializeField] private Color idlePortColor = new Color(.3f,.4f,.45f,1);
         [Header("Circuit Caption")]
         [SerializeField, Range(8, 16)]
         private int circuitCaptionFontSize = 10;
@@ -27,6 +38,12 @@ namespace Escape4Now.UI
         [SerializeField] private Color darkCaptionColor = new Color(.025f, .045f, .07f, 1f);
         [SerializeField, Range(0f, 1f)] private float lightFaceThreshold = .55f;
         private int normalCaptionFontSize;
+        [SerializeField, Min(0)] private float switchCaptionInset = 42;
+        public void ArrangeMechanismCaption(bool hasSwitch)
+        {
+            label.rectTransform.offsetMin = new Vector2(hasSwitch ? switchCaptionInset : 6,4);
+            label.rectTransform.offsetMax = new Vector2(-6,-4);
+        }
         private void Awake()
         {
             normalCaptionFontSize = label.resizeTextMaxSize;
@@ -36,6 +53,28 @@ namespace Escape4Now.UI
         private int side, index;
         private Vector3 home;
         public Button Button => button;
+        public PuzzlePieceMotion Motion => motion;
+        public PuzzleMatchingPieceView MatchingView => matchingView;
+        public Vector2 ConnectionPoint(RectTransform space,int column)
+        {
+            var rect = (RectTransform)transform;
+            var world = connector != null ? connector.transform.position
+                : rect.TransformPoint(rect.rect.center + Vector2.right*rect.rect.width*(column == 0 ? .5f : -.5f));
+            return space.InverseTransformPoint(world);
+        }
+        public void SetMatchingState(bool selected,bool hovered,bool matched,bool valid,Color tint)
+        {
+            if (connector != null) connector.color = tint;
+            motion?.SetPowered(matched);
+            if (interactionOutline == null) return;
+            interactionOutline.enabled = selected || hovered || matched;
+            interactionOutline.effectColor = hovered && !valid ? wrongOutline : matched || hovered ? correctOutline : selectedOutline;
+        }
+        public void SetPowered(bool on)
+        {
+            foreach (var port in circuitPorts) port.color = on ? poweredPortColor : idlePortColor;
+            motion?.SetPowered(on);
+        }
 
         // Remember which puzzle side and slot this saved UI piece represents.
         public void Bind(SurvivalPuzzleUI view, int column, int slot)
@@ -74,10 +113,12 @@ namespace Escape4Now.UI
         // Start a drag only for puzzle types that support moving pieces.
         public void OnBeginDrag(PointerEventData data)
         {
-            if (!button.interactable || side == 1 || !owner.CanDrag)
+            if (!button.interactable || !owner.CanDrag || owner.DragSource != null)
                 return;
+            if (side == 1 && !owner.IsWireMatching) return;
             owner.ClearSelection();
             home = transform.position;
+            if (owner.IsWireMatching && !owner.BeginWireDrag(side,index,data)) return;
             owner.DragSource = this;
             dragGroup.blocksRaycasts = false;
         }
@@ -85,7 +126,10 @@ namespace Escape4Now.UI
         public void OnDrag(PointerEventData data)
         {
             if (owner.DragSource == this)
-                transform.position = data.position;
+            {
+                if (owner.IsWireMatching) owner.MoveWireDrag(data.position);
+                else motion.Drag(data.position,data.pressEventCamera);
+            }
         }
 
         // Return the visual to its home position; the puzzle decides whether the drop changed the answer.
@@ -93,7 +137,8 @@ namespace Escape4Now.UI
         {
             if (owner.DragSource != this)
                 return;
-            transform.position = home;
+            if (owner.IsWireMatching) owner.EndWireDrag();
+            else if (!owner.IsMatchingComplete(side,index)) motion.ReturnHome();
             dragGroup.blocksRaycasts = true;
             owner.DragSource = null;
         }
@@ -103,12 +148,15 @@ namespace Escape4Now.UI
             if (owner.DragSource != null)
                 owner.Drop(owner.DragSource.side, owner.DragSource.index, side, index);
         }
+        public void OnPointerEnter(PointerEventData data) { owner?.HoverMatch(side,index,true); }
+        public void OnPointerExit(PointerEventData data) { owner?.HoverMatch(side,index,false); }
 
         private void OnDisable()
         {
             if (owner == null || owner.DragSource != this)
                 return;
             transform.position = home;
+            motion?.ReturnHome();
             dragGroup.blocksRaycasts = true;
             owner.DragSource = null;
         }

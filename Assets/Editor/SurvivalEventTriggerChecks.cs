@@ -27,6 +27,16 @@ public static class SurvivalEventTriggerChecks
         var actor = mode.ActiveTurnParticipant;
         while (!mode.IsActiveSurvivor(actor)) { mode.Turns.EndTurnAfterBattleLoss(actor); actor = mode.ActiveTurnParticipant; }
         var original = actor.GridPosition;
+        Require(events.WorldFeedback != null, "Outdoor events have saved feedback references");
+        var cues = new SerializedObject(events.WorldFeedback).FindProperty("cues");
+        Require(cues.arraySize == 5, "Ground crossings, boosts, slips and pickups have authored cues");
+        for (int i = 0; i < cues.arraySize; i++)
+        {
+            var cue = (SurvivalWorldBurst)cues.GetArrayElementAtIndex(i).FindPropertyRelative("prefab").objectReferenceValue;
+            var fields = new SerializedObject(cue);
+            Require(fields.FindProperty("particles").objectReferenceValue != null
+                && ((AudioSource)fields.FindProperty("sound").objectReferenceValue).clip != null, "Each outdoor cue has particles and sound");
+        }
         var monsterPositions = Object.FindObjectsByType<PlayerCharacter>(FindObjectsSortMode.None)
             .Where(player => mode.RoleOf(player) == SurvivalRole.Monster).ToDictionary(player => player, player => player.GridPosition);
         Require(settings.events.Count(rule => rule.Trigger == SurvivalEventTrigger.Tile) == 11, "Exactly eleven event types retain floor triggers");
@@ -70,6 +80,7 @@ public static class SurvivalEventTriggerChecks
         Require(actor.SetGridPosition(boostCells[0]), "Reach marked Track section");
         events.ResolveStep(actor, Vector2Int.right);
         Require(actor.MovesRemaining == 4 + boost.amount, "Track section grants configured movement");
+        Require(events.GetComponentsInChildren<SurvivalWorldBurst>().Length > 0, "Crossing the Track boost creates visible player feedback");
         events.ResolveStep(actor, Vector2Int.right);
         Require(actor.MovesRemaining == 4 + boost.amount, "Track bonus cannot be farmed repeatedly within one turn");
         Set(actor, "resolvingStep", false); actor.SetGridPosition(original);
@@ -100,6 +111,8 @@ public static class SurvivalEventTriggerChecks
         Require(events.TryActivateRule(branch), "A physical branch can spawn on a validated alternate walkway");
         var branchEffect = environment.ActiveEffects.Single(effect => effect.Type == SurvivalEventType.FallenBranch);
         var branchCell = branchEffect.Cells.Single();
+        Require(map.IsWalkable(branchCell), "Branch blocks only after its landing animation");
+        yield return new WaitForSeconds(.6f);
         Require(!map.IsWalkable(branchCell) && !map.Objectives.IsReserved(branchCell), "Branch blocks a real safe tile");
         var hazards = new HashSet<Vector2Int>(branchEffect.Cells);
         foreach (var pair in events.Tiles) if (SurvivalEventLayout.MovesPlayers(pair.Value.type)) hazards.Add(pair.Key);
@@ -114,7 +127,18 @@ public static class SurvivalEventTriggerChecks
         Require(water.Cells.Count > 0 && water.Cells.Count <= settings.maximumSprinklerTiles, "Sprinkler extent respects its Inspector budget");
         foreach (var cell in water.Cells) Require(!map.Objectives.IsReserved(cell) && map.IsWalkable(cell) && mode.MovementCost(cell) > 1, "Sprinklers affect safe walkable tiles only");
         yield return new WaitForSeconds(.8f);
+        var sprays=environment.GetComponentsInChildren<SurvivalSprinklerSpray>();
+        Require(sprays.Length>0,"Sprinklers have visible moving water streams");
+        var stream=sprays[0].GetComponentInChildren<LineRenderer>();
+        Vector3 waterBefore=stream.GetPosition(4);
+        yield return new WaitForSeconds(.15f);
+        Require(stream.GetPosition(4)!=waterBefore,"Water travels through the sprinkler arcs");
+        session.PauseGame(); waterBefore=stream.GetPosition(4);
+        yield return new WaitForSecondsRealtime(.15f);
+        Require(stream.GetPosition(4)==waterBefore,"Pause freezes sprinkler presentation");
+        session.ResumeGame();
         DirectoryCapture("sprinklers"); yield return null; yield return null;
+        yield return CaptureDetail(sprays[0].transform.position,"sprinkler-detail");
         Expire(environment, settings);
         yield return null;
         Require(!events.CurrentMessage.Contains("Sprinklers"), "Sprinkler feedback disappears when the area effect expires");
@@ -126,6 +150,7 @@ public static class SurvivalEventTriggerChecks
             var sound = map.GetComponentsInChildren<SurvivalAmbientEffect>().First(effect => effect.name.StartsWith("Car Alarm"));
             Require(sound.GetComponentInParent<SurvivalPropVisual>().Kind == OutdoorPropKind.Car && sound.GetComponent<AudioSource>().clip != null,
                 "Alarm flashes and sounds on the actual car, without controlling a monster");
+            Require(sound.GetComponent<AudioSource>().volume<=.06f,"Car alarm uses the saved quieter volume");
         }
         Require(!events.TryActivateRule(Rule(settings, SurvivalEventType.OpenGate)), "Escape gates cannot be opened by an unrelated event");
         Require(events.TryActivateRule(Rule(settings, SurvivalEventType.Blackout)) && events.BlackoutTurns > 0, "Blackout activates globally without stepping on a tile");
@@ -140,6 +165,9 @@ public static class SurvivalEventTriggerChecks
         Require(events.TryActivateRule(Rule(settings, SurvivalEventType.RainStorm)), "Rain starts as global weather");
         Require(mode.AdjustRollMovement(actor, 6) == Math.Max(settings.minimumRollMovement, 6 - Rule(settings, SurvivalEventType.RainStorm).amount), "Rain applies the configurable movement penalty");
         Require(map.GetComponentsInChildren<SurvivalAmbientEffect>().Any(effect => effect.name.StartsWith("Rain Weather")), "Rain has a native weather visual");
+        var rainVisual = map.GetComponentsInChildren<SurvivalAmbientEffect>().First(effect => effect.name.StartsWith("Rain Weather"));
+        Require(rainVisual.GetComponentInChildren<ParticleSystem>().shape.meshShapeType == ParticleSystemMeshShapeType.Triangle,
+            "Rain covers the campus interior rather than only its four corners");
         var rainEffects = (IList)typeof(SurvivalEventController).GetField("temporary", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(events);
         var rain = rainEffects[0];
         int rainTurns = (int)rain.GetType().GetField("turns").GetValue(rain);

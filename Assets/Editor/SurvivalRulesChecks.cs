@@ -54,7 +54,7 @@ public static class SurvivalRulesChecks
         SessionState.SetBool("SurvivalRulesChecks.UI", false);
         EditorSceneManager.OpenScene("Assets/Scenes/SurvivalMode.unity");
         var session = new SerializedObject(Object.FindFirstObjectByType<LocalMultiplayerSession>());
-        session.FindProperty("spawnAIMonsterWhenUnassigned").boolValue = false;
+        session.FindProperty("spawnAIMonsterWhenUnassigned").boolValue = Argument("-spawnMonster", "false") == "true";
         session.ApplyModifiedPropertiesWithoutUndo();
         var map = new SerializedObject(Object.FindFirstObjectByType<SurvivalMap>());
         map.FindProperty("useFixedSeed").boolValue = true;
@@ -247,11 +247,30 @@ public static class SurvivalRulesChecks
         }
 
         if (monsterSlot >= 0)
-            Require(mode.SetSetupRole(monsterSlot, SurvivalRole.Monster), "Any setup slot can be assigned the external monster role");
+        {
+            if (Argument("-spawnMonster", "false") == "true")
+            {
+                session.SetPlayerCount(count); session.SetMonsterPlayer(monsterSlot);
+                Require(session.IsMonsterPlayer(monsterSlot), "Use the shared lobby's actual Monster assignment");
+            }
+            else Require(mode.SetSetupRole(monsterSlot, SurvivalRole.Monster), "Any setup slot can be assigned the external monster role");
+        }
         Require(!session.TryStartLocalMatch(0) && !session.TryStartLocalMatch(5), "Invalid participant counts rejected");
         Require(session.TryStartLocalMatch(count), "Survival starts: " + session.Status);
         for (int i = 0; i < 8; i++)
             yield return null;
+        if (Argument("-spawnMonster", "false") == "true")
+        {
+            var monster = Object.FindFirstObjectByType<MonsterCharacter>();
+            Require(monster != null && monster.GridPosition == mode.Objectives.MonsterSpawn,
+                "The existing monster initializes at the selected procedural spawn");
+            var world = map.GridToWorld(new Vector2(monster.GridPosition.x+.5f,monster.GridPosition.y+.5f));
+            Require(Vector3.Distance(monster.transform.position,world)<.01f,"Monster artwork is centered on its real footprint");
+            SurvivalMonsterSpawnChecks.Check(map.Layout,mode.Objectives,mode.Rules);
+            Require(mode.ActiveSurvivors.Count == (monsterSlot >= 0 ? count-1 : count),"AI and player-controlled setups retain the correct survivors");
+            Debug.Log("SURVIVAL RUNTIME SPAWN CHECK PASSED: "+mode.ActiveSurvivors.Count+" survivors, monster slot "+monsterSlot+", seed "+map.LayoutSeed);
+            yield break;
+        }
         if (external != null)
             Require(mode.Turns.CopyTurnOrder().Length == 5 && mode.ActiveSurvivors.Count == 4, "Four survivors plus one external turn slot; no AI implementation");
         Require(mode.Objectives.Tasks.Count > mode.Objectives.Required && mode.Objectives.Exits.Count == 2, "Extra shared tasks and two exits");
@@ -528,7 +547,7 @@ public static class SurvivalRulesChecks
                     puzzle.Connect(i, Array.IndexOf(puzzle.Right, puzzle.Left[i]));
                 break;
             case SurvivalPuzzleType.ButtonSequence:
-                puzzle.Tick(20);
+                puzzle.Tick(puzzle.Sequence.Length*(puzzle.Definition.sequenceFlashSeconds+puzzle.Definition.sequenceGapSeconds)+.01f);
                 foreach (int button in puzzle.Sequence)
                     puzzle.PressSequence(button);
                 break;
@@ -655,6 +674,8 @@ public static class SurvivalRulesChecks
             Require(mode.Tasks.Puzzle != null, "Native Interact opens a puzzle");
             //View coverage uses one station fixture; normal match completion is tested separately.
             var configuredDefinition = Object.Instantiate(definition);
+            //UI coverage deliberately resizes and pauses; the deadline has its own live timeout check.
+            configuredDefinition.timeLimitSeconds = 120f;
             if (definition.type == SurvivalPuzzleType.ArrangeNumbers)
                 configuredDefinition.numberCount = int.Parse(Argument("-puzzleCount", definition.numberCount.ToString()));
             typeof(SurvivalTaskController).GetProperty("Puzzle").SetValue(mode.Tasks,
@@ -671,11 +692,24 @@ public static class SurvivalRulesChecks
                 var b = (PuzzleTokenUI)references.FindProperty("right").GetArrayElementAtIndex(Array.IndexOf(puzzle.Right, puzzle.Left[0])).objectReferenceValue;
                 if (definition.type == SurvivalPuzzleType.MatchWires)
                 {
-                    yield return Click(a.Button);
-                    yield return Click(b.Button);
+                    yield return CheckLiveWires(context, mode, references, puzzle, a, b);
                 }
                 else
+                {
+                    var sourceView = new SerializedObject(a.MatchingView);
+                    var caption = (RectTransform)sourceView.FindProperty("caption").objectReferenceValue;
+                    var icon = (RectTransform)sourceView.FindProperty("iconMount").objectReferenceValue;
+                    var labelCorners = new Vector3[4]; var iconCorners = new Vector3[4];
+                    caption.GetWorldCorners(labelCorners); icon.GetWorldCorners(iconCorners);
+                    Require(labelCorners[0].x >= iconCorners[2].x, "Item pictures have dedicated space beside readable captions");
+                    Require(!((Image)sourceView.FindProperty("socket").objectReferenceValue).gameObject.activeSelf,
+                        "Supplies and batteries use objects and slots instead of wire sockets");
+                    Require(icon.childCount > 0, "Matching objects use the saved native UI picture prefabs");
                     yield return Drag(a, b);
+                    var targetView = new SerializedObject(b.MatchingView);
+                    Require(((Text)targetView.FindProperty("label").objectReferenceValue).text.Contains("OK"),
+                        "Inserted objects leave a visible completed slot");
+                }
                 Require(puzzle.Matched[0], "Pointer matching/dragging updates " + definition.type);
             }
             else if (definition.type == SurvivalPuzzleType.EnterCode)
@@ -747,7 +781,10 @@ public static class SurvivalRulesChecks
         }
 
         if (Argument("-puzzleType", "all") == "all")
+        {
             yield return CheckPuzzleFailures(context, mode, references, actor, task);
+            yield return CheckTaskDeadline(context, mode, actor, task);
+        }
         Debug.Log("SURVIVAL PUZZLE UI CHECKS PASSED: " + testedPuzzles + " puzzle views fully solved, pointer controls, real drag/drop, shared pause, landscape and portrait.");
     }
 
@@ -771,7 +808,7 @@ public static class SurvivalRulesChecks
             }
             else if (type == SurvivalPuzzleType.ButtonSequence)
             {
-                puzzle.Tick(20);
+                puzzle.Tick(puzzle.Sequence.Length*(puzzle.Definition.sequenceFlashSeconds+puzzle.Definition.sequenceGapSeconds)+.01f);
                 yield return null;
                 int wrong = (puzzle.Sequence[0] + 1) % definition.Count;
                 yield return Click(((PuzzleTokenUI)view.FindProperty("cells").GetArrayElementAtIndex(wrong).objectReferenceValue).Button);
@@ -789,6 +826,8 @@ public static class SurvivalRulesChecks
                 yield return Click((Button)view.FindProperty("close").objectReferenceValue);
             }
             yield return null; yield return null;
+            float resultDeadline = Time.realtimeSinceStartup + 3f;
+            while (mode.Tasks.Puzzle != null && Time.realtimeSinceStartup < resultDeadline) yield return null;
             Require(mode.Tasks.Puzzle == null && !actor.IsInMenu() && !task.Completed && mode.CompletedPuzzles == 0,
                 "Failed or cancelled " + type + " closes without awarding progress and remains retryable");
             Require(mode.Turns.TurnNumber > turn, "Failure/cancellation consumes exactly the current solo turn");
@@ -877,7 +916,85 @@ public static class SurvivalRulesChecks
                     if (puzzle.Switches[i] != puzzle.Targets[i]) yield return Click(((PuzzleTokenUI)cellRefs.GetArrayElementAtIndex(i).objectReferenceValue).Button);
                 break;
         }
+        if (puzzle.Solved)
+        {
+            var feedback = (SurvivalPuzzleFeedback)view.FindProperty("feedback").objectReferenceValue;
+            yield return new WaitForSeconds(feedback.ResultWait + .1f);
+        }
         yield return null; yield return null;
+    }
+
+    private static IEnumerator CheckLiveWires(MatchUIContext context, SurvivalModeController mode, SerializedObject view,
+        PuzzleSession puzzle, PuzzleTokenUI leftEnd, PuzzleTokenUI rightEnd)
+    {
+        var matching = (SurvivalMatchingUI)view.FindProperty("matching").objectReferenceValue;
+        var preview = (PuzzleWireGraphic)new SerializedObject(matching).FindProperty("preview").objectReferenceValue;
+        Vector3 home = leftEnd.transform.position;
+        var gap = (Center(leftEnd)+Center(rightEnd))*.5f;
+        yield return HoldWire(leftEnd,gap);
+        Require(preview.gameObject.activeInHierarchy && leftEnd.transform.position == home,
+            "Dragging draws a live cable while the socket stays fixed");
+        Canvas.ForceUpdateCanvases();
+        var mesh = preview.canvasRenderer.GetMesh();
+        Require(mesh != null && mesh.vertexCount > 0, "Live cable has visible UI geometry");
+        ScreenCapture.CaptureScreenshot("Logs/SurvivalRulesPreviews/MatchWires-drag.png");
+        yield return null; yield return null;
+        InputSystem.QueueStateEvent(mouse,new MouseState { position = gap });
+        yield return null; yield return null;
+        Require(!puzzle.Failed && !puzzle.Matched[0] && !preview.gameObject.activeInHierarchy,
+            "Releasing away from a socket cancels without failing");
+        yield return HoldWire(leftEnd,gap);
+        float puzzleTime = puzzle.Elapsed, matchTime = context.Timer.TimeRemaining;
+        context.Session.PauseGame(); yield return new WaitForSecondsRealtime(.2f);
+        Require(puzzle.Elapsed == puzzleTime && context.Timer.TimeRemaining == matchTime,
+            "Pause freezes both task and match clocks during a drag");
+        context.Session.ResumeGame();
+        InputSystem.QueueStateEvent(mouse,new MouseState { position = gap });
+        yield return null; yield return null;
+        Require(!puzzle.Failed && ((CanvasGroup)new SerializedObject(leftEnd).FindProperty("dragGroup").objectReferenceValue).blocksRaycasts,
+            "Pause cancels the loose drag and restores endpoint hit testing");
+        yield return Drag(rightEnd,leftEnd);
+        Require(puzzle.Matched[0], "A cable can be dragged from right to left");
+        if (puzzle.Left.Length > 2)
+        {
+            var source = (PuzzleTokenUI)view.FindProperty("left").GetArrayElementAtIndex(1).objectReferenceValue;
+            var target = (PuzzleTokenUI)view.FindProperty("right").GetArrayElementAtIndex(Array.IndexOf(puzzle.Right,puzzle.Left[1])).objectReferenceValue;
+            yield return Click(target.Button); yield return Click(source.Button);
+            Require(puzzle.Matched[1], "Click-to-match also accepts either end first");
+        }
+        Require(!leftEnd.Button.interactable && !rightEnd.Button.interactable, "Correct connections lock their sockets");
+    }
+
+    private static IEnumerator HoldWire(PuzzleTokenUI source,Vector2 end)
+    {
+        var start = Center(source);
+        InputSystem.QueueStateEvent(mouse,new MouseState { position = start }); yield return null; yield return null;
+        InputSystem.QueueStateEvent(mouse,new MouseState { position = start }.WithButton(MouseButton.Left)); yield return null; yield return null;
+        for (int step = 1; step <= 5; step++)
+        {
+            InputSystem.QueueStateEvent(mouse,new MouseState { position = Vector2.Lerp(start,end,step/5f) }.WithButton(MouseButton.Left));
+            yield return null; yield return null;
+        }
+    }
+
+    private static IEnumerator CheckTaskDeadline(MatchUIContext context,SurvivalModeController mode,PlayerCharacter actor,SurvivalTaskPlacement task)
+    {
+        Require(actor.SetGridPosition(task.InteractionCells[0]), "Move beside the timeout fixture");
+        yield return null; yield return null;
+        Require(mode.Tasks.TryInteract(actor), "Open a real timed task attempt");
+        var definition = Object.Instantiate(mode.Rules.puzzles[0]); definition.timeLimitSeconds = 1;
+        var attempt = new PuzzleSession(definition,42);
+        typeof(SurvivalTaskController).GetProperty("Puzzle").SetValue(mode.Tasks,attempt);
+        int round = mode.Turns.TurnNumber;
+        yield return null; yield return null;
+        float start = context.Timer.TimeRemaining;
+        float until = Time.realtimeSinceStartup+5;
+        while (mode.Tasks.Puzzle != null && Time.realtimeSinceStartup < until) yield return null;
+        Require(attempt.TimedOut && mode.Tasks.Puzzle == null && !actor.IsInMenu(), "Task deadline closes an idle attempt and releases controls");
+        Require(!task.Completed && mode.CompletedPuzzles == 0 && mode.Turns.TurnNumber == round+1,
+            "Timeout awards no puzzle progress and ends exactly the current turn");
+        Require(context.Timer.TimeRemaining < start, "Match clock keeps counting while the task is open");
+        Object.Destroy(definition);
     }
 
     private static Vector2 Center(Component component)

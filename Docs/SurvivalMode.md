@@ -130,6 +130,34 @@ Player actions reuse the project's Input Actions, including Interact and shared 
 
 Use an isolated project copy if Unity already has the main project open.
 
+### Puzzle interaction and deadlines
+
+**Survival Puzzle Board View** on the interface prefab controls matching row height, spacing, column widths and headings. Rows adapt to the enabled piece count. Board housings and button shadows are saved native UI; decorative screws ignore layout groups. Switch captions have a separate Inspector inset so handles do not cover their text.
+
+Supplies now use separate editable pictures for the ball, towel, book, cone, bottle and tool. Each piece has a dedicated icon area beside its caption. Receiving containers show a dim picture and a matching color border; inserting an item lights the container and leaves an **OK** label. Batteries use the same interaction with battery pictures and device slots. Wire sockets and wire instructions appear only in the wire puzzle. **Matching Icon Prefabs** on the puzzle definition can replace the native UI artwork; **Puzzle Matching Piece View** controls caption spacing, icon size and slot colors.
+
+Each puzzle definition has **Attempt Time Limit / Time Limit Seconds**. Shipped attempts allow 15 seconds, or 20 for Circuit. The task window shows a countdown and warning color. The match timer keeps running during puzzles; the shared Pause menu freezes both clocks. Timeout leaves the station incomplete, releases player controls and ends that survivor's turn. A solved puzzle is credited before its short completion animation.
+
+Wires support dragging from either end, a cable that follows the pointer, aim feedback and click-to-connect. Dropping into empty space cancels the loose cable. Supplies and batteries move with the pointer and slide into matching slots. Number tiles animate swaps. Circuit pieces rotate and show power spreading through connected pieces. Switches and breakers have moving handles and indicator lamps. Sequence and keypad buttons use the same hover, press and sound feedback.
+
+The **Survival Interface** prefab holds the saved controls, countdown and feedback references. `PuzzlePieceMotion` controls presentation only; `SurvivalMatchingUI` handles matching gestures; `SurvivalPuzzleFeedback` controls sounds, lights and result timing. Answers remain in `PuzzleSession`, and turn ownership remains in `SurvivalTaskController`. Pointer and navigation events still come through the existing Input System UI module.
+
+### Outdoor feedback
+
+The **Car Alarm** prefab's Audio Source volume is **0.055** (previously 0.18). **Sprinkler Water** uses **Survival Sprinkler Spray** with saved water-stream renderers and visible nozzle artwork. Reach, arc height, sweep, flow speed, stream length and line widths/colors remain editable in Unity. The sound is a quiet loop; Pause freezes both the water and sound. Wet-ground visuals remain attached to the original safe procedural region and do not add blocking geometry.
+
+**Survival World Feedback** on the event controller maps outdoor event types to editable particle/audio prefabs. Mud and sprinkler crossings produce short ground cues; boost, slip and drink collection produce player feedback. The can uses the existing inventory pickup. **Survival Branch Fall** animates the branch and rechecks occupancy and connectivity before it lands and blocks a tile. Rain uses the existing weather particles with a looping sound and configurable screen tint. **Survival Lighting Feedback** dims campus lamp heads during Blackout and restores them afterward. Escape signals remain available. Effects still expire through the existing turn-based event rules, and Pause freezes their presentation.
+
+### Procedural monster spawn
+
+The map no longer creates a special clearing in the center. It generates areas, paths, props and survivor spawns normally, then places tasks and exits. `SurvivalMonsterSpawnSelector` searches the resulting walkable data for an existing safe monster footprint. It checks all footprint cells, the distance from every survivor spawn, available movement directions and a route the whole monster can follow into the main paths. Occupying the chosen footprint must also leave survivors a route to tasks and exits. Later events exclude the small selected footprint; no ground is repainted and no props are removed.
+
+Open **Match Rules / Procedural Monster Spawn** to change footprint size, minimum survivor distance, clearance radius, minimum open directions, reachable positions, initial candidate attempts and preferred area types. The current monster uses a 2×2 footprint. Defaults use an eight-tile separation, two open directions and at least twelve reachable footprint positions. The initial search checks 128 shuffled candidates, then checks the remaining positions before giving up. Choosing among valid areas and positions uses the match seed. Only the existing outer generation retry can request a new map after objective/spawn placement fails.
+
+`SurvivalMonsterSpawnChecks.Run` checks fixed-seed repeatability, placement variation, footprint safety, separation, objective access and unchanged terrain. `SurvivalRulesChecks.Run -spawnMonster true -survivalPlayers 2` checks the existing monster's actual initialization. Add `-monsterSlot 0` to check a player-controlled monster without assuming the final lobby slot owns that role.
+
+`SurvivalInteractionModelChecks.Run` checks deadlines and solvability for all nine types. `SurvivalRulesChecks.UI` also checks live wire rendering, reverse connections, drag cancellation, Pause during dragging, failed attempts and an idle timeout through real UI controls.
+
 - `-executeMethod SurvivalRulesChecks.Generation`: seeded campus/objective/event connectivity, compatibility, reservation and puzzle solvability checks.
 - `-executeMethod SurvivalRulesChecks.Run -survivalPlayers 1` (also 2, 3, 4): playable rules, shared completion, cancellation, timer/Pause, effects, escape and individual results.
 - Add `-expiryOnly true` for timeout during an open puzzle; `-allDead true` for all-eliminated results; `-monsterSlot 0` with two participants for role assignment; `-externalMonster true` with four survivors for an externally supplied turn-slot fixture.

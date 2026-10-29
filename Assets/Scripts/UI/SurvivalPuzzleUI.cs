@@ -51,6 +51,10 @@ namespace Escape4Now.UI
         private Text interactLabel;
         [SerializeField]
         private Button close;
+        [Header("Interaction Presentation")]
+        [SerializeField] private SurvivalMatchingUI matching;
+        [SerializeField] private SurvivalPuzzleFeedback feedback;
+        [SerializeField] private SurvivalPuzzleBoardView board;
         [Header("Inspector Presentation")]
         [SerializeField]
         private Color neutral = new Color(.18f, .23f, .27f);
@@ -96,6 +100,11 @@ namespace Escape4Now.UI
         private bool focusPending;
         private int selectedIndex = -1;
         private int openedFrame;
+        private int lastSequenceFlash = -1;
+        public SurvivalPuzzleFeedback Feedback => feedback;
+        public bool Playing => context.Playing && !context.Finished;
+        public Escape4Now.Map.SurvivalEventController EventSource => mode.Events;
+        public bool IsWireMatching => mode.Tasks.Puzzle != null && mode.Tasks.Puzzle.Definition.type == SurvivalPuzzleType.MatchWires;
         public PuzzleTokenUI DragSource { get; set; }
         private bool CanUsePuzzle => mode.Tasks.Puzzle != null && !mode.Tasks.Puzzle.Solved && !mode.Tasks.Puzzle.Failed && !LocalMultiplayerSession.GameplayPaused;
         public bool CanDrag => CanUsePuzzle && (mode.Tasks.Puzzle.Definition.type == SurvivalPuzzleType.MatchWires
@@ -103,11 +112,24 @@ namespace Escape4Now.UI
             || mode.Tasks.Puzzle.Definition.type == SurvivalPuzzleType.Batteries
             || mode.Tasks.Puzzle.Definition.type == SurvivalPuzzleType.ArrangeNumbers);
 
-        public void ClearSelection() => selectedIndex = -1;
+        public void ClearSelection() { selectedIndex = -1; matching.ClearSelection(); }
+        public bool BeginWireDrag(int side,int index,UnityEngine.EventSystems.PointerEventData data)
+            => matching.BeginDrag(side,index,data.position,data.pressEventCamera);
+        public void MoveWireDrag(Vector2 screen) => matching.MoveDrag(screen);
+        public void EndWireDrag() => matching.EndDrag();
+        public void HoverMatch(int side,int index,bool entered) => matching?.Hover(side,index,entered);
+        public bool IsMatchingComplete(int side,int index)
+        {
+            var puzzle = mode.Tasks.Puzzle;
+            if (!SurvivalMatchingUI.Supports(puzzle) || side > 1) return false;
+            int source = side == 0 ? index : System.Array.IndexOf(puzzle.Left,puzzle.Right[index]);
+            return source >= 0 && puzzle.Matched[source];
+        }
 
         // Connect the saved Unity buttons and puzzle pieces to the task controller.
         private void Start()
         {
+            matching.Configure(left,right,connections);
             for (int i = 0; i < left.Length; i++)
                 left[i].Bind(this, 0, i);
             for (int i = 0; i < right.Length; i++)
@@ -133,14 +155,16 @@ namespace Escape4Now.UI
             panel.SetActive(playable && attempt != null);
             if (!panel.activeSelf)
                 return;
-            if (attempt.Solved)
+            feedback.Present(attempt);
+            if (attempt.Solved) mode.Tasks.RecordCompletion();
+            if (attempt.Solved && feedback.ReadyToClose)
             {
                 mode.Tasks.FinishSolvedPuzzle();
                 panel.SetActive(false);
                 return;
             }
 
-            if (attempt.Failed)
+            if (attempt.Failed && feedback.ReadyToClose)
             {
                 mode.Tasks.ClosePuzzle();
                 panel.SetActive(false);
@@ -151,6 +175,11 @@ namespace Escape4Now.UI
             {
                 revision = mode.Tasks.Revision;
                 selectedIndex = -1;
+                matching.ClearSelection();
+                foreach (var token in left) token.Motion.ResetPiece();
+                foreach (var token in right) token.Motion.ResetPiece();
+                foreach (var token in cells) token.Motion.ResetPiece();
+                lastSequenceFlash = -1;
                 openedFrame = Time.frameCount;
                 codeInput.SetTextWithoutNotify("");
                 codeInput.characterLimit = attempt.Definition.codeLength;
@@ -166,27 +195,9 @@ namespace Escape4Now.UI
             codePanel.SetActive(code);
             clue.text = code ? string.Format(codeFormat, attempt.Code) : "";
             status.text = "";
-            for (int i = 0; i < connections.Length; i++)
-            {
-                bool connected = definition.type == SurvivalPuzzleType.MatchWires && i < attempt.Matched.Length && attempt.Matched[i];
-                connections[i].gameObject.SetActive(connected);
-                if (!connected)
-                    continue;
-                int target = System.Array.IndexOf(attempt.Right, attempt.Left[i]);
-                var a = (RectTransform)left[i].transform;
-                var b = (RectTransform)right[target].transform;
-                var parent = connections[i].parent;
-                Vector3 start = parent.InverseTransformPoint(a.TransformPoint(a.rect.center + Vector2.right * a.rect.width * .5f));
-                Vector3 end = parent.InverseTransformPoint(b.TransformPoint(b.rect.center + Vector2.left * b.rect.width * .5f));
-                Vector3 delta = end - start;
-                connections[i].localPosition = start;
-                connections[i].localRotation = Quaternion.Euler(0, 0, Mathf.Atan2(delta.y, delta.x) * Mathf.Rad2Deg);
-                connections[i].sizeDelta = new Vector2(delta.magnitude, wireThickness);
-                connections[i].GetComponent<Image>().color = definition.colors[attempt.Left[i]];
-            }
-
             if (pairing)
             {
+                board.Present(definition.type,attempt.Left.Length,left,right);
                 int matched = 0;
                 foreach (bool value in attempt.Matched) if (value) matched++;
                 status.text = string.Format(matchingProgressFormat, matched, attempt.Matched.Length);
@@ -202,9 +213,14 @@ namespace Escape4Now.UI
                     for (int j = 0; j < attempt.Left.Length; j++)
                         if (attempt.Left[j] == b && attempt.Matched[j])
                             rightMatched = true;
-                    left[i].Show(definition.symbols[a], selectedIndex == i ? selected : definition.colors[a], !attempt.Matched[i]);
-                    right[i].Show(definition.symbols[b], definition.colors[b], !rightMatched);
+                    left[i].Show(definition.symbols[a], definition.colors[a], !attempt.Matched[i] && !attempt.Failed && !attempt.Solved);
+                    right[i].Show(definition.symbols[b], definition.colors[b], !rightMatched && !attempt.Failed && !attempt.Solved);
+                    left[i].Motion.SetTheme(definition.type); right[i].Motion.SetTheme(definition.type);
+                    left[i].MatchingView.Present(definition,a,false,attempt.Matched[i]);
+                    right[i].MatchingView.Present(definition,b,true,rightMatched);
                 }
+                matching.Refresh(attempt,wireThickness);
+                status.text += "\n" + matching.Hint;
             }
             else if (!code)
             {
@@ -247,7 +263,12 @@ namespace Escape4Now.UI
                 }
 
                 if (definition.type == SurvivalPuzzleType.ButtonSequence)
+                {
                     status.text = attempt.SequenceReady ? string.Format(repeatFormat, attempt.SequenceProgress, attempt.Sequence.Length) : watchText;
+                    if (attempt.FlashButton >= 0 && attempt.FlashButton != lastSequenceFlash) feedback.Press();
+                    lastSequenceFlash = attempt.FlashButton;
+                }
+                var powered = circuit ? attempt.PoweredCircuitDistances() : null;
                 for (int i = 0; i < cells.Length; i++)
                 {
                     cells[i].gameObject.SetActive(i < count);
@@ -256,7 +277,7 @@ namespace Escape4Now.UI
                     string label = (i + 1).ToString();
                     Color color = neutral;
                     int ports = 0;
-                    bool enabled = true;
+                    bool enabled = !attempt.Solved && !attempt.Failed;
                     if (circuit)
                     {
                         ports = attempt.Ports[i];
@@ -271,7 +292,7 @@ namespace Escape4Now.UI
                     else if (definition.type == SurvivalPuzzleType.ButtonSequence)
                     {
                         color = attempt.FlashButton == i ? flash : definition.colors[i];
-                        enabled = attempt.SequenceReady;
+                        enabled = attempt.SequenceReady && !attempt.Solved && !attempt.Failed;
                     }
                     else
                     {
@@ -280,6 +301,12 @@ namespace Escape4Now.UI
                     }
 
                     cells[i].Show(label, color, enabled, ports);
+                    cells[i].Motion.SetTheme(definition.type);
+                    cells[i].ArrangeMechanismCaption(definition.type == SurvivalPuzzleType.PowerSwitches || definition.type == SurvivalPuzzleType.Breaker);
+                    if (circuit) cells[i].SetPowered(feedback.PowerReached(powered[i]));
+                    else if (definition.type == SurvivalPuzzleType.PowerSwitches || definition.type == SurvivalPuzzleType.Breaker)
+                    { cells[i].Motion.SetLever(attempt.Switches[i]); cells[i].Motion.SetPowered(attempt.Switches[i]); }
+                    else if (definition.type == SurvivalPuzzleType.ButtonSequence) cells[i].Motion.SetPowered(attempt.FlashButton == i);
                 }
             }
 
@@ -301,17 +328,11 @@ namespace Escape4Now.UI
             //The press that opened a puzzle must not also choose its first piece in the same frame.
             if (!CanUsePuzzle || Time.frameCount <= openedFrame)
                 return;
-            if (side == 0)
+            if (side < 2)
             {
-                selectedIndex = index;
-                return;
-            }
-
-            if (side == 1)
-            {
-                if (selectedIndex >= 0)
-                    puzzle.Connect(selectedIndex, index);
-                selectedIndex = -1;
+                var before = (bool[])puzzle.Matched.Clone();
+                matching.Select(side,index);
+                AnimateNewMatches(before,puzzle);
                 return;
             }
 
@@ -322,6 +343,7 @@ namespace Escape4Now.UI
                     break;
                 case SurvivalPuzzleType.Circuit:
                     puzzle.RotateCircuit(index);
+                    cells[index].Motion.Rotate(); feedback.CircuitChanged();
                     break;
                 case SurvivalPuzzleType.PowerSwitches:
                 case SurvivalPuzzleType.Breaker:
@@ -332,7 +354,7 @@ namespace Escape4Now.UI
                         selectedIndex = index;
                     else
                     {
-                        puzzle.SwapNumbers(selectedIndex, index);
+                        SwapNumbers(puzzle,selectedIndex,index);
                         selectedIndex = -1;
                     }
 
@@ -345,11 +367,34 @@ namespace Escape4Now.UI
         {
             if (!CanDrag)
                 return;
-            if (sourceSide == 0 && targetSide == 1)
-                mode.Tasks.Puzzle.Connect(sourceIndex, targetIndex);
+            if (sourceSide < 2 && targetSide < 2)
+            {
+                var puzzle = mode.Tasks.Puzzle;
+                var before = (bool[])puzzle.Matched.Clone();
+                matching.Match(sourceSide,sourceIndex,targetSide,targetIndex);
+                AnimateNewMatches(before,puzzle);
+            }
             else if (sourceSide == 2 && targetSide == 2 && mode.Tasks.Puzzle.Definition.type == SurvivalPuzzleType.ArrangeNumbers)
-                mode.Tasks.Puzzle.SwapNumbers(sourceIndex, targetIndex);
+                SwapNumbers(mode.Tasks.Puzzle,sourceIndex,targetIndex);
             selectedIndex = -1;
+        }
+
+        private void AnimateNewMatches(bool[] before,Escape4Now.Puzzles.PuzzleSession puzzle)
+        {
+            for (int i = 0; i < before.Length; i++)
+                if (!before[i] && puzzle.Matched[i])
+                {
+                    feedback.Connected();
+                    if (puzzle.Definition.type != SurvivalPuzzleType.MatchWires)
+                        left[i].Motion.Insert(right[System.Array.IndexOf(puzzle.Right,puzzle.Left[i])].transform.position);
+                }
+        }
+        private void SwapNumbers(Escape4Now.Puzzles.PuzzleSession puzzle,int a,int b)
+        {
+            if (a == b) return;
+            puzzle.SwapNumbers(a,b);
+            cells[a].Motion.AnimateFrom(cells[b].transform.position);
+            cells[b].Motion.AnimateFrom(cells[a].transform.position);
         }
 
         // Pass the visible code field to the puzzle instead of checking the code inside the UI.
