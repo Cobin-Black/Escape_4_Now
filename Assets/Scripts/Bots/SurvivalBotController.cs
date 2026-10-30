@@ -96,7 +96,7 @@ namespace Escape4Now.Bots
                     int nextDistance = DistanceToMonster(path[0]);
 
                     // Only escape if the puzzle route approaches the Monster.
-                    if (nextDistance < currentDistance)
+                    if (nextDistance <= currentDistance && nextDistance <= 3)
                     {
                         List<Vector2Int> escapePath = FindEscapePath();
 
@@ -112,6 +112,17 @@ namespace Escape4Now.Bots
 
                 if (path == null || path.Count == 0)
                     break;
+
+                // Never move directly into the Monster's footprint.
+                if (DistanceToMonster(path[0]) == 0)
+                {
+                    List<Vector2Int> escapePath = FindEscapePath();
+
+                    if (escapePath == null || escapePath.Count == 0)
+                        break;
+
+                    path = escapePath;
+                }
 
                 if (!player.MoveAlongBotPath(path))
                     break;
@@ -457,7 +468,19 @@ namespace Escape4Now.Bots
                         visited.Contains(next))
                         continue;
 
-                    int newCost = costs[current] + player.Mode.MovementCost(next);
+                    int distance = DistanceToMonster(next);
+                    int dangerPenalty = 0;
+
+                    if (distance <= 1)
+                        dangerPenalty = 20;
+                    else if (distance == 2)
+                        dangerPenalty = 10;
+                    else if (distance == 3)
+                        dangerPenalty = 5;
+
+                    int newCost = costs[current]
+                        + player.Mode.MovementCost(next)
+                        + dangerPenalty;
 
                     if (!costs.ContainsKey(next) || newCost < costs[next])
                     {
@@ -539,7 +562,18 @@ namespace Escape4Now.Bots
                 int cost = 0;
 
                 foreach (Vector2Int step in path)
+                {
                     cost += player.Mode.MovementCost(step);
+
+                    int distance = DistanceToMonster(step);
+
+                    if (distance <= 1)
+                        cost += 20;
+                    else if (distance == 2)
+                        cost += 10;
+                    else if (distance == 3)
+                        cost += 5;
+                }
 
                 if (cost < shortestCost)
                 {

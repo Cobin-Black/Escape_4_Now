@@ -775,7 +775,6 @@ namespace Escape4Now.Player
                     queue.Enqueue(next);
                 }
             }
-
             // Reconstruct the path to the closest reachable position.
             List<Vector2Int> path = new List<Vector2Int>();
             Vector2Int step = closestPosition;
@@ -790,52 +789,66 @@ namespace Escape4Now.Player
             return path;
         }
 
-
         private Vector2Int GetAIChargeDirection()
         {
             if (monsterTurn < chargeReadyTurn)
                 return Vector2Int.zero;
 
+            PlayerCharacter target = FindClosestPlayer();
+
+            if (target == null)
+                return Vector2Int.zero;
+
             Vector2Int[] directions =
             {
-        Vector2Int.up,
-        Vector2Int.down,
-        Vector2Int.left,
-        Vector2Int.right
-    };
+                Vector2Int.up,
+                Vector2Int.down,
+                Vector2Int.left,
+                Vector2Int.right
+            };
+            Vector2Int bestDirection = Vector2Int.zero;
+            int currentDistance = GetDistanceToFootprint(target.GridPosition);
+            int bestDistance = currentDistance;
 
             foreach (Vector2Int direction in directions)
             {
-                // The Monster needs room for its first Charge step.
-                if (!IsFootprintWalkable(gridPosition + direction))
+                Vector2Int destination = gridPosition;
+                int steps = 0;
+
+                for (int i = 0; i < chargeDistance; i++)
+                {
+                    Vector2Int next = destination + direction;
+
+                    if (!IsFootprintWalkable(next))
+                        break;
+
+                    destination = next;
+                    steps++;
+                }
+
+                // Avoid charging into an obstacle.
+                if (steps < chargeDistance)
                     continue;
 
-                foreach (PlayerCharacter survivor in players)
+                int distanceX = Mathf.Max(0,
+                    Mathf.Max(destination.x - target.GridPosition.x,
+                        target.GridPosition.x - (destination.x + 1)));
+
+                int distanceY = Mathf.Max(0,
+                    Mathf.Max(destination.y - target.GridPosition.y,
+                        target.GridPosition.y - (destination.y + 1)));
+
+                int distance = distanceX + distanceY;
+
+                if (distance < bestDistance)
                 {
-                    if (survivor == null || !survivor.isActiveAndEnabled
-                        || survivor.Health <= 0)
-                        continue;
-
-                    Vector2Int position = survivor.GridPosition;
-
-                    for (int step = 1; step <= chargeDistance; step++)
-                    {
-                        Vector2Int anchor = gridPosition + direction * step;
-
-                        // Check whether the Survivor is in the Charge's path.
-                        if (position.x >= anchor.x && position.x <= anchor.x + 1
-                            && position.y >= anchor.y && position.y <= anchor.y + 1)
-                        {
-                            return direction;
-                        }
-                    }
+                    bestDistance = distance;
+                    bestDirection = direction;
                 }
             }
 
-            return Vector2Int.zero;
+            return bestDirection;
         }
-
-
 
         // Lets the AI move toward the closest player during its turn.
         private void TakeAITurn()
@@ -907,7 +920,6 @@ namespace Escape4Now.Player
             Vector2Int direction = path[0] - gridPosition;
             TryMove(direction);
         }
-
 
         // Finishes the Monster turn and returns control to the player turn cycle.
         private void EndMonsterTurn()

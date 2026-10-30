@@ -478,7 +478,8 @@ namespace Escape4Now.Player
                              + Mathf.Abs(cell.y - previous.y);
 
                 if (distance != 1 || !MovementMap.IsWalkable(cell)
-                    || (MovementMap.IsExit(cell) && !CanUseExit))
+                    || (MovementMap.IsExit(cell) && !CanUseExit) 
+                    || IsMonsterTile(cell))
                     return false;
 
                 totalCost += gameMode.MovementCost(cell);
