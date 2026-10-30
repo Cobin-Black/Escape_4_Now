@@ -25,6 +25,7 @@ namespace Escape4Now.UI
         [SerializeField] private Outline interactionOutline;
         [SerializeField] private PuzzlePieceMotion motion;
         [SerializeField] private PuzzleMatchingPieceView matchingView;
+        [SerializeField] private SurvivalPowerSwitchHandle powerSwitch;
         [SerializeField] private Color selectedOutline = Color.white;
         [SerializeField] private Color correctOutline = new Color(.3f,1,.65f,1);
         [SerializeField] private Color wrongOutline = new Color(1,.3f,.25f,1);
@@ -51,10 +52,10 @@ namespace Escape4Now.UI
 
         private SurvivalPuzzleUI owner;
         private int side, index;
-        private Vector3 home;
         public Button Button => button;
         public PuzzlePieceMotion Motion => motion;
         public PuzzleMatchingPieceView MatchingView => matchingView;
+        public SurvivalPowerSwitchHandle PowerSwitch => powerSwitch;
         public Vector2 ConnectionPoint(RectTransform space,int column)
         {
             var rect = (RectTransform)transform;
@@ -117,7 +118,6 @@ namespace Escape4Now.UI
                 return;
             if (side == 1 && !owner.IsWireMatching) return;
             owner.ClearSelection();
-            home = transform.position;
             if (owner.IsWireMatching && !owner.BeginWireDrag(side,index,data)) return;
             owner.DragSource = this;
             dragGroup.blocksRaycasts = false;
@@ -155,7 +155,6 @@ namespace Escape4Now.UI
         {
             if (owner == null || owner.DragSource != this)
                 return;
-            transform.position = home;
             motion?.ReturnHome();
             dragGroup.blocksRaycasts = true;
             owner.DragSource = null;

@@ -20,6 +20,7 @@ namespace Escape4Now.UI
         [SerializeField, Min(0)] private float failureSeconds = 1f;
         [SerializeField, Min(0)] private float warningSeconds = 5f;
         [SerializeField, Min(.01f)] private float circuitStepSeconds = .09f;
+        [SerializeField, Min(0)] private float circuitOutputHoldSeconds = .35f;
         [SerializeField, Range(0,1)] private float volume = .5f;
         [SerializeField, Range(0,1)] private float glowStrength = .2f;
         [SerializeField, Min(.1f)] private float glowSpeed = 12f;
@@ -31,13 +32,13 @@ namespace Escape4Now.UI
         [SerializeField] private string failureText = "Incorrect — turn ends";
         [SerializeField] private string timeoutText = "TIME'S UP — turn ends";
         private PuzzleSession attempt;
-        private float resultElapsed, circuitElapsed;
+        private float resultElapsed, circuitElapsed, completionWait;
         private bool resultPlayed;
         public bool CanInteract => attempt != null && !attempt.Solved && !attempt.Failed
             && !Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused;
         public bool ReadyToClose => attempt != null && (attempt.Solved || attempt.Failed)
-            && resultElapsed >= (attempt.Solved ? successSeconds : failureSeconds);
-        public float ResultWait => Mathf.Max(successSeconds,failureSeconds);
+            && resultElapsed >= (attempt.Solved ? completionWait : failureSeconds);
+        public float ResultWait => Mathf.Max(Mathf.Max(successSeconds,failureSeconds),completionWait);
         public void Hover() { if (CanInteract) Play(hoverSound); }
         public void Press() { if (CanInteract) Play(pressSound); }
         public void Connected() { Play(connectionSound); }
@@ -48,14 +49,20 @@ namespace Escape4Now.UI
         public void Present(PuzzleSession current)
         {
             if (attempt != current)
-            { attempt = current; resultElapsed = circuitElapsed = 0; resultPlayed = false; }
+            { attempt = current; resultElapsed = circuitElapsed = 0; resultPlayed = false; completionWait = successSeconds; }
             if (attempt == null) return;
             circuitElapsed += Time.deltaTime;
             bool ended = attempt.Solved || attempt.Failed;
             if (ended)
             {
                 resultElapsed += Time.deltaTime;
-                if (!resultPlayed) { resultPlayed = true; Play(attempt.Solved ? successSound : failureSound); }
+                if (!resultPlayed)
+                {
+                    resultPlayed = true;
+                    if(attempt.Solved && attempt.Definition.type == SurvivalPuzzleType.Circuit)
+                        completionWait = Mathf.Max(successSeconds,(attempt.PoweredCircuitDistances()[attempt.EndCell]+1)*circuitStepSeconds+circuitOutputHoldSeconds);
+                    Play(attempt.Solved ? successSound : failureSound);
+                }
             }
             var tint = ended ? attempt.Solved ? successColor : failureColor
                 : attempt.SecondsRemaining <= warningSeconds ? failureColor : readyColor;

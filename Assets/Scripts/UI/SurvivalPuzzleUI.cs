@@ -55,6 +55,10 @@ namespace Escape4Now.UI
         [SerializeField] private SurvivalMatchingUI matching;
         [SerializeField] private SurvivalPuzzleFeedback feedback;
         [SerializeField] private SurvivalPuzzleBoardView board;
+        [SerializeField] private SurvivalCircuitFlowView circuitFlow;
+        [SerializeField] private SurvivalNumberRowView numberRow;
+        [SerializeField] private SurvivalPowerSwitchBoard powerSwitchBoard;
+        [SerializeField] private Vector2 powerSwitchCellSize = new Vector2(100,70);
         [Header("Inspector Presentation")]
         [SerializeField]
         private Color neutral = new Color(.18f, .23f, .27f);
@@ -74,6 +78,9 @@ namespace Escape4Now.UI
         [SerializeField] private string numberOrderFormat = "ORDER: {0}";
         [SerializeField] private string numberPickText = "Select two tiles to swap, or drag one onto another.";
         [SerializeField] private string numberSelectedFormat = "Selected {0}. Choose another tile to swap.";
+        [SerializeField] private string numberProgressFormat = "In place {0}/{1}";
+        [SerializeField] private string circuitProgressFormat = "Powered pieces {0}/{1}  |  Output: {2}";
+        [SerializeField] private Color circuitWaitingColor = new Color(.35f,.25f,.16f,1);
         [SerializeField] private string matchingProgressFormat = "Matched {0} / {1}";
         [SerializeField] private string lightsProgressFormat = "Green lights {0} / {1}";
         [SerializeField]
@@ -227,11 +234,17 @@ namespace Escape4Now.UI
                 bool circuit = definition.type == SurvivalPuzzleType.Circuit;
                 int count = circuit ? attempt.Ports.Length : definition.Count;
                 bool numbers = definition.type == SurvivalPuzzleType.ArrangeNumbers;
+                bool powerSwitches = definition.type == SurvivalPuzzleType.PowerSwitches;
+                if(powerSwitchBoard!=null)powerSwitchBoard.gameObject.SetActive(powerSwitches);
+                if(circuitFlow != null) circuitFlow.gameObject.SetActive(circuit);
+                if(numberRow != null) numberRow.gameObject.SetActive(numbers);
                 int columns = Mathf.Clamp(tokenColumns, 1, count);
                 //Avoid leaving one control alone on the last row when a balanced grid fits.
                 if (columns > 1 && count > columns && count % columns == 1) columns--;
-                cellGrid.constraintCount = circuit ? definition.circuitSize : numbers ? count : columns;
-                cellGrid.cellSize = circuit ? circuitCellSize : numbers ? numberCellSize : tokenCellSize;
+                cellGrid.constraintCount = circuit ? definition.circuitSize : numbers || powerSwitches ? count : columns;
+                cellGrid.cellSize = circuit ? circuitCellSize : numbers ? numberCellSize : powerSwitches ? powerSwitchCellSize : tokenCellSize;
+                if(powerSwitches)
+                    cellGrid.cellSize=new Vector2(Mathf.Min(powerSwitchCellSize.x,(((RectTransform)pieces.transform).rect.width-cellGrid.spacing.x*(count-1))/count),powerSwitchCellSize.y);
                 if (numbers)
                 {
                     var area = ((RectTransform)pieces.transform).rect;
@@ -239,7 +252,10 @@ namespace Escape4Now.UI
                     var order = new string[count];
                     for (int i = 0; i < count; i++) order[i] = (i + 1).ToString();
                     clue.text = string.Format(numberOrderFormat, string.Join("  ", order));
-                    status.text = selectedIndex >= 0 ? string.Format(numberSelectedFormat, attempt.Values[selectedIndex] + 1) : numberPickText;
+                    int placed = 0;
+                    for(int i=0;i<count;i++) if(attempt.Values[i]==i) placed++;
+                    status.text = string.Format(numberProgressFormat,placed,count)+"\n"
+                        +(selectedIndex >= 0 ? string.Format(numberSelectedFormat, attempt.Values[selectedIndex] + 1) : numberPickText);
                 }
                 if (definition.type == SurvivalPuzzleType.PowerSwitches)
                 {
@@ -282,19 +298,20 @@ namespace Escape4Now.UI
                     {
                         ports = attempt.Ports[i];
                         label = i == attempt.StartCell ? circuitInputLabel : i == attempt.EndCell ? circuitOutputLabel : "";
-                        color = i == attempt.StartCell ? selected : i == attempt.EndCell ? complete : neutral;
+                        bool outputPowered = (attempt.Ports[attempt.EndCell]&2)!=0 && feedback.PowerReached(powered[attempt.EndCell]);
+                        color = i == attempt.StartCell ? selected : i == attempt.EndCell ? outputPowered ? complete : circuitWaitingColor : neutral;
                     }
                     else if (definition.type == SurvivalPuzzleType.ArrangeNumbers)
                     {
                         label = (attempt.Values[i] + 1).ToString();
-                        color = selectedIndex == i ? selected : neutral;
+                        color = selectedIndex == i ? selected : attempt.Values[i] == i ? complete : neutral;
                     }
                     else if (definition.type == SurvivalPuzzleType.ButtonSequence)
                     {
                         color = attempt.FlashButton == i ? flash : definition.colors[i];
                         enabled = attempt.SequenceReady && !attempt.Solved && !attempt.Failed;
                     }
-                    else
+                    else if(!powerSwitches)
                     {
                         label += "\n" + (attempt.Switches[i] ? onText : offText);
                         color = attempt.Switches[i] ? complete : neutral;
@@ -303,11 +320,21 @@ namespace Escape4Now.UI
                     cells[i].Show(label, color, enabled, ports);
                     cells[i].Motion.SetTheme(definition.type);
                     cells[i].ArrangeMechanismCaption(definition.type == SurvivalPuzzleType.PowerSwitches || definition.type == SurvivalPuzzleType.Breaker);
+                    if(cells[i].PowerSwitch!=null)cells[i].PowerSwitch.Present(powerSwitchBoard,i,powerSwitches,powerSwitches && attempt.PowerSwitchPositions[i]);
                     if (circuit) cells[i].SetPowered(feedback.PowerReached(powered[i]));
                     else if (definition.type == SurvivalPuzzleType.PowerSwitches || definition.type == SurvivalPuzzleType.Breaker)
                     { cells[i].Motion.SetLever(attempt.Switches[i]); cells[i].Motion.SetPowered(attempt.Switches[i]); }
                     else if (definition.type == SurvivalPuzzleType.ButtonSequence) cells[i].Motion.SetPowered(attempt.FlashButton == i);
                 }
+                if(circuit)
+                {
+                    int lit=0;foreach(int distance in powered) if(feedback.PowerReached(distance)) lit++;
+                    bool output=(attempt.Ports[attempt.EndCell]&2)!=0 && feedback.PowerReached(powered[attempt.EndCell]);
+                    status.text=string.Format(circuitProgressFormat,lit,count,output?onText:offText);
+                    circuitFlow?.Present(attempt,cells,feedback);
+                }
+                if(numbers) numberRow?.Present(attempt,cells);
+                if(powerSwitches)powerSwitchBoard?.Present(attempt,cells);
             }
 
             if (focusPending)
@@ -386,15 +413,15 @@ namespace Escape4Now.UI
                 {
                     feedback.Connected();
                     if (puzzle.Definition.type != SurvivalPuzzleType.MatchWires)
-                        left[i].Motion.Insert(right[System.Array.IndexOf(puzzle.Right,puzzle.Left[i])].transform.position);
+                        left[i].Motion.Insert(right[System.Array.IndexOf(puzzle.Right,puzzle.Left[i])].Motion.SlotCenter);
                 }
         }
         private void SwapNumbers(Escape4Now.Puzzles.PuzzleSession puzzle,int a,int b)
         {
             if (a == b) return;
             puzzle.SwapNumbers(a,b);
-            cells[a].Motion.AnimateFrom(cells[b].transform.position);
-            cells[b].Motion.AnimateFrom(cells[a].transform.position);
+            cells[a].Motion.AnimateFrom(cells[b].Motion.SlotCenter);
+            cells[b].Motion.AnimateFrom(cells[a].Motion.SlotCenter);
         }
 
         // Pass the visible code field to the puzzle instead of checking the code inside the UI.

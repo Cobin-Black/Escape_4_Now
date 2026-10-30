@@ -18,6 +18,7 @@ namespace Escape4Now.Puzzles
 
         private readonly int[] solution;
         public bool[] Switches { get; }
+        public bool[] PowerSwitchPositions { get; }
         public bool[] Targets { get; }
         public int[] Sequence { get; }
         public string Code { get; }
@@ -67,6 +68,7 @@ namespace Escape4Now.Puzzles
             if (Sorted(Values))
                 SwapRaw(Values, 0, 1);
             Switches = new bool[count];
+            PowerSwitchPositions = new bool[count];
             Targets = new bool[count];
             for (int i = 0; i < count; i++)
                 Targets[i] = random.Next(2) == 1;
@@ -223,6 +225,7 @@ namespace Escape4Now.Puzzles
                 return;
             if (Definition.type == SurvivalPuzzleType.PowerSwitches)
             {
+                PowerSwitchPositions[index] = !PowerSwitchPositions[index];
                 FlipPower(index);
                 Solved = AllOn();
             }

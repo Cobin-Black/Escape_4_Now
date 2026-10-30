@@ -24,9 +24,10 @@ namespace Escape4Now.UI
         [SerializeField] private Color poweredColor = new Color(.25f,1,.7f,1);
         [SerializeField] private Color unpoweredColor = new Color(.2f,.27f,.3f,1);
         private bool hovered, pressed, dragging, moving, inserted;
-        private Vector3 destination;
+        private Vector2 destination;
         private float moveRemaining, pressRemaining, powerPhase;
         public RectTransform Artwork => artwork;
+        public Vector3 SlotCenter => ((RectTransform)transform).TransformPoint(((RectTransform)transform).rect.center);
         public void SetTheme(SurvivalPuzzleType type)
         {
             if (lever != null) lever.parent.gameObject.SetActive(type == SurvivalPuzzleType.PowerSwitches || type == SurvivalPuzzleType.Breaker);
@@ -59,12 +60,19 @@ namespace Escape4Now.UI
             if (RectTransformUtility.ScreenPointToWorldPointInRectangle((RectTransform)artwork.parent,screen,camera,out var position))
                 artwork.position = position;
         }
-        public void ReturnHome() { dragging = false; MoveTo(transform.position,false); }
+        public void ReturnHome() { dragging = false; MoveHome(); }
         public void Insert(Vector3 slot) { dragging = false; MoveTo(slot,true); }
         public void AnimateFrom(Vector3 position)
-        { if (artwork == null) return; artwork.position = position; MoveTo(transform.position,false); }
+        { if (artwork == null) return; dragging = false; artwork.position = position; MoveHome(); }
+        private void MoveHome()
+        { destination = Vector2.zero; moving = true; inserted = false; moveRemaining = moveSeconds; }
         private void MoveTo(Vector3 target,bool hideWhenDone)
-        { destination = target; moving = true; inserted = hideWhenDone; moveRemaining = moveSeconds; }
+        {
+            //Keep the destination relative to the slot so resizing or pausing cannot leave a tile floating.
+            Vector2 anchorOrigin = (Vector2)artwork.localPosition-artwork.anchoredPosition;
+            destination = (Vector2)artwork.parent.InverseTransformPoint(target)-anchorOrigin;
+            moving = true; inserted = hideWhenDone; moveRemaining = moveSeconds;
+        }
         public void ResetPiece()
         {
             moving = dragging = inserted = hovered = pressed = false;
@@ -83,8 +91,8 @@ namespace Escape4Now.UI
                 if (moving && !dragging)
                 {
                     moveRemaining -= Time.deltaTime;
-                    artwork.position = Vector3.Lerp(artwork.position,destination,Time.deltaTime*response);
-                    if (moveRemaining <= 0) { artwork.position = destination; moving = false; }
+                    artwork.anchoredPosition = Vector2.Lerp(artwork.anchoredPosition,destination,Time.deltaTime*response);
+                    if (moveRemaining <= 0) { artwork.anchoredPosition = destination; moving = false; }
                 }
                 if (artworkGroup != null && inserted && !moving) artworkGroup.alpha = 0;
             }

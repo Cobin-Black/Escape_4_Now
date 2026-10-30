@@ -678,6 +678,10 @@ public static class SurvivalRulesChecks
             configuredDefinition.timeLimitSeconds = 120f;
             if (definition.type == SurvivalPuzzleType.ArrangeNumbers)
                 configuredDefinition.numberCount = int.Parse(Argument("-puzzleCount", definition.numberCount.ToString()));
+            if (definition.type == SurvivalPuzzleType.Circuit)
+                configuredDefinition.circuitSize = int.Parse(Argument("-circuitSize", definition.circuitSize.ToString()));
+            if (definition.type == SurvivalPuzzleType.PowerSwitches)
+                configuredDefinition.switchCount = int.Parse(Argument("-switchCount", definition.switchCount.ToString()));
             typeof(SurvivalTaskController).GetProperty("Puzzle").SetValue(mode.Tasks,
                 new PuzzleSession(configuredDefinition, int.Parse(Argument("-puzzleSeed", "42"))));
             yield return null;
@@ -718,6 +722,24 @@ public static class SurvivalRulesChecks
                 field.text = puzzle.Code.Substring(0, 2);
                 Require(field.characterLimit == definition.codeLength, "Code entry uses Inspector difficulty");
             }
+            else if (definition.type == SurvivalPuzzleType.PowerSwitches)
+            {
+                int index=0;
+                bool wouldSolve=true;
+                for(int i=0;i<puzzle.Switches.Length;i++)
+                    if(!(i==0 || i==1 ? !puzzle.Switches[i] : puzzle.Switches[i]))wouldSolve=false;
+                if(wouldSolve)index=1;
+                var token=(PuzzleTokenUI)references.FindProperty("cells").GetArrayElementAtIndex(index).objectReferenceValue;
+                var before=(bool[])puzzle.Switches.Clone();bool position=puzzle.PowerSwitchPositions[index];
+                yield return SlidePowerSwitch(token,position?-50:50);
+                Require(puzzle.PowerSwitchPositions[index]!=position,"A real pointer drag moves the horizontal switch exactly once");
+                for(int i=0;i<before.Length;i++)
+                    Require(puzzle.Switches[i]==(i==index || i==(index+1)%before.Length ? !before[i] : before[i]),"Each switch changes only its two linked output lights");
+                var parts=new SerializedObject(token.PowerSwitch);
+                Require(((GameObject)parts.FindProperty("housing").objectReferenceValue).activeInHierarchy
+                    && !((GameObject)parts.FindProperty("oldHandle").objectReferenceValue).activeSelf,
+                    "Power Switches uses a horizontal control instead of the breaker handle");
+            }
             else if (definition.type == SurvivalPuzzleType.ButtonSequence)
             {
                 while (!puzzle.SequenceReady) yield return null;
@@ -733,6 +755,8 @@ public static class SurvivalRulesChecks
                 Require(button.gameObject.activeInHierarchy || puzzle.Solved, "Native puzzle control responds: " + definition.type);
             }
 
+            if(definition.type == SurvivalPuzzleType.ArrangeNumbers)
+                yield return CheckNumberReflow(context, references, puzzle);
             foreach (var size in new[]
             {
                 new Vector2Int(1280, 720),
@@ -897,6 +921,15 @@ public static class SurvivalRulesChecks
                 for (int i = 0; i < puzzle.Ports.Length && !puzzle.Solved; i++)
                     for (int turn = 0; turn < 4 && puzzle.Ports[i] != solution[i] && !puzzle.Solved; turn++)
                         yield return Click(((PuzzleTokenUI)cellRefs.GetArrayElementAtIndex(i).objectReferenceValue).Button);
+                var response=(SurvivalPuzzleFeedback)view.FindProperty("feedback").objectReferenceValue;
+                while(puzzle.Solved && !response.PowerReached(puzzle.PoweredCircuitDistances()[puzzle.EndCell])) yield return null;
+                var flow=(SurvivalCircuitFlowView)view.FindProperty("circuitFlow").objectReferenceValue;
+                var connections=new SerializedObject(flow).FindProperty("bridges");
+                int visible=0;
+                for(int i=0;i<connections.arraySize;i++) if(((Image)connections.GetArrayElementAtIndex(i).objectReferenceValue).gameObject.activeInHierarchy)visible++;
+                Require(visible>2,"Circuit displays real links across tile gaps when power reaches the output");
+                ScreenCapture.CaptureScreenshot("Logs/SurvivalRulesPreviews/Circuit-powered.png");
+                yield return null; yield return null;
                 break;
             case SurvivalPuzzleType.PowerSwitches:
                 int mask = -1;
@@ -995,6 +1028,46 @@ public static class SurvivalRulesChecks
             "Timeout awards no puzzle progress and ends exactly the current turn");
         Require(context.Timer.TimeRemaining < start, "Match clock keeps counting while the task is open");
         Object.Destroy(definition);
+    }
+
+    private static IEnumerator CheckNumberReflow(MatchUIContext context,SerializedObject view,PuzzleSession puzzle)
+    {
+        var refs=view.FindProperty("cells");
+        int target=1;
+        var copy=(int[])puzzle.Values.Clone(); var saved=copy[0];copy[0]=copy[1];copy[1]=saved;
+        bool wouldSolve=true;for(int i=0;i<copy.Length;i++) if(copy[i]!=i)wouldSolve=false;
+        if(wouldSolve)target=2;
+        var first=(PuzzleTokenUI)refs.GetArrayElementAtIndex(0).objectReferenceValue;
+        var second=(PuzzleTokenUI)refs.GetArrayElementAtIndex(target).objectReferenceValue;
+        yield return Drag(first,second);
+        //Resize during the swap, then pause and resume with a different canvas size.
+        NativeUiChecks.SetSize(720,960);yield return new WaitForSeconds(.4f);
+        context.Session.PauseGame();NativeUiChecks.SetSize(1280,720);
+        yield return new WaitForSecondsRealtime(.15f);context.Session.ResumeGame();
+        yield return new WaitForSeconds(.4f);
+        float previousX=float.NegativeInfinity, rowY=first.transform.position.y;
+        for(int i=0;i<puzzle.Values.Length;i++)
+        {
+            var token=(PuzzleTokenUI)refs.GetArrayElementAtIndex(i).objectReferenceValue;
+            Require(token.Motion.Artwork.anchoredPosition.sqrMagnitude<.001f,"Swapped numbers settle exactly into their own slots after resize and Pause");
+            Require(Mathf.Abs(token.transform.position.y-rowY)<.1f && token.transform.position.x>previousX,"Number slots stay in one ordered row");
+            previousX=token.transform.position.x;
+        }
+        ScreenCapture.CaptureScreenshot("Logs/SurvivalRulesPreviews/ArrangeNumbers-settled.png");
+        yield return null;yield return null;
+    }
+
+    private static IEnumerator SlidePowerSwitch(PuzzleTokenUI token,float distance)
+    {
+        var start=Center(token);
+        InputSystem.QueueStateEvent(mouse,new MouseState{position=start});yield return null;yield return null;
+        InputSystem.QueueStateEvent(mouse,new MouseState{position=start}.WithButton(MouseButton.Left));yield return null;yield return null;
+        for(int step=1;step<=4;step++)
+        {
+            InputSystem.QueueStateEvent(mouse,new MouseState{position=start+Vector2.right*(distance*step/4)}.WithButton(MouseButton.Left));
+            yield return null;yield return null;
+        }
+        InputSystem.QueueStateEvent(mouse,new MouseState{position=start+Vector2.right*distance});yield return null;yield return null;
     }
 
     private static Vector2 Center(Component component)

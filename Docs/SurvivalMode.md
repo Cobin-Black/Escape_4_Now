@@ -132,6 +132,12 @@ Use an isolated project copy if Unity already has the main project open.
 
 ### Puzzle interaction and deadlines
 
+**Power Switches** uses horizontal controls with a separate row of red/green output lamps. Click a switch or drag its handle; each switch flips the two lights printed below it. Hovering or selecting a switch outlines that pair. The last switch links back to light 1. The goal is to turn every output lamp green. **Repair the Breaker** keeps its existing vertical handles and target combination. `SurvivalPowerSwitchHandle` owns the slide gesture/appearance, while `SurvivalPowerSwitchBoard` presents the linked lamps; puzzle rules remain in `PuzzleSession`. Slider travel/speed, drag threshold, lamp colors/positions and captions are Inspector settings.
+
+Circuit power uses **Survival Circuit Flow View**: only mutually facing connectors receive a bridge across the tile gap. Powered links show moving pulses, and the output stays unlit until a real source-to-output path exists. Wire width, pulse size/speed, terminal length and colors are Inspector settings. The success view remains open long enough for power to reach the output.
+
+Arrange Numbers has fixed destination labels, correct-position colors and an **In place** counter. Pieces animate back to anchored positions inside their own slots; they do not use screen coordinates or tile pivots as destinations. This keeps the row stable during rapid swaps, resizing and Pause. **Survival Number Row View** controls the target-label wording, colors and offset. Both puzzle views use the existing native Input System UI and puzzle rules.
+
 **Survival Puzzle Board View** on the interface prefab controls matching row height, spacing, column widths and headings. Rows adapt to the enabled piece count. Board housings and button shadows are saved native UI; decorative screws ignore layout groups. Switch captions have a separate Inspector inset so handles do not cover their text.
 
 Supplies now use separate editable pictures for the ball, towel, book, cone, bottle and tool. Each piece has a dedicated icon area beside its caption. Receiving containers show a dim picture and a matching color border; inserting an item lights the container and leaves an **OK** label. Batteries use the same interaction with battery pictures and device slots. Wire sockets and wire instructions appear only in the wire puzzle. **Matching Icon Prefabs** on the puzzle definition can replace the native UI artwork; **Puzzle Matching Piece View** controls caption spacing, icon size and slot colors.
