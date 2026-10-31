@@ -229,7 +229,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fcc5f863a49471d41b6623b06524cf70, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Map.SurvivalAmbientEffect
   particles: {fileID: 7534521272018650296}
   sound: {fileID: 5278435796722286075}
@@ -251,13 +251,13 @@ AudioSource:
   m_audioClip: {fileID: 0}
   m_Resource: {fileID: 8300000, guid: 9b496555525e6e6438859c3d5180ec7e, type: 3}
   m_PlayOnAwake: 1
-  m_Volume: 0.18
+  m_Volume: 0.055
   m_Pitch: 1
   Loop: 1
   Mute: 0
   Spatialize: 0
   SpatializePostEffects: 0
-  Priority: 128
+  Priority: 180
   DopplerLevel: 1
   MinDistance: 1
   MaxDistance: 500
@@ -345,15 +345,15 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a31c2c3d424be72439a783a66da30095, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Map.SurvivalEffectVisual
   highlights:
   - {fileID: 7060745379719617160}
   - {fileID: 5446107513693841267}
   rotatingSpray: {fileID: 0}
   pulseSeconds: 1.5
-  minimumOpacity: 0.35
-  maximumOpacity: 0.8
+  minimumOpacity: 0.08
+  maximumOpacity: 0.7
   sprayDegreesPerSecond: 45
 --- !u!1 &4845499997183283581
 GameObject:

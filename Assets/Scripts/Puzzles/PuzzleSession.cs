@@ -18,6 +18,7 @@ namespace Escape4Now.Puzzles
 
         private readonly int[] solution;
         public bool[] Switches { get; }
+        public bool[] PowerSwitchPositions { get; }
         public bool[] Targets { get; }
         public int[] Sequence { get; }
         public string Code { get; }
@@ -27,6 +28,8 @@ namespace Escape4Now.Puzzles
         public float Elapsed { get; private set; }
         public bool Solved { get; private set; }
         public bool Failed { get; private set; }
+        public bool TimedOut { get; private set; }
+        public float SecondsRemaining => Math.Max(0, Definition.timeLimitSeconds - Elapsed);
         public bool SequenceReady => Elapsed >= Sequence.Length * (Definition.sequenceFlashSeconds + Definition.sequenceGapSeconds);
 
         public int FlashButton
@@ -57,10 +60,15 @@ namespace Escape4Now.Puzzles
             Matched = new bool[count];
             SurvivalObjectiveLayout.Shuffle(Left, random);
             SurvivalObjectiveLayout.Shuffle(Right, random);
+            //Keep matching layouts shuffled even when both random orders happen to be identical.
+            bool aligned = true;
+            for (int i = 0; i < count; i++) if (Left[i] != Right[i]) aligned = false;
+            if (aligned && count > 1) SwapRaw(Right,0,1);
             SurvivalObjectiveLayout.Shuffle(Values, random);
             if (Sorted(Values))
                 SwapRaw(Values, 0, 1);
             Switches = new bool[count];
+            PowerSwitchPositions = new bool[count];
             Targets = new bool[count];
             for (int i = 0; i < count; i++)
                 Targets[i] = random.Next(2) == 1;
@@ -150,7 +158,9 @@ namespace Escape4Now.Puzzles
         // Advance the sequence preview using time supplied by the task controller; paused frames supply no time.
         public void Tick(float seconds)
         {
+            if (Solved || Failed) return;
             Elapsed += Math.Max(0f, seconds);
+            if (SecondsRemaining <= 0) { TimedOut = true; Failed = true; }
         }
 
         // Match the selected pair by its saved key, not by its current screen position.
@@ -215,6 +225,7 @@ namespace Escape4Now.Puzzles
                 return;
             if (Definition.type == SurvivalPuzzleType.PowerSwitches)
             {
+                PowerSwitchPositions[index] = !PowerSwitchPositions[index];
                 FlipPower(index);
                 Solved = AllOn();
             }
@@ -242,8 +253,15 @@ namespace Escape4Now.Puzzles
         // Follow only connections that meet on both neighboring pieces; merely touching pieces are not connected.
         private bool CircuitConnected()
         {
-            if ((Ports[StartCell] & 8) == 0 || (Ports[EndCell] & 2) == 0)
-                return false;
+            return (Ports[EndCell] & 2) != 0 && PoweredCircuitDistances()[EndCell] >= 0;
+        }
+
+        //The same search supplies both the solved check and the UI's traveling power animation.
+        public int[] PoweredCircuitDistances()
+        {
+            var distances = new int[Ports.Length];
+            for (int i = 0; i < distances.Length; i++) distances[i] = -1;
+            if ((Ports[StartCell] & 8) == 0) return distances;
             int size = Definition.circuitSize;
             var visited = new HashSet<int>
             {
@@ -251,6 +269,7 @@ namespace Escape4Now.Puzzles
             };
             var queue = new Queue<int>();
             queue.Enqueue(StartCell);
+            distances[StartCell] = 0;
             int[] dx =
             {
                 0,
@@ -273,8 +292,6 @@ namespace Escape4Now.Puzzles
             while (queue.Count > 0)
             {
                 int cell = queue.Dequeue();
-                if (cell == EndCell)
-                    return true;
                 for (int d = 0; d < 4; d++)
                 {
                     int x = cell % size + dx[d], y = cell / size + dy[d];
@@ -282,11 +299,14 @@ namespace Escape4Now.Puzzles
                         continue;
                     int next = y * size + x;
                     if ((Ports[cell] & bit[d]) != 0 && (Ports[next] & bit[(d + 2) % 4]) != 0 && visited.Add(next))
+                    {
+                        distances[next] = distances[cell] + 1;
                         queue.Enqueue(next);
+                    }
                 }
             }
 
-            return false;
+            return distances;
         }
     }
 }

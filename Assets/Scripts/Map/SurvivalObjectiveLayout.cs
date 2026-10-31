@@ -42,13 +42,16 @@ namespace Escape4Now.Map
         public IReadOnlyList<SurvivalTaskPlacement> Tasks => tasks.AsReadOnly();
         public IReadOnlyList<Vector2Int> Exits => exits.AsReadOnly();
         public Vector2Int MonsterSpawn { get; private set; }
+        public bool HasMonsterSpawn { get; private set; }
         public int Required { get; }
         public int SurvivorCount { get; }
 
         public bool IsReserved(Vector2Int cell) => reserved.Contains(cell);
         public bool IsTaskObject(Vector2Int cell) => objects.Contains(cell);
         public bool IsWalkable(Vector2Int cell) => map.IsWalkable(cell.x, cell.y) && !objects.Contains(cell);
-        public bool IsSpawn(Vector2Int cell) => cell == MonsterSpawn || ContainsIndex(map.PlayerSpawns, cell);
+        public bool IsSpawn(Vector2Int cell) => (HasMonsterSpawn && cell.x >= MonsterSpawn.x && cell.y >= MonsterSpawn.y
+            && cell.x < MonsterSpawn.x + settings.monsterFootprint.x && cell.y < MonsterSpawn.y + settings.monsterFootprint.y)
+            || ContainsIndex(map.PlayerSpawns, cell);
         private bool ContainsIndex(IReadOnlyList<int> indices, Vector2Int cell)
         {
             foreach (int index in indices)
@@ -59,7 +62,7 @@ namespace Escape4Now.Map
 
         private Vector2Int Cell(int index) => new Vector2Int(index % map.Width, index / map.Width);
         public static int Distance(Vector2Int a, Vector2Int b) => Math.Abs(a.x - b.x) + Math.Abs(a.y - b.y);
-        // Reserve spawns first, then try placing opposite exits and enough reachable puzzle stations.
+        //Place survivor reservations, exits and tasks before choosing a monster spawn in the remaining space.
         public SurvivalObjectiveLayout(SurvivalMapLayout map, SurvivalRulesSettings settings, int survivors)
         {
             this.map = map;
@@ -78,6 +81,7 @@ namespace Escape4Now.Map
                 exits.Clear();
                 objects.Clear();
                 reserved.Clear();
+                HasMonsterSpawn = false;
 
                 foreach (var prop in map.Props)
                 {
@@ -97,52 +101,6 @@ namespace Escape4Now.Map
 
                 var available = AllCells();
                 Shuffle(available, random);
-
-                // Spawn the Monster in the center of the 4x4 clearing.
-                bool monsterFound = false;
-
-                int clearingStartX = (map.Width - 4) / 2;
-                int clearingStartY = (map.Height - 4) / 2;
-
-                Vector2Int centerSpawn = new Vector2Int(
-                    clearingStartX + (4 - settings.monsterFootprint.x) / 2,
-                    clearingStartY + (4 - settings.monsterFootprint.y) / 2
-                );
-
-                bool fits = true;
-
-                for (int y = 0; y < settings.monsterFootprint.y; y++)
-                {
-                    for (int x = 0; x < settings.monsterFootprint.x; x++)
-                    {
-                        Vector2Int part = centerSpawn + new Vector2Int(x, y);
-
-                        if (!IsWalkable(part) || reserved.Contains(part))
-                        {
-                            fits = false;
-                        }
-                    }
-                }
-
-                if (fits)
-                {
-                    MonsterSpawn = centerSpawn;
-                    monsterFound = true;
-                }
-
-                if (!monsterFound)
-                    continue;
-
-                for (int y = 0; y < settings.monsterFootprint.y; y++)
-                {
-                    for (int x = 0; x < settings.monsterFootprint.x; x++)
-                    {
-                        Reserve(
-                            MonsterSpawn + new Vector2Int(x, y),
-                            settings.spawnClearance
-                        );
-                    }
-                }
 
                 int exitSide = random.Next(4);
 
@@ -228,12 +186,19 @@ namespace Escape4Now.Map
                     && usedTypes.Count > Required
                     && ValidateConnectivity(null))
                 {
-                    return;
+                    //Find a spawn in the finished campus; never carve out land for it.
+                    if (!SurvivalMonsterSpawnSelector.TryChoose(map, this, settings, random, out var spawn)) continue;
+                    MonsterSpawn = spawn;
+                    HasMonsterSpawn = true;
+                    for (int y = 0; y < settings.monsterFootprint.y; y++)
+                        for (int x = 0; x < settings.monsterFootprint.x; x++)
+                            Reserve(spawn + new Vector2Int(x,y), settings.monsterSpawnClearanceRadius);
+                    if (ValidateConnectivity(null)) return;
                 }
             }
 
             throw new InvalidOperationException(
-                "Could not place reachable Survival tasks and exits with at least one extra puzzle type. Check puzzle compatibility, clearances and count settings."
+                "Could not place reachable Survival tasks, exits and a safe monster spawn. Check puzzle compatibility, extra task counts, monster separation and clearances."
             );
         }
 
@@ -348,7 +313,7 @@ namespace Escape4Now.Map
         }
 
         // Search from the survivor spawns and check that task interaction spaces and exits are still reachable.
-        public bool ValidateConnectivity(ISet<Vector2Int> extraBlocked)
+        public bool ValidateConnectivity(ISet<Vector2Int> extraBlocked, bool checkMonsterSpawn = true)
         {
             var visited = new HashSet<Vector2Int>();
             var pending = new Queue<Vector2Int>();
@@ -385,7 +350,7 @@ namespace Escape4Now.Map
             foreach (var exit in exits)
                 if (!visited.Contains(exit))
                     return false;
-            return visited.Contains(MonsterSpawn);
+            return !checkMonsterSpawn || !HasMonsterSpawn || visited.Contains(MonsterSpawn);
         }
 
         public static void Shuffle<T>(IList<T> list, System.Random random)

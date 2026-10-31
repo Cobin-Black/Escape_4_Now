@@ -20,6 +20,10 @@ namespace Escape4Now.Map
         [Header("Survival Trigger Systems")]
         [SerializeField] private SurvivalEnvironmentController environment;
         [SerializeField] private SurvivalEventScheduler scheduler;
+        [Header("Outdoor Visual and Audio Feedback")]
+        [SerializeField] private SurvivalWorldFeedback worldFeedback;
+        public SurvivalWorldFeedback WorldFeedback => worldFeedback;
+        public bool RainActive => temporary.Exists(effect => effect.type == SurvivalEventType.RainStorm);
         private readonly Dictionary<Vector2Int, SurvivalEventRule> tiles = new Dictionary<Vector2Int, SurvivalEventRule>();
         private readonly List<SurvivalWorldMarker> markers = new List<SurvivalWorldMarker>();
         private readonly List<TemporaryEffect> temporary = new List<TemporaryEffect>();
@@ -274,6 +278,7 @@ namespace Escape4Now.Map
             }
 
             ShowEffectMessage(player, rule.type, Feedback(rule, player));
+            worldFeedback?.Emit(rule.type,player);
         }
 
         private void ShowSkipped(PlayerCharacter player, SurvivalEventRule rule) => ShowMessage(player, string.Format(settings.skippedEventFormat, rule.title));

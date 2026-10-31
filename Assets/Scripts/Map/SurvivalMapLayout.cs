@@ -55,7 +55,6 @@ namespace Escape4Now.Map
     public sealed class SurvivalMapLayout
     {
         private const int Bands = 3;
-        private const int MonsterClearingSize = 4;
         private static readonly int[] StepX = { 1, 0, -1, 0 }, StepY = { 0, 1, 0, -1 };
         private readonly SurvivalGenerationSettings settings;
         private readonly SurvivalObstacleSettings obstacleSettings;
@@ -179,7 +178,6 @@ namespace Escape4Now.Map
                     BuildArea(settings.CourtyardPocket, slots[unused], false);
                     areas[areas.Count - 1].IsPocket = true;
                 }
-            CreateMonsterClearing();
             if (!IsConnected()) return false;
 
             foreach (OutdoorPropRule rule in obstacleSettings.Rules)
@@ -479,47 +477,13 @@ namespace Escape4Now.Map
         private void SetFootprint(int x, int y, int w, int h, bool value)
         { for (int yy = y; yy < y + h; yy++) for (int xx = x; xx < x + w; xx++) blocked[yy * Width + xx] = value; }
 
-        // Creates a 4x4 open clearing at the center of the Survival map.
-        // Keeps the clearing walkable and prevents props from spawning inside it.
-        private void CreateMonsterClearing()
-        {
-            int startX = (Width - MonsterClearingSize) / 2;
-            int startY = (Height - MonsterClearingSize) / 2;
-
-            for (int y = startY; y < startY + MonsterClearingSize; y++)
-            {
-                for (int x = startX; x < startX + MonsterClearingSize; x++)
-                {
-                    int cell = y * Width + x;
-
-                    surface[cell] = OutdoorSurface.Grass;
-                    areaTypes[cell] = OutdoorAreaKind.None;
-                    blocked[cell] = false;
-                    protectedPath[cell] = true;
-                    mainPath[cell] = true;
-                }
-            }
-        }
-
-        // Pick separate walkable spawn cells from the completed layout.
-        // Pick separate walkable spawn cells from the completed layout.
-
+        //Choose survivor positions from the finished campus. Monster separation is checked afterward.
         private bool ChooseSpawns()
         {
-            // Calculate the Monster's position in the center clearing.
-            int monsterX = (Width - 4) / 2 + 1;
-            int monsterY = (Height - 4) / 2 + 1;
-
             for (int y = 1; y < Height - 1; y++)
             {
                 for (int x = 1; x < Width - 1; x++)
                 {
-                    // Keep players at least 8 tiles away from the Monster.
-                    int monsterDistance = Math.Abs(x - monsterX) + Math.Abs(y - monsterY);
-
-                    if (monsterDistance < 8)
-                        continue;
-
                     bool safe = IsWalkable(x, y) && !occupied[y * Width + x];
 
                     for (int dy = -settings.SpawnClearance; safe && dy <= settings.SpawnClearance; dy++)

@@ -134,6 +134,8 @@ GameObject:
   - component: {fileID: 106}
   - component: {fileID: 105}
   - component: {fileID: 107}
+  - component: {fileID: 108}
+  - component: {fileID: 109}
   m_Layer: 0
   m_Name: Survival Outdoor Map
   m_TagString: Untagged
@@ -166,8 +168,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b732f042c1524cf7a535638ccdb4f004, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  m_Name:
+  m_EditorClassIdentifier:
   generation:
     width: 32
     height: 32
@@ -345,8 +347,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b732f042c1524cf7a535638ccdb4f009, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  m_Name:
+  m_EditorClassIdentifier:
   map: {fileID: 102}
   trackFieldPrefabs:
   - {fileID: 11400000, guid: b732f042c1524cf7a535638ccdb4f109, type: 3}
@@ -638,6 +640,7 @@ MonoBehaviour:
   settings: {fileID: 11400000, guid: e6a51f70ccb2a51448b15c5e198c8007, type: 2}
   environment: {fileID: 106}
   scheduler: {fileID: 105}
+  worldFeedback: {fileID: 108}
 --- !u!114 &105
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -675,6 +678,45 @@ MonoBehaviour:
   m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Map.SurvivalCampusVisuals
   settings: {fileID: 11400000, guid: c3ae699635ccae6408d626d7c489db3d, type: 2}
+--- !u!114 &108
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 100}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e4260d2f4762dc34b9ce08793291a860, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Map.SurvivalWorldFeedback
+  cues:
+  - type: 10
+    prefab: {fileID: 7848721383147913372, guid: c658c793c4ec7144a9f5c3b46d396f92, type: 3}
+  - type: 20
+    prefab: {fileID: 3485869123048513755, guid: 330ec55f7759b2f4fb078607c9fcc835, type: 3}
+  - type: 3
+    prefab: {fileID: 2204939255067531541, guid: b141d29a9cf72ed4c8c59fd632557e39, type: 3}
+  - type: 9
+    prefab: {fileID: 8359822295121521097, guid: 718251fb026e2584a986c1f30b1d2500, type: 3}
+  - type: 4
+    prefab: {fileID: 4820276447861482257, guid: a8f46d493e6c3d9469b4519fa95f46bd, type: 3}
+--- !u!114 &109
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 100}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: fdde967406a180346a0e198779c3e92b, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Map.SurvivalLightingFeedback
+  events: {fileID: 104}
+  map: {fileID: 102}
+  brightThreshold: 0.7
+  unlitColor: {r: 0.15, g: 0.19, b: 0.21, a: 1}
 --- !u!1 &200
 GameObject:
   m_ObjectHideFlags: 0
@@ -893,7 +935,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 0.72, g: 0.79, b: 0.86, a: 1}
@@ -968,7 +1010,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 0.72, g: 0.79, b: 0.86, a: 1}
@@ -1150,7 +1192,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5f7201a12d95ffc409449d95f23cf332, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Text
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
@@ -2949,6 +2991,7 @@ MonoBehaviour:
   completedMessage: Puzzle completed for the team.
   incompleteMessage: Puzzle incomplete. It can be attempted on a later turn.
   failedMessage: Puzzle failed. Try again on a later turn.
+  timedOutMessage: Task time ran out. Try again on a later turn.
   showTaskNames: 1
   showNearbyTaskNames: 1
   taskNameDistance: 2
@@ -4301,7 +4344,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 0.36, g: 0.7, b: 0.48, a: 1}
@@ -4358,7 +4401,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 306cc8c2b49d7114eaa3623786fc2126, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.LayoutElement
   m_IgnoreLayout: 0
   m_MinWidth: -1
@@ -4419,7 +4462,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9085046f02f69544eb97fd06b6048fe2, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Toggle
   m_Navigation:
     m_Mode: 3
@@ -4467,7 +4510,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 0.15, g: 0.18, b: 0.16, a: 1}
@@ -4505,7 +4548,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 306cc8c2b49d7114eaa3623786fc2126, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.LayoutElement
   m_IgnoreLayout: 1
   m_MinWidth: -1
@@ -4543,7 +4586,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 0.36, g: 0.7, b: 0.48, a: 1}
@@ -4934,11 +4977,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 3386689922029162758, guid: 89816560eab031442b56c83d798debe0, type: 3}
       propertyPath: mode
-      value: 
+      value:
       objectReference: {fileID: 1200000052}
     - target: {fileID: 3386689922029162758, guid: 89816560eab031442b56c83d798debe0, type: 3}
       propertyPath: context
-      value: 
+      value:
       objectReference: {fileID: 1561651309}
     - target: {fileID: 3399056213027433073, guid: 89816560eab031442b56c83d798debe0, type: 3}
       propertyPath: m_Name
@@ -4946,7 +4989,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6978770066372938357, guid: 89816560eab031442b56c83d798debe0, type: 3}
       propertyPath: viewport
-      value: 
+      value:
       objectReference: {fileID: 1561651310}
     m_RemovedComponents: []
     m_RemovedGameObjects: []

@@ -16,10 +16,11 @@ MonoBehaviour:
   type: 4
   title: Power Switches
   mapLabel: Switches
-  instruction: Each switch flips its light and the next light. The last wraps to
-    the first. Turn every light green.
+  instruction: Slide or click a switch to flip its two linked lights. The labels
+    show which lights it affects. Turn every light green.
   stationPrefab: {fileID: 457065678631449261, guid: d53cd5f0c0cc9294aa9eec661942cc5b, type: 3}
   compatibleAreas: 01000000040000000500000006000000020000000300000007000000
+  timeLimitSeconds: 15
   wireCount: 4
   sequenceLength: 4
   sequenceButtonCount: 4
@@ -46,3 +47,4 @@ MonoBehaviour:
   - D
   - E
   - F
+  matchingIconPrefabs: []

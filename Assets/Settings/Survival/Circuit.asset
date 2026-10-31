@@ -20,6 +20,7 @@ MonoBehaviour:
     tile with an unbroken circuit.
   stationPrefab: {fileID: 970741259573402856, guid: 0e9d8a6bdc57f3f4b88e3869a0f70f41, type: 3}
   compatibleAreas: 06000000040000000700000002000000
+  timeLimitSeconds: 20
   wireCount: 4
   sequenceLength: 4
   sequenceButtonCount: 4

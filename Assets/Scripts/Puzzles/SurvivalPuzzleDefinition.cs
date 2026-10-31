@@ -33,6 +33,9 @@ namespace Escape4Now.Puzzles
         public string instruction;
         public SurvivalWorldMarker stationPrefab;
         public OutdoorAreaKind[] compatibleAreas;
+        [Header("Attempt Time Limit")]
+        [Min(1f), Tooltip("Seconds available for this attempt, including any sequence preview. Pause stops this countdown.")]
+        public float timeLimitSeconds = 15f;
         [Header("Short Puzzle Difficulty")]
         [Range(2, 6)]
         public int wireCount = 4;
@@ -61,11 +64,15 @@ namespace Escape4Now.Puzzles
         [Header("Visible Matching Keys")]
         public Color[] colors;
         public string[] symbols;
+        [Tooltip("Optional native UI icon prefabs, indexed like Symbols and Colors. Used by supplies and batteries.")]
+        public GameObject[] matchingIconPrefabs;
         public bool Allows(OutdoorAreaKind area) => compatibleAreas != null && Array.IndexOf(compatibleAreas, area) >= 0;
         public int Count => type == SurvivalPuzzleType.MatchWires ? wireCount : type == SurvivalPuzzleType.SortSupplies ? supplyCount : type == SurvivalPuzzleType.Batteries ? batteryCount : type == SurvivalPuzzleType.ArrangeNumbers ? numberCount : type == SurvivalPuzzleType.Breaker ? breakerCount : type == SurvivalPuzzleType.ButtonSequence ? sequenceButtonCount : switchCount;
 
         public void Validate()
         {
+            if (timeLimitSeconds < 1f || float.IsNaN(timeLimitSeconds) || float.IsInfinity(timeLimitSeconds))
+                throw new InvalidOperationException("Assign a positive task time limit on Survival puzzle '" + name + "'.");
             if (stationPrefab == null)
                 throw new InvalidOperationException("Assign Station Prefab on Survival puzzle '" + name + "'.");
             if (compatibleAreas == null || compatibleAreas.Length == 0)

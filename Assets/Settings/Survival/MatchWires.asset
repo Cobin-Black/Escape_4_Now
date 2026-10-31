@@ -16,10 +16,11 @@ MonoBehaviour:
   type: 0
   title: Match the Wires
   mapLabel: Wires
-  instruction: Select a wire on the left, then its match on the right, or drag between
-    them. Match both color and symbol.
+  instruction: Drag a wire between matching sockets, or click both ends in either
+    order. Match color and symbol. Drop on empty space to cancel.
   stationPrefab: {fileID: 4346921062425260134, guid: 5c8df6b101d238a478c303bb707ca9f9, type: 3}
   compatibleAreas: 06000000040000000700000002000000
+  timeLimitSeconds: 15
   wireCount: 4
   sequenceLength: 4
   sequenceButtonCount: 4
