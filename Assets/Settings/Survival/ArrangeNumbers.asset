@@ -20,6 +20,7 @@ MonoBehaviour:
     them, or drag one onto another.
   stationPrefab: {fileID: 3094712573281682986, guid: b5cb3e98e6d5fc544adb025c13be23e0, type: 3}
   compatibleAreas: 01000000040000000500000006000000020000000300000007000000
+  timeLimitSeconds: 15
   wireCount: 4
   sequenceLength: 4
   sequenceButtonCount: 4

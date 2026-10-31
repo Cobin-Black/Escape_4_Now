@@ -16,10 +16,11 @@ MonoBehaviour:
   type: 5
   title: Sort Supplies
   mapLabel: Supplies
-  instruction: Select or drag each supply on the left to the container with the same
-    color and symbol on the right.
+  instruction: Drag each supply into the matching container on the right. Match the
+    picture, name and color. You can also select an item, then its container.
   stationPrefab: {fileID: 476664812067662895, guid: 66c96f8ecc8890644a4730a6e875ede9, type: 3}
   compatibleAreas: 01000000040000000500000006000000020000000300000007000000
+  timeLimitSeconds: 15
   wireCount: 4
   sequenceLength: 4
   sequenceButtonCount: 4
@@ -46,3 +47,10 @@ MonoBehaviour:
   - CONE
   - BOTTLE
   - TOOL
+  matchingIconPrefabs:
+  - {fileID: 859038459268692106, guid: 8500cb2c5935cdb4c82714e006abc59b, type: 3}
+  - {fileID: 7099666325540674790, guid: 088703bfdee062942ad0e436aded7d99, type: 3}
+  - {fileID: 8661317022636907328, guid: 257e5c85b84a98e40a92ade711522eb3, type: 3}
+  - {fileID: 5379173215059422282, guid: 004a1571bec16a6469c16640bd616dfe, type: 3}
+  - {fileID: 2435992455459767207, guid: 707cdd33c5dc9d040b77308b9092ca62, type: 3}
+  - {fileID: 711811603751443266, guid: e2c81a4d04941e448a10d3da9502e944, type: 3}

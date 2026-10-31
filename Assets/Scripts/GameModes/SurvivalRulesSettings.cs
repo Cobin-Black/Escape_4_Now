@@ -54,10 +54,20 @@ namespace Escape4Now.GameModes
         public int taskProtectionRadius = 1;
         [Min(0)]
         public int spawnClearance = 1;
-        [Tooltip("Reserved monster footprint in grid tiles. The current MonsterCharacter from main occupies 2 by 2 tiles.")]
-        public Vector2Int monsterFootprint = new Vector2Int(2, 2);
         [Min(1)]
         public int minimumTaskSeparation = 5;
+        [Header("Procedural Monster Spawn")]
+        [Tooltip("Match the actor's occupied grid footprint. The existing monster uses 2 by 2 tiles.")]
+        public Vector2Int monsterFootprint = new Vector2Int(2, 2);
+        [Min(2)] public int minimumMonsterSpawnDistance = 8;
+        [Min(0), Tooltip("Extra existing walkable space around the footprint. No tiles are cleared or repainted.")]
+        public int monsterSpawnClearanceRadius = 0;
+        [Range(1,4)] public int minimumMonsterOpenDirections = 2;
+        [Min(2)] public int minimumMonsterReachablePositions = 12;
+        [Min(1), Tooltip("Initial candidate batch. Remaining candidates are checked before requesting another layout.")]
+        public int monsterSpawnAttempts = 128;
+        public OutdoorAreaKind[] preferredMonsterSpawnAreas = { OutdoorAreaKind.TrackField, OutdoorAreaKind.Courtyard,
+            OutdoorAreaKind.Courts, OutdoorAreaKind.Parking };
         [Header("Validation Limits")]
         [Min(1)]
         public int placementAttempts = 128;
@@ -86,6 +96,9 @@ namespace Escape4Now.GameModes
         public void Validate(int survivors)
         {
             if (monsterFootprint.x < 1 || monsterFootprint.y < 1) throw new InvalidOperationException("Assign a positive monster footprint.");
+            if (minimumMonsterSpawnDistance < 2 || monsterSpawnClearanceRadius < 0 || minimumMonsterOpenDirections < 1
+                || minimumMonsterOpenDirections > 4 || minimumMonsterReachablePositions < 2 || monsterSpawnAttempts < 1)
+                throw new InvalidOperationException("Assign valid procedural monster spawn distances, clearance and search limits.");
             var count = ForSurvivors(survivors);
             if (count.required < 1 || count.extraStations < 1 || escapeCount < 2 || exitPrefab == null || placementAttempts < 1 || candidatesPerTask < 1 || mapRegenerationAttempts < 1 || interactionRange < 1 || puzzles == null || puzzles.Length == 0)
                 throw new InvalidOperationException("Assign valid Survival rules, extra tasks, two exits and puzzle prefabs.");

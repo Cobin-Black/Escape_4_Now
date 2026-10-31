@@ -20,6 +20,7 @@ MonoBehaviour:
     Include any zero at the start.
   stationPrefab: {fileID: 4776133405496814340, guid: e9cb8f0abc3f1dd45a2b3d0ab0f9c892, type: 3}
   compatibleAreas: 01000000040000000500000006000000020000000300000007000000
+  timeLimitSeconds: 15
   wireCount: 4
   sequenceLength: 4
   sequenceButtonCount: 4

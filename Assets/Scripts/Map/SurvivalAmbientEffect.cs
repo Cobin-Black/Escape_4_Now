@@ -38,6 +38,8 @@ namespace Escape4Now.Map
             weatherShape.vertices = vertices; weatherShape.triangles = new[] { 0, 1, 2, 0, 2, 3 };
             weatherShape.RecalculateNormals(); weatherShape.RecalculateBounds();
             shape.shapeType = ParticleSystemShapeType.Mesh; shape.mesh = weatherShape;
+            //Emit across the whole campus surface, rather than only at its four corner vertices.
+            shape.meshShapeType = ParticleSystemMeshShapeType.Triangle;
             shape.scale = Vector3.one;
             var emission = particles.emission;
             emission.rateOverTime = Mathf.Min(maximumEmission, map.Width * map.Height * particlesPerTile);

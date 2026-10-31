@@ -20,6 +20,7 @@ MonoBehaviour:
     may appear more than once.
   stationPrefab: {fileID: 1894731249346795470, guid: 243e3f09be25ca3429c79b13504c11e5, type: 3}
   compatibleAreas: 01000000040000000500000006000000020000000300000007000000
+  timeLimitSeconds: 15
   wireCount: 4
   sequenceLength: 4
   sequenceButtonCount: 4

@@ -294,6 +294,19 @@ namespace Escape4Now.Map
                     }
                 }
                 else foreach (var cell in effect.Cells) effect.visuals.Add(Spawn(rule.prefab, cell).gameObject);
+                if (rule.type == SurvivalEventType.FallenBranch && effect.visuals[0].TryGetComponent<SurvivalBranchFall>(out var falling))
+                {
+                    foreach (var cell in effect.Cells)
+                    {
+                        map.RemoveTemporaryBlock(cell);
+                        falling.Configure(() => map.TryBlockTemporarily(cell), () =>
+                        {
+                            foreach (var visual in effect.visuals) if (visual != null) Destroy(visual);
+                            active.Remove(effect);
+                        });
+                        break;
+                    }
+                }
             }
             active.Add(effect);
             plan.Consume(rule);
@@ -306,6 +319,9 @@ namespace Escape4Now.Map
         public void ResolveStep(PlayerCharacter player)
         {
             var cell = player.GridPosition;
+            foreach (var effect in active)
+                if (effect.Cells.Contains(cell) && (effect.Type == SurvivalEventType.Mud || effect.Type == SurvivalEventType.Sprinklers))
+                    events.WorldFeedback?.Emit(effect.Type,player);
             var boost = Rule(SurvivalEventType.TrackBoost);
             if (boost != null && boostCells.Contains(cell) && boosted.Add(player)) events.ApplyEnvironmentalStep(boost, player);
             var slip = Rule(SurvivalEventType.PoolsideSlip);

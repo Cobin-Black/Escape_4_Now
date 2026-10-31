@@ -16,10 +16,11 @@ MonoBehaviour:
   type: 7
   title: Battery Placement
   mapLabel: Batteries
-  instruction: Select or drag each battery on the left to the slot with the same
-    color and symbol on the right.
+  instruction: Drag each battery into its matching device slot. Match color and symbol.
+    You can also select a battery, then its slot.
   stationPrefab: {fileID: 6686921080891051134, guid: c782108d62314bd48b033012b954f680, type: 3}
   compatibleAreas: 01000000040000000500000006000000020000000300000007000000
+  timeLimitSeconds: 15
   wireCount: 4
   sequenceLength: 4
   sequenceButtonCount: 4
@@ -46,3 +47,10 @@ MonoBehaviour:
   - D
   - E
   - F
+  matchingIconPrefabs:
+  - {fileID: 7845160589747723335, guid: 342f91a377c194948aa04e33eebc90e6, type: 3}
+  - {fileID: 3876462914771744110, guid: 20e82cd0f1c83094f8d3f3db045a96cf, type: 3}
+  - {fileID: 7870156982034759779, guid: 2bf5d3362b9486c41a859fcd1edbe30b, type: 3}
+  - {fileID: 6988836365343538384, guid: cc4820354f3c7b4438cf4591fb9b1a1d, type: 3}
+  - {fileID: 7143039750200610250, guid: 4e4d1e4f5d4867d4d8b646ab07138394, type: 3}
+  - {fileID: 972712236260769633, guid: 76b497084bfefd046bafb2171b939199, type: 3}

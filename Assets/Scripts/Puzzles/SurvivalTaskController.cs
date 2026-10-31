@@ -21,6 +21,7 @@ namespace Escape4Now.Puzzles
         [SerializeField]
         private string incompleteMessage = "Puzzle incomplete. It can be attempted on a later turn.";
         [SerializeField] private string failedMessage = "Puzzle failed. Try again on a later turn.";
+        [SerializeField] private string timedOutMessage = "Task time ran out. Try again on a later turn.";
         [Header("Task Labels")]
         [SerializeField, InspectorName("Show Task Debug Labels")] private bool showTaskNames = true;
         [SerializeField] private bool showNearbyTaskNames = true;
@@ -34,6 +35,7 @@ namespace Escape4Now.Puzzles
         public PlayerCharacter Actor { get; private set; }
         public SurvivalTaskPlacement CurrentTask { get; private set; }
         public int Revision { get; private set; }
+        private bool completionRecorded;
 
         // Create station and gate visuals from the objective layout; this does not choose new positions.
         public void BeginMatch()
@@ -100,6 +102,7 @@ namespace Escape4Now.Puzzles
             Actor = player;
             CurrentTask = task;
             Puzzle = new PuzzleSession(task.Definition, random.Next());
+            completionRecorded = false;
             Revision++;
             player.SetInMenu(true);
             return true;
@@ -118,14 +121,22 @@ namespace Escape4Now.Puzzles
                 FinishAttempt(true, true);
         }
 
+        //Save a solved task before its short success animation, so the animation cannot delay team progress.
+        public void RecordCompletion()
+        {
+            if (!completionRecorded && Puzzle != null && Puzzle.Solved)
+                completionRecorded = mode.CompleteTask(CurrentTask,Actor);
+        }
+
         // Save only a successful completion; closing or failing keeps the station available for another turn.
         private void FinishAttempt(bool solved, bool endTurn)
         {
             var player = Actor;
-            if (solved)
+            if (solved && !completionRecorded)
                 mode.CompleteTask(CurrentTask, player);
             if (player != null)
-                mode.Events.ShowMessage(player, solved ? completedMessage : Puzzle != null && Puzzle.Failed ? failedMessage : incompleteMessage);
+                mode.Events.ShowMessage(player, solved ? completedMessage : Puzzle != null && Puzzle.TimedOut ? timedOutMessage
+                    : Puzzle != null && Puzzle.Failed ? failedMessage : incompleteMessage);
             Puzzle = null;
             Actor = null;
             CurrentTask = null;

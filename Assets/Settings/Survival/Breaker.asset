@@ -19,6 +19,7 @@ MonoBehaviour:
   instruction: Click each numbered breaker to match its ON or OFF target shown above.
   stationPrefab: {fileID: 5740129353046687525, guid: 628cd9804f05ff7468652e2260500341, type: 3}
   compatibleAreas: 06000000040000000700000002000000
+  timeLimitSeconds: 15
   wireCount: 4
   sequenceLength: 4
   sequenceButtonCount: 4
