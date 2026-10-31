@@ -37,6 +37,8 @@ namespace Escape4Now.Player
         [SerializeField, Min(0.1f)] private float diceRollAnimationDuration = 0.9f;
         [SerializeField, Min(0f)] private float sharedTileHorizontalOffset = 0.14f;
         [SerializeField, Min(0f)] private float sharedTileVerticalOffset = 0.08f;
+        [Header("Bot Settings")]
+        [SerializeField] private bool isBotControlled;
 
         private SpriteRenderer spriteRenderer;
         private Coroutine moveRoutine;
@@ -59,7 +61,6 @@ namespace Escape4Now.Player
         public PlayerEventState EventState => eventState;
         private bool isUsingItem;
         private bool isInMenu;
-        private bool isBotControlled;
         private bool roarSlowActive;
         public PlayerInventory Inventory => inventory;
         public bool HasReachedExit => hasReachedExit;
@@ -452,6 +453,42 @@ namespace Escape4Now.Player
             if (totalCost > movesRemaining) return false;
             //Players may share a tile; walls and the movement budget still limit the route.
             if (path.Count == 0 || (MovementMap.IsExit(path[0]) && !CanUseExit)) return false;
+            moveRoutine = StartCoroutine(MoveAlongPath(path));
+            return true;
+        }
+
+        // Moves a Survival Bot along a path it has already calculated.
+        public bool MoveAlongBotPath(List<Vector2Int> path)
+        {
+            if (!(gameMode is SurvivalModeController) || !isBotControlled
+                || !CanReadTurnInput || !isActiveAndEnabled || IsMoving
+                || hasReachedExit || MovementMap == null
+                || !hasRolled || IsRollAnimating || movesRemaining <= 0
+                || (turnSystem != null && !turnSystem.IsPlayersTurn(this))
+                || path == null || path.Count == 0)
+                return false;
+
+            Vector2Int previous = gridPosition;
+            int totalCost = 0;
+
+            foreach (Vector2Int cell in path)
+            {
+                // Ensure the route moves one tile at a time.
+                int distance = Mathf.Abs(cell.x - previous.x)
+                             + Mathf.Abs(cell.y - previous.y);
+
+                if (distance != 1 || !MovementMap.IsWalkable(cell)
+                    || (MovementMap.IsExit(cell) && !CanUseExit) 
+                    || IsMonsterTile(cell))
+                    return false;
+
+                totalCost += gameMode.MovementCost(cell);
+                previous = cell;
+            }
+
+            if (totalCost > movesRemaining)
+                return false;
+
             moveRoutine = StartCoroutine(MoveAlongPath(path));
             return true;
         }
