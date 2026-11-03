@@ -40,6 +40,7 @@ namespace Escape4Now.GameModes
         public SurvivalObjectiveLayout Objectives => map.Objectives;
         public override IPlayerGridMap GridMap => map;
         public override GameModeType Type => GameModeType.Monster;
+        public override bool SupportsBots => true;
         public override int MinimumPlayers => 1;
         public override int MaximumTurnParticipants => 5;
 
