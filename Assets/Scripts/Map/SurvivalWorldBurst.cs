@@ -16,11 +16,15 @@ namespace Escape4Now.Map
         private Transform target;
         private float elapsed;
         private bool paused;
+        private System.Func<bool> pauseContext, endedContext;
+        // Arena effects use their own pause/lifecycle; existing Survival prefabs keep the original defaults.
+        public void ConfigureContext(System.Func<bool> isPaused, System.Func<bool> hasEnded)
+        { pauseContext = isPaused; endedContext = hasEnded; }
         public void Follow(Transform player) { target = player; }
         private void Update()
         {
-            if (Escape4Now.Multiplayer.LocalMultiplayerSession.MatchHasEnded) { Destroy(gameObject); return; }
-            bool pause = Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused;
+            if (endedContext != null ? endedContext() : Escape4Now.Multiplayer.LocalMultiplayerSession.MatchHasEnded) { Destroy(gameObject); return; }
+            bool pause = pauseContext != null ? pauseContext() : Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused;
             if (pause != paused)
             {
                 paused = pause;

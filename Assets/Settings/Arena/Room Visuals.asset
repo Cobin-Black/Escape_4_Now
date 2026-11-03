@@ -1,0 +1,65 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: d88a978e3f11dca4690fb961f70c69b3, type: 3}
+  m_Name: Room Visuals
+  m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Arena.ArenaRoomVisualSettings
+  auditoriumSeat: {fileID: 8644713646781487171, guid: 6ebbb2db7216af440bfa156ca6360d3a, type: 3}
+  lockers: {fileID: 7158599630475579421, guid: 24500a7ef5e43a64fb662862dcc04eee, type: 3}
+  equipmentRack: {fileID: 4113981635364971416, guid: 442853f614dfc614a928e6a6dbfb0a05, type: 3}
+  controlDesk: {fileID: 115361425740150470, guid: f8c36aefc16e0f843b5d0c3dbaf12b3e, type: 3}
+  scoreboard: {fileID: 3979347347617338240, guid: 2db64b0ae7c49f84ea8a79676298938e, type: 3}
+  curtainPleats: {fileID: 2456174729925247219, guid: b4af06096fcb51649a1cc11acafd8451, type: 3}
+  window: {fileID: 3966452330579728090, guid: 73abaf365a8dc4a4cb17710244509502, type: 3}
+  speaker: {fileID: 5172267532037703287, guid: a0f3fb3265d51c847bd895e091fff209, type: 3}
+  wallDetailSpacing: 3
+  detailChance: 0.8
+  baseboard: {r: 0.2, g: 0.24, b: 0.3, a: 1}
+  capColor: {r: 0.78, g: 0.73, b: 0.62, a: 1}
+  trimHeight: 0.08
+  courtKeyColor: {r: 0.18, g: 0.34, b: 0.59, a: 0.9}
+  awayKeyColor: {r: 0.66, g: 0.13, b: 0.15, a: 0.85}
+  stageEdge: {r: 0.18, g: 0.1, b: 0.06, a: 1}
+  stageEdgeHeight: 0.07
+  gymBackWallHeight: 1.15
+  windowWallInset: {x: 0, y: -0.46}
+  windowMountHeight: 0.28
+  scoreboardWallInset: {x: -0.46, y: 0}
+  scoreboardMountHeight: 0.3
+  scoreboardFacing: 3
+  showScoreboardText: 1
+  displayFont: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
+  scoreboardTitle: GYM
+  scoreboardText: GYM
+  scoreboardTextSize: 0.09
+  scoreboardFontSize: 64
+  scoreboardFontStyle: 1
+  scoreboardTextColor: {r: 1, g: 0.9, b: 0.6, a: 1}
+  scoreboardTextInset: {x: -0.14, y: 0}
+  scoreboardTextHeight: 0.64
+  scoreboardSortingOffset: 35
+  scoreboardHomeLabel: HOME
+  scoreboardAwayLabel: AWAY
+  scoreboardHomeScore: 0
+  scoreboardAwayScore: 0
+  scoreboardPeriodLabel: PERIOD
+  scoreboardPeriod: 1
+  scoreboardColumnOffset: 0.82
+  scoreboardHeaderHeight: 1.35
+  scoreboardTeamHeight: 1.05
+  scoreboardDigitsHeight: 0.66
+  scoreboardPeriodHeight: 0.29
+  scoreboardHeaderSize: 0.032
+  scoreboardTeamSize: 0.026
+  scoreboardDigitsSize: 0.08
+  scoreboardPeriodSize: 0.026
+  scoreboardLabelColor: {r: 0.9, g: 0.94, b: 1, a: 1}
+  playerSortingOffset: 60

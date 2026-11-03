@@ -186,15 +186,7 @@ namespace Escape4Now.UI
         // Creates filled and dimmed hearts based on health.
         private string Hearts(int remaining)
         {
-            remaining = Mathf.Clamp(remaining, 0, maxHearts);
-
-            string lost = new string('♥', maxHearts - remaining);
-
-            return new string('♥', remaining)
-                + (lost.Length > 0
-                    ? "<color=" + lostHeartColor + ">"
-                      + lost + "</color>"
-                    : "");
+            return HealthHeartText.Format(remaining, maxHearts, lostHeartColor);
         }
 
         // Creates the section, ability rows, and divider.
