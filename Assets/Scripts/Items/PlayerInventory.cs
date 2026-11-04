@@ -118,6 +118,8 @@ namespace Escape4Now.Items
         //Finds the Use Item action in the project-wide Input System asset (Assets/Settings/InputSystem_Actions).
         private void Awake()
         {
+            // Arena prefabs retain inventory data for future pickups, but do not use turn-based item input.
+            if (player != null && player.UsesRealTimeMovement) return;
             useItemAction = player != null && player.InputBindings != null ? player.InputBindings.UseItem
                 : null;
 

@@ -1,0 +1,43 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 74d65c0ccb9f3bc488e26c459d96ec2b, type: 3}
+  m_Name: Interface Style
+  m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Arena.ArenaInterfaceStyle
+  font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
+  setupTitleSize: 28
+  headingSize: 18
+  bodySize: 14
+  smallSize: 12
+  panel: {r: 0.025, g: 0.075, b: 0.12, a: 0.98}
+  card: {r: 0.055, g: 0.14, b: 0.2, a: 1}
+  input: {r: 0.09, g: 0.2, b: 0.28, a: 1}
+  accent: {r: 0.08, g: 0.72, b: 0.94, a: 1}
+  start: {r: 0.16, g: 0.7, b: 0.39, a: 1}
+  text: {r: 0.93, g: 0.97, b: 1, a: 1}
+  secondary: {r: 0.6, g: 0.77, b: 0.85, a: 1}
+  healthy: {r: 0.98, g: 0.27, b: 0.32, a: 1}
+  emptyHealth: {r: 0.12, g: 0.24, b: 0.31, a: 1}
+  holder: {r: 1, g: 0.76, b: 0.2, a: 1}
+  setupWidth: 650
+  padding: 22
+  gap: 12
+  playerRowHeight: 60
+  countButtonHeight: 40
+  startButtonHeight: 48
+  hudWidth: 252
+  hudPadding: 9
+  healthRowHeight: 38
+  healthSegments: 5
+  hudScale: 1
+  hudGap: 3
+  hudOffset: {x: 12, y: -12}
+  urgentTimerFraction: 0.25

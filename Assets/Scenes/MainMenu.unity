@@ -285,6 +285,39 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 93482e651091439aa509ec563875c0bf, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  startScreenScene: StartScreen
+  tutorialScene: Tutorial
+  leaderboardScene: Leaderboard
+  modeScenes:
+  - Race_Gamemode
+  - SurvivalMode
+  - FreeForAll
+  - HotPotato
+  background: {r: 0.663, g: 0.863, b: 1, a: 1}
+  tapeStripe: {r: 0.831, g: 0.941, b: 1, a: 1}
+  accent: {r: 0.212, g: 0.945, b: 0.804, a: 1}
+  headingColor: {r: 0.561, g: 0.816, b: 1, a: 1}
+  ModeNames:
+  - RACE
+  - SURVIVAL
+  - FREE FOR ALL
+  - HOT POTATO
+  ModePlayers:
+  - "2\u20134 PLAYERS"
+  - "2\u20134 PLAYERS"
+  - "2\u20134 PLAYERS"
+  - "2\u20134 PLAYERS"
+  ModeText:
+  - One key is hidden in a locker. Find it, battle other players for it on the same
+    tile, and carry it out.
+  - Something is loose in the school. Stay alive together until the clock runs out.
+  - Free movement in the gym. Combat rules are still being developed.
+  - Chase, tag and pass the potato before it explodes.
+  ModeWin:
+  - Carry the key through the EXIT first
+  - Survive until time is up or complete the tasks to escape
+  - Be the last player standing
+  - Be the last player standing
 --- !u!4 &1200000003
 Transform:
   m_ObjectHideFlags: 0

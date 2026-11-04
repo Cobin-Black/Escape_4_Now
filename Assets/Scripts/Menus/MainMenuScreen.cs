@@ -15,8 +15,8 @@ namespace Escape4Now.Menus
         [SerializeField] private string startScreenScene = "StartScreen";
         [SerializeField] private string tutorialScene = "Tutorial";
         [SerializeField] private string leaderboardScene = "Leaderboard";
-        [Tooltip("Scene for each game mode, in order: Race, Survival. Leave one empty while that mode is not built yet.")]
-        [SerializeField] private string[] modeScenes = { "Race_Gamemode", "SurvivalMode" };
+        [Tooltip("Scenes in order: Race, Survival, Free For All, Hot Potato.")]
+        [SerializeField] private string[] modeScenes = { "Race_Gamemode", "SurvivalMode", "FreeForAll", "HotPotato" };
 
         [Header("Colors")]
         [SerializeField] private Color background = new Color(0.663f, 0.863f, 1f);
@@ -26,15 +26,17 @@ namespace Escape4Now.Menus
 
         private static readonly string[] MenuTitles = { "GAME MODE", "START TUTORIAL", "SETTINGS", "LEADERBOARD", "ACCOUNT", "QUIT" };
         private static readonly string[] MenuSubtitles = { "Pick how you want to play", "New here? Start with this", "Sound, screen, controls", "Fastest escapes", "Sign up, name and picture", "Close the game" };
-        //The gamemodes on main: Race (Race_Gamemode scene) and Survival (SurvivalMode scene).
-        private static readonly string[] ModeNames = { "RACE", "SURVIVAL" };
-        private static readonly string[] ModePlayers = { "2–4 PLAYERS", "2–4 PLAYERS" };
-        private static readonly string[] ModeText =
+        [Header("Game Mode Cards (same order as Scenes)")]
+        [SerializeField] private string[] ModeNames = { "RACE", "SURVIVAL", "FREE FOR ALL", "HOT POTATO" };
+        [SerializeField] private string[] ModePlayers = { "2–4 PLAYERS", "2–4 PLAYERS", "2–4 PLAYERS", "2–4 PLAYERS" };
+        [SerializeField,TextArea] private string[] ModeText =
         {
             "One key is hidden in a locker. Find it, battle other players for it on the same tile, and carry it out.",
-            "Something is loose in the school. Stay alive together until the clock runs out."
+            "Something is loose in the school. Stay alive together until the clock runs out.",
+            "Free movement in the gym. Combat rules are still being developed.",
+            "Chase, tag and pass the potato before it explodes."
         };
-        private static readonly string[] ModeWin = { "Carry the key through the EXIT first", "Survive until time is up or complete the tasks to escape" };
+        [SerializeField] private string[] ModeWin = { "Carry the key through the EXIT first", "Survive until time is up or complete the tasks to escape", "Be the last player standing", "Be the last player standing" };
         private static readonly Color[] AvatarColors =
         {
             new Color(1f, 0.835f, 0f), new Color(0.212f, 0.945f, 0.804f), new Color(1f, 0.31f, 0.847f),
@@ -264,19 +266,19 @@ namespace Escape4Now.Menus
             Label(new Rect(inner.xMax - 200f, inner.y + 10f, 200f, 24f), ModeNames[mode] + " SELECTED", Text(MonoFont, 13, TextAnchor.MiddleRight), Muted);
 
             int count = ModeNames.Length;
-            float cw = (inner.width - 14f * (count - 1)) / count;
+            float cw = (inner.width - 14f) / 2;
             for (int i = 0; i < count; i++)
             {
                 bool on = mode == i;
-                Rect c = new Rect(inner.x + i * (cw + 14f), inner.y + 62f, cw, 300f);
+                Rect c = new Rect(inner.x + (i % 2) * (cw + 14f), inner.y + 62f + (i / 2) * 172f, cw, 158f);
                 if (on) Block(c, accent, Ink, 4f, Red, 6f);
                 else Block(c, Ink, Hover(c) ? Hex("#55556a") : Hex("#2e2e38"), 4f, Color.clear, 0f);
                 Color text = on ? Ink : Color.white;
 
-                Rect iconBox = new Rect(c.x + 18f, c.y + 18f, 56f, 56f);
+                Rect iconBox = new Rect(c.x + 14f, c.y + 12f, 32f, 32f);
                 if (on) Fill(iconBox, Ink);
                 else Block(iconBox, Hex("#1e1e26"), Line, 2f, Color.clear, 0f);
-                DrawModeIcon(i == 0 ? 0 : 1, new Rect(iconBox.x + 11f, iconBox.y + 11f, 34f, 34f), accent);
+                DrawModeIcon(i == 0 ? 0 : 1, new Rect(iconBox.x + 4f, iconBox.y + 4f, 24f, 24f), accent);
 
                 Vector2 tagSize = tagStyle.CalcSize(new GUIContent(ModePlayers[i]));
                 Rect tagRect = new Rect(c.xMax - 18f - tagSize.x - 12f, c.y + 18f, tagSize.x + 12f, 20f);
@@ -284,11 +286,10 @@ namespace Escape4Now.Menus
                 else Outline(tagRect, 2f, Hex("#44444f"));
                 Label(tagRect, ModePlayers[i], tagStyle, on ? accent : Hex("#bdbdbd"));
 
-                float nameH = cardName.CalcHeight(new GUIContent(ModeNames[i]), cw - 36f);
-                Label(new Rect(c.x + 18f, c.y + 86f, cw - 36f, nameH), ModeNames[i], cardName, text);
-                Label(new Rect(c.x + 18f, c.y + 94f + nameH, cw - 36f, 110f), ModeText[i], small, text);
-                Fill(new Rect(c.x + 18f, c.yMax - 62f, cw - 36f, 2f), on ? WithAlpha(Ink, 0.35f) : Hex("#2e2e38"));
-                Label(new Rect(c.x + 18f, c.yMax - 52f, cw - 36f, 40f), "WIN: " + ModeWin[i], Text(MonoFont, 12, TextAnchor.UpperLeft, true), text);
+                Label(new Rect(c.x + 55f, c.y + 14f, cw - 175f, 30f), ModeNames[i], Text(MonoFont, 18, TextAnchor.MiddleLeft, true), text);
+                Label(new Rect(c.x + 18f, c.y + 54f, cw - 36f, 55f), ModeText[i], small, text);
+                Fill(new Rect(c.x + 18f, c.yMax - 42f, cw - 36f, 2f), on ? WithAlpha(Ink, 0.35f) : Hex("#2e2e38"));
+                Label(new Rect(c.x + 18f, c.yMax - 34f, cw - 36f, 30f), "WIN: " + ModeWin[i], Text(MonoFont, 11, TextAnchor.UpperLeft, true), text);
                 if (Hit(c)) mode = i;
             }
 

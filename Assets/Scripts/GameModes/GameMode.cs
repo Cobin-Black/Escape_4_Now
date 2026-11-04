@@ -4,7 +4,7 @@ using UnityEngine;
 namespace Escape4Now.GameModes
 {
     //Every gamemode the item spawner keeps a separate item list for.
-    public enum GameModeType { Race, Monster, FreeForAll, Untitled }
+    public enum GameModeType { Race, Monster, FreeForAll, Untitled, HotPotato }
 
     //Base for the scene's gamemode script. Each gamemode decides its own exit and win rules.
     public abstract class GameMode : MonoBehaviour

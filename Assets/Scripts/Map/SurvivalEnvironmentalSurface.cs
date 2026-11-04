@@ -36,8 +36,15 @@ namespace Escape4Now.Map
         public void Configure(SurvivalMap map, IEnumerable<Vector2Int> region)
         {
             foreach (var legacy in replacedVisuals) if (legacy != null) legacy.SetActive(false);
+            if (style == EnvironmentalSurfaceStyle.TrackPaint) { PaintTrack(map, new HashSet<Vector2Int>(region)); return; }
+            Configure(region, point => map.GridToWorld(point), map.LayoutSeed, map.MapMaterial);
+        }
+
+        // The same merged wet-ground renderer also works on real-time arena maps.
+        public void Configure(IEnumerable<Vector2Int> region, System.Func<Vector2,Vector3> world, int seed, Material material)
+        {
+            foreach (var legacy in replacedVisuals) if (legacy != null) legacy.SetActive(false);
             var cells = new HashSet<Vector2Int>(region);
-            if (style == EnvironmentalSurfaceStyle.TrackPaint) { PaintTrack(map, cells); return; }
             var points = new List<Vector2>(); var triangles = new List<int>(); var colors = new List<Color>();
             var puddles = new List<Vector2>(); var puddleTriangles = new List<int>(); var puddleColors = new List<Color>();
             foreach (var cell in cells)
@@ -59,7 +66,7 @@ namespace Escape4Now.Map
                     }
                 }
                 AddPolygon(cell, boundary, points, triangles, colors, false);
-                float noise = Mathf.PerlinNoise(cell.x * grainScale + map.LayoutSeed % 997, cell.y * grainScale);
+                float noise = Mathf.PerlinNoise(cell.x * grainScale + seed % 997, cell.y * grainScale);
                 if (noise < puddleChance)
                 {
                     var outline = new List<Vector2>();
@@ -73,8 +80,8 @@ namespace Escape4Now.Map
                     AddPolygon(center, outline, puddles, puddleTriangles, puddleColors, true);
                 }
             }
-            Draw(map, style == EnvironmentalSurfaceStyle.Mud ? "Muddy Ground" : "Continuous wet ground", points, triangles, colors, groundSortingOrder);
-            Draw(map, "Shallow irregular puddles", puddles, puddleTriangles, puddleColors, groundSortingOrder+1);
+            Draw(world, material, style == EnvironmentalSurfaceStyle.Mud ? "Muddy Ground" : "Continuous wet ground", points, triangles, colors, groundSortingOrder);
+            Draw(world, material, "Shallow irregular puddles", puddles, puddleTriangles, puddleColors, groundSortingOrder+1);
         }
 
         // Fill a ground outline with triangles sharing a center point.
@@ -131,15 +138,15 @@ namespace Escape4Now.Map
         }
 
         // Convert grid points into local mesh positions so the surface follows the current map size.
-        private void Draw(SurvivalMap map,string label,List<Vector2> points,List<int> triangles,List<Color> colors,int order)
+        private void Draw(System.Func<Vector2,Vector3> world,Material material,string label,List<Vector2> points,List<int> triangles,List<Color> colors,int order)
         {
             if(points.Count==0)return;
             var item=new GameObject(label); item.transform.SetParent(transform,false);
             var vertices=new Vector3[points.Count];
-            for(int i=0;i<points.Count;i++)vertices[i]=item.transform.InverseTransformPoint(map.GridToWorld(points[i]));
+            for(int i=0;i<points.Count;i++)vertices[i]=item.transform.InverseTransformPoint(world(points[i]));
             var mesh=new Mesh { name=label }; mesh.vertices=vertices; mesh.triangles=triangles.ToArray(); mesh.colors=colors.ToArray();
             mesh.RecalculateBounds(); meshes.Add(mesh); item.AddComponent<MeshFilter>().sharedMesh=mesh;
-            var renderer=item.AddComponent<MeshRenderer>();renderer.sharedMaterial=materialOverride!=null?materialOverride:map.MapMaterial;
+            var renderer=item.AddComponent<MeshRenderer>();renderer.sharedMaterial=materialOverride!=null?materialOverride:material;
             renderer.sortingOrder=order;
         }
         // Release only the meshes created for this instance when its event visual is removed.

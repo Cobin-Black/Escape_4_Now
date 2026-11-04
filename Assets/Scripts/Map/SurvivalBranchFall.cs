@@ -16,15 +16,20 @@ namespace Escape4Now.Map
         private float elapsed;
         private Vector3 home;
         private bool finished;
+        private Func<bool> isPaused;
         public void Configure(Func<bool> tryLand,Action failure)
+            => Configure(tryLand,failure,null);
+        // Real-time events provide their own Pause state; existing Survival callers keep their original behavior.
+        public void Configure(Func<bool> tryLand,Action failure,Func<bool> pause)
         {
             land = tryLand; rejected = failure;
+            isPaused = pause;
             home = branch.localPosition;
             branch.localPosition = home + Vector3.up*fallHeight;
         }
         private void Update()
         {
-            if (finished || land == null || Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused) return;
+            if (finished || land == null || (isPaused != null ? isPaused() : Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused)) return;
             elapsed += Time.deltaTime;
             float progress = Mathf.Clamp01(elapsed/fallSeconds);
             branch.localPosition = home + Vector3.up*fallHeight*(1-progress*progress);

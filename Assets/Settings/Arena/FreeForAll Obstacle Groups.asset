@@ -1,0 +1,74 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: df7b20998ca41ab48a009627b847c010, type: 3}
+  m_Name: FreeForAll Obstacle Groups
+  m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Arena.ArenaObstacleSettings
+  groupCount: {x: 5, y: 6}
+  maximumBlockedTiles: 14
+  maximumFloorCoverage: 0.1
+  placementAttempts: 320
+  groupSpacing: 3.5
+  centerRouteWidth: 2
+  rejectNewDeadEnds: 1
+  patterns:
+  - label: Mat stack and safety cone
+    zone: 0
+    facing: 0
+    fixedQuarterTurns: 0
+    edgeOnly: 1
+    edgeDepth: 3
+    weight: 1
+    clearance: 1
+    pieces:
+    - offset: {x: 0, y: 0}
+      prefab: {fileID: 3508522792116879343, guid: 3046d6ac47929ec4a86087ff1abb814e, type: 3}
+    - offset: {x: 1, y: 0}
+      prefab: {fileID: 5469471867253762860, guid: f0a67ae468f397146b762a0694366db4, type: 3}
+  - label: Folding cover
+    zone: 0
+    facing: 0
+    fixedQuarterTurns: 0
+    edgeOnly: 1
+    edgeDepth: 3
+    weight: 1
+    clearance: 1
+    pieces:
+    - offset: {x: 0, y: 0}
+      prefab: {fileID: 224645066305911287, guid: 1c04d14ee1d80e141a634ed28016f2ed, type: 3}
+    - offset: {x: 0, y: 1}
+      prefab: {fileID: 224645066305911287, guid: 1c04d14ee1d80e141a634ed28016f2ed, type: 3}
+  - label: Ball cart and bench
+    zone: 0
+    facing: 0
+    fixedQuarterTurns: 0
+    edgeOnly: 1
+    edgeDepth: 3
+    weight: 1
+    clearance: 1
+    pieces:
+    - offset: {x: 0, y: 0}
+      prefab: {fileID: 4113981635364971416, guid: 442853f614dfc614a928e6a6dbfb0a05, type: 3}
+    - offset: {x: 1, y: 0}
+      prefab: {fileID: 11400000, guid: b732f042c1524cf7a535638ccdb4f101, type: 3}
+  - label: Storage corner
+    zone: 2
+    facing: 0
+    fixedQuarterTurns: 0
+    edgeOnly: 1
+    edgeDepth: 3
+    weight: 1
+    clearance: 0
+    pieces:
+    - offset: {x: 0, y: 0}
+      prefab: {fileID: 7452347994031326464, guid: 1dd929e2392d81b41bfc05943b414601, type: 3}
+    - offset: {x: 1, y: 0}
+      prefab: {fileID: 11400000, guid: b732f042c1524cf7a535638ccdb4f115, type: 3}

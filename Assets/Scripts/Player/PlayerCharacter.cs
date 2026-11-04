@@ -33,6 +33,9 @@ namespace Escape4Now.Player
         [SerializeField] private PlayerInventory inventory;
         [Header("Health")]
         [SerializeField, Min(0)] private int health = 5;
+        [Header("Movement Owner")]
+        [SerializeField, Tooltip("Only for the real-time arena prefabs. Leaves dice and grid input inactive.")]
+        private bool realTimeMovement;
         [Header("Movement Display")]
         [SerializeField, Min(0.1f)] private float diceRollAnimationDuration = 0.9f;
         [SerializeField, Min(0f)] private float sharedTileHorizontalOffset = 0.14f;
@@ -71,7 +74,7 @@ namespace Escape4Now.Player
         public int SecondDie => secondDie;
         public int MovesRemaining => movesRemaining;
         internal bool IsResolvingEventStep => resolvingStep;
-        public bool IsCurrentTurn => turnSystem == null || turnSystem.IsPlayersTurn(this);
+        public bool IsCurrentTurn => !realTimeMovement && (turnSystem == null || turnSystem.IsPlayersTurn(this));
         //Blocks the previous player's last key press from reaching this player.
         public bool CanReadTurnInput => Time.timeScale > 0f
             && (gameMode == null || gameMode.IsParticipantActive(this))
@@ -98,6 +101,7 @@ namespace Escape4Now.Player
         //Checks settings and places the player on its starting tile.
         private void Awake()
         {
+            if (realTimeMovement) { SetupMarker(); return; }
             ValidateSettings();
             SetupInputActions();
             SetupMarker();
@@ -113,6 +117,7 @@ namespace Escape4Now.Player
         //Reads dice roll and movement key input each frame.
         private void Update()
         {
+            if (realTimeMovement) return;
             if (Escape4Now.Multiplayer.LanMultiplayerSession.Active) return;
             if (Time.timeScale <= 0f || Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused) return;
             if (isBotControlled) return;
@@ -149,6 +154,15 @@ namespace Escape4Now.Player
         public bool HasKey => networkHasKey || (inventory != null && inventory.HasKey());
         public Color IdentityColor => playerColor;
         public PlayerAppearance Appearance => appearance;
+        public bool UsesRealTimeMovement => realTimeMovement;
+        // Arena modes share the same identity and health, but own continuous movement themselves.
+        public void ConfigureArenaIdentity(int number, string displayName, Color color)
+        {
+            realTimeMovement = true;
+            name = string.IsNullOrWhiteSpace(displayName) ? "Player " + number : displayName.Trim();
+            playerColor = color;
+            SetupMarker();
+        }
         public IPlayerGridMap GridMap => MovementMap;
 
         //Uses the scene's Inspector-assigned movement and roll actions.
@@ -376,13 +390,13 @@ namespace Escape4Now.Player
             }
             for (int i = 0; i < participants.Count; i++)
                 if (cells[i] == cells[destinations[i]]) return false;
-            for (int i = 0; i < participants.Count; i++)
+            if (!SharedPositionEffects.TryPermute(cells, destinations, (i, cell) => true, (i, cell) =>
             {
                 PlayerCharacter player = participants[i];
-                player.gridPosition = cells[destinations[i]];
+                player.gridPosition = cell;
                 player.registeredPosition = player.gridPosition;
                 player.SnapToGridPosition();
-            }
+            })) return false;
             //Shared destinations keep their player offsets after everyone has moved.
             RebuildMapOccupants(map);
             foreach (Vector2Int cell in cells) participants[0].RefreshSharedTilePositions(cell);
@@ -877,7 +891,7 @@ namespace Escape4Now.Player
             {
                 Debug.Log(name + " has been eliminated!");
 
-                UpdateMapOccupancy(gridPosition);
+                if (!realTimeMovement) UpdateMapOccupancy(gridPosition);
 
                 // Deactivate the character while retaining its health for match results.
                 gameObject.SetActive(false);
