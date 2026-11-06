@@ -1,6 +1,7 @@
 // Connects saved lobby controls to player setup and shows the player slots supported by the selected mode.
 
 using System;
+using Escape4Now.Accounts;
 using Escape4Now.GameModes;
 using Escape4Now.Player;
 using UnityEngine;
@@ -62,6 +63,7 @@ namespace Escape4Now.UI
                     });
             }
             if (skinsButton != null) skinsButton.onClick.AddListener(OpenSkins);
+            AccountLinkUI.Create(gameObject, Array.ConvertAll(slots, slot => slot.name), slot => !session.IsBotPlayer(slot));
         }
 
         public void OpenSkins()
@@ -96,7 +98,10 @@ namespace Escape4Now.UI
                 ShowSkin(slot.swatch, session, i);
                 slot.bot.gameObject.SetActive(session.Mode.SupportsBots);
                 slot.bot.SetIsOnWithoutNotify(session.IsBotPlayer(i));
-                slot.name.interactable = !session.IsBotPlayer(i);
+                bool linked = AccountService.IsLinked(i);
+                //A linked player must be unlinked before their slot can become a bot.
+                slot.bot.interactable = i == 0 || !linked;
+                slot.name.interactable = !session.IsBotPlayer(i) && !linked;
                 if (!slot.name.isFocused && slot.name.text != session.GetPlayerName(i))
                     slot.name.SetTextWithoutNotify(session.GetPlayerName(i));
 
