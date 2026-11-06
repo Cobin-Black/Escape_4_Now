@@ -16,8 +16,8 @@ namespace Escape4Now.Accounts
     public static class AccountService
     {
         //Change this to "production" for the release build.
-        //private const string TargetEnvironment = "development";
-        private const string TargetEnvironment = "production";
+        private const string TargetEnvironment = "development";
+        //private const string TargetEnvironment = "production";
         //Keeps Player 1's remembered login apart from the ones Players 2-4 use.
         private const string PlayerOneProfile = "player1";
         private const int PlayerSlots = 4;
