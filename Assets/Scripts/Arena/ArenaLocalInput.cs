@@ -8,9 +8,10 @@ namespace Escape4Now.Arena
     public sealed class ArenaLocalInput : MonoBehaviour
     {
         private InputActionAsset owned;
-        private InputAction move, tagAction;
+        private InputAction move, tagAction, useItemAction;
         public Vector2 Move => move != null ? Vector2.ClampMagnitude(move.ReadValue<Vector2>(), 1) : Vector2.zero;
         public bool TagPressed => tagAction != null && tagAction.WasPressedThisFrame();
+        public bool UseItemPressed => useItemAction != null && useItemAction.WasPressedThisFrame();
 
         // Give this slot its own action copy and keyboard layout or explicitly assigned gamepad.
         public void Configure(InputActionAsset template, int slot, int gamepad)
@@ -26,6 +27,7 @@ namespace Escape4Now.Arena
                 };
             move = map.FindAction("Move", true);
             tagAction = map.FindAction("Tag", true);
+            useItemAction = map.FindAction("UseItem", false);
             map.Enable();
         }
 
@@ -39,7 +41,7 @@ namespace Escape4Now.Arena
             }
 
             owned = null;
-            move = tagAction = null;
+            move = tagAction = useItemAction = null;
         }
 
         private void OnDestroy() => Release();

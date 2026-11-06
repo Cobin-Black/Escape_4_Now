@@ -47,6 +47,7 @@ namespace Escape4Now.Arena
         public float SpeedMultiplier { get; set; } = 1;
         public float EffectRemaining { get; set; }
         public bool Shield { get; set; }
+        public Vector2 FacingDirection { get; private set; } = Vector2.down;
         public Vector2 ScreenVelocity { get; private set; }
 
         private Vector2 screenVelocity, eventVelocity;
@@ -101,7 +102,10 @@ namespace Escape4Now.Arena
             eventVelocity = Match.Events != null ? Match.Events.FilterMovement(this, desired, eventVelocity, Time.deltaTime) : desired;
             Move(eventVelocity * Time.deltaTime);
             if (ScreenVelocity.sqrMagnitude > .0001f)
+            {
+                FacingDirection = ScreenVelocity.normalized;
                 Character.Appearance?.FaceToward(ScreenVelocity);
+            }
         }
 
         // Small swept steps prevent tunneling; contact normals make wall sliding stable and predictable.

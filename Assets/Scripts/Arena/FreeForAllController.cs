@@ -15,6 +15,17 @@ namespace Escape4Now.Arena
         // Combat will call ArenaParticipant.Damage, Knockback or Eliminate. No attack rules are invented here.
         protected override void Tick(float dt)
         {
+            foreach (ArenaParticipant participant in Players)
+            {
+                if (!participant.Alive || !participant.Input.UseItemPressed)
+                    continue;
+
+                var inventory = participant.GetComponent<Escape4Now.Items.PlayerInventory>();
+
+                if (inventory != null)
+                    inventory.UseFirstItem();
+            }
+
             CheckLastPlayer();
         }
     }
