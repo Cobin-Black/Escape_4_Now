@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Escape4Now.UI;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -93,6 +94,7 @@ namespace Escape4Now.Arena
             }
 
             start.onClick.AddListener(StartMatch);
+            AccountLinkUI.Create(gameObject, names, null);
             Refresh();
         }
 
