@@ -28,8 +28,9 @@ namespace Escape4Now.Items
             if (!inventory.IsFull)
                 return inventory.AddItem(this);
 
-            if (inventory.Items[0] is FreeForAllItem heldItem &&
-                heldItem.ItemType == itemType)
+            if (inventory.Items[0] is FreeForAllItem heldItem 
+            && heldItem.ItemType == itemType 
+            && heldItem.UsesRemaining < heldItem.MaxUses)
             {
                 heldItem.Refill();
                 return true;

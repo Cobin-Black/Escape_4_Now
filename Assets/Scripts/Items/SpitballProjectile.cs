@@ -68,9 +68,17 @@ namespace Escape4Now.Items
 
                     if (Vector2.Distance(next, target.Position) <= radius)
                     {
-                        target.Knockback(direction * knockback);
-                        target.SpeedMultiplier = slowMultiplier;
-                        target.EffectRemaining = slowDuration;
+                        // Check the Eraser shield before damage consumes a block.
+                        bool blocked = target.HasEraserShield;
+
+                        target.Damage(1);
+
+                        if (target.Alive && !blocked)
+                        {
+                            target.Knockback(direction * knockback);
+                            target.SpeedMultiplier = slowMultiplier;
+                            target.EffectRemaining = slowDuration;
+                        }
 
                         Destroy(gameObject);
                         return;

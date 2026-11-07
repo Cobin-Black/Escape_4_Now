@@ -47,6 +47,8 @@ namespace Escape4Now.Arena
         public float SpeedMultiplier { get; set; } = 1;
         public float EffectRemaining { get; set; }
         public bool Shield { get; set; }
+        public int EraserBlocksRemaining { get; private set; }
+        public bool HasEraserShield => EraserBlocksRemaining > 0;
         public Vector2 FacingDirection { get; private set; } = Vector2.down;
         public Vector2 ScreenVelocity { get; private set; }
 
@@ -129,19 +131,28 @@ namespace Escape4Now.Arena
             GetComponent<SpriteRenderer>().sortingOrder = Match.Map.Order(point) + (Match.Map.Settings.roomVisuals != null ? Match.Map.Settings.roomVisuals.playerSortingOffset : 5);
         }
 
+        // Activate the Eraser shield with two blocks.
+        public void ActivateEraserShield(int blocks)
+        {
+            EraserBlocksRemaining = blocks;
+        }
+
         // Forward damage to the existing health system, then notify the match if this player is eliminated.
         public void Damage(int amount)
         {
             if (!Alive || amount <= 0)
                 return;
-            if (Shield)
+
+            // Block incoming damage while the Eraser shield is active.
+            if (EraserBlocksRemaining > 0)
             {
-                Shield = false;
+                EraserBlocksRemaining--;
                 return;
             }
 
             for (int i = 0; i < amount && Character.Health > 0; i++)
                 Character.TakeDamage();
+
             onDamaged?.Invoke();
             if (Character.Health <= 0)
                 Eliminate();
@@ -170,6 +181,7 @@ namespace Escape4Now.Arena
             SpeedMultiplier = 1;
             EffectRemaining = 0;
             Shield = false;
+            EraserBlocksRemaining = 0;
             eventVelocity = screenVelocity = Vector2.zero;
             ScreenVelocity = Vector2.zero;
         }

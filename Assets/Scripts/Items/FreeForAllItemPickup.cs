@@ -11,6 +11,7 @@ namespace Escape4Now.Items
         [SerializeField, Min(0.1f)] private float pickupRadius = 0.6f;
 
         private bool collected;
+        public bool Collected => collected;
 
         private void Awake()
         {
@@ -48,9 +49,10 @@ namespace Escape4Now.Items
                     continue;
 
                 // Only collect an item when the inventory accepts it.
-                bool canCollect = !inventory.IsFull ||
-                    (inventory.Items[0] is FreeForAllItem heldItem &&
-                     heldItem.ItemType == item.ItemType);
+                bool canCollect = !inventory.IsFull || 
+                (inventory.Items[0] is FreeForAllItem heldItem 
+                && heldItem.ItemType == item.ItemType 
+                && heldItem.UsesRemaining < heldItem.MaxUses);
 
                 if (!canCollect)
                     continue;
