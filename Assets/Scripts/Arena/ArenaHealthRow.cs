@@ -1,6 +1,7 @@
 using Escape4Now.UI;
 using UnityEngine;
 using UnityEngine.UI;
+using Escape4Now.Items;
 
 namespace Escape4Now.Arena
 {
@@ -23,6 +24,14 @@ namespace Escape4Now.Arena
         private string eliminatedLabel = "OUT";
         private ArenaParticipant bound;
         private int startingHealth;
+
+        [Header("FreeForAll Inventory")]
+        [SerializeField] private GameObject inventorySection;
+        [SerializeField] private Image itemIcon;
+        [SerializeField] private Text itemCharges;
+        [SerializeField] private Sprite spitballIcon;
+        [SerializeField] private Sprite rulerIcon;
+        [SerializeField] private Sprite eraserIcon;
         // Bind to one participant and display their own health and potato-holder state.
         public void Show(ArenaParticipant player, bool hasPotato)
         {
@@ -45,6 +54,47 @@ namespace Escape4Now.Arena
             value.text = player.Alive ? string.Format(healthFormat, health, startingHealth) : eliminatedLabel;
             hearts.color = style.healthy;
             hearts.text = HealthHeartText.Format(player.Alive ? health : 0, startingHealth, "#" + ColorUtility.ToHtmlStringRGB(style.emptyHealth));
+            ShowInventory(player);
+        }
+
+        // Display the player's current FreeForAll item and charges.
+        private void ShowInventory(ArenaParticipant player)
+        {
+            bool isFFA = player.Match is FreeForAllController;
+
+            if (!isFFA)
+            {
+                inventorySection.SetActive(false);
+                return;
+            }
+
+            PlayerInventory inventory = player.GetComponent<PlayerInventory>();
+
+            if (inventory == null || inventory.Items.Count == 0 ||
+                inventory.Items[0] is not FreeForAllItem item)
+            {
+                inventorySection.SetActive(false);
+                return;
+            }
+
+            inventorySection.SetActive(true);
+
+            switch (item.ItemType)
+            {
+                case FreeForAllItemType.Spitball:
+                    itemIcon.sprite = spitballIcon;
+                    break;
+
+                case FreeForAllItemType.Ruler:
+                    itemIcon.sprite = rulerIcon;
+                    break;
+
+                case FreeForAllItemType.Eraser:
+                    itemIcon.sprite = eraserIcon;
+                    break;
+            }
+
+            itemCharges.text = item.UsesRemaining + "/" + item.MaxUses;
         }
     }
 }
