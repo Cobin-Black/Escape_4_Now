@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Escape4Now.Accounts;
 using Escape4Now.GameModes;
 using Escape4Now.Player;
 using UnityEngine;
@@ -208,11 +209,22 @@ namespace Escape4Now.Arena
                 if (p.Alive)
                     winner = p;
             Result = winner != null ? winner.name + winnerSuffix : noWinnerMessage;
+            //Two players can go out on the same frame, so only the first call counts as the end of the match.
+            if (Playing) ReportStats(winner);
             Playing = false;
             Paused = false;
             events?.Stop();
             onMatchEnded?.Invoke();
             return true;
+        }
+
+        private void ReportStats(ArenaParticipant winner)
+        {
+            string mode = Type == GameModeType.HotPotato ? AccountStats.HotPotato : AccountStats.FreeForAll;
+            var stats = new List<MatchStat>();
+            foreach (var p in Players)
+                stats.Add(new MatchStat(p.Slot, mode, p == winner, Players.Count));
+            AccountStats.Report(stats);
         }
 
         public void Notify(string message, float duration = 3)

@@ -1,4 +1,4 @@
-using System.IO;
+using Escape4Now.Accounts;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using static Escape4Now.Menus.ArcadeMenuKit;
@@ -14,7 +14,6 @@ namespace Escape4Now.Menus
         [Header("Scenes")]
         [SerializeField] private string startScreenScene = "StartScreen";
         [SerializeField] private string tutorialScene = "Tutorial";
-        [SerializeField] private string leaderboardScene = "Leaderboard";
         [Tooltip("Scenes in order: Race, Survival, Free For All, Hot Potato.")]
         [SerializeField] private string[] modeScenes = { "Race_Gamemode", "SurvivalMode", "FreeForAll", "HotPotato" };
 
@@ -25,7 +24,7 @@ namespace Escape4Now.Menus
         [SerializeField] private Color headingColor = new Color(0.561f, 0.816f, 1f);
 
         private static readonly string[] MenuTitles = { "GAME MODE", "START TUTORIAL", "SETTINGS", "LEADERBOARD", "ACCOUNT", "QUIT" };
-        private static readonly string[] MenuSubtitles = { "Pick how you want to play", "New here? Start with this", "Sound, screen, controls", "Fastest escapes", "Sign up, name and picture", "Close the game" };
+        private static readonly string[] MenuSubtitles = { "Pick how you want to play", "New here? Start with this", "Sound, screen, controls", "Wins and fastest times", "Match history and log out", "Close the game" };
         [Header("Game Mode Cards (same order as Scenes)")]
         [SerializeField] private string[] ModeNames = { "RACE", "SURVIVAL", "FREE FOR ALL", "HOT POTATO" };
         [SerializeField] private string[] ModePlayers = { "2–4 PLAYERS", "2–4 PLAYERS", "2–4 PLAYERS", "2–4 PLAYERS" };
@@ -37,43 +36,27 @@ namespace Escape4Now.Menus
             "Chase, tag and pass the potato before it explodes."
         };
         [SerializeField] private string[] ModeWin = { "Carry the key through the EXIT first", "Survive until time is up or complete the tasks to escape", "Be the last player standing", "Be the last player standing" };
-        private static readonly Color[] AvatarColors =
-        {
-            new Color(1f, 0.835f, 0f), new Color(0.212f, 0.945f, 0.804f), new Color(1f, 0.31f, 0.847f),
-            new Color(0.49f, 1f, 0.604f), new Color(1f, 0.478f, 0.102f), new Color(0.608f, 0.549f, 1f)
-        };
+        private static readonly Color AvatarColor = new Color(1f, 0.835f, 0f);
         private static readonly int[] Barcode = { 3, 1, 2, 1, 4, 1, 1, 3, 2, 1, 1, 2, 4, 1, 2, 1, 3, 1, 1, 2, 1, 4, 2, 1, 1, 3, 1, 2, 1, 1, 4, 1, 2, 3, 1, 1, 2, 1, 3, 1 };
 
-        private const string NameKey = "E4N_PlayerName";
-        private const string AvatarKey = "E4N_Avatar";
-        private const string UploadKey = "E4N_AvatarUploaded";
         private const string MusicKey = "E4N_Music";
         private const string SfxKey = "E4N_Sfx";
 
+        private readonly LeaderboardPanel leaderboard = new LeaderboardPanel();
+        private readonly MatchHistoryPanel history = new MatchHistoryPanel();
         private Section section = Section.GameMode;
         private int mode;
         private int music = 5;
         private int sfx = 6;
-        private string playerName = "PLAYER ONE";
-        private int avatar;
-        private Texture2D uploadedPicture;
         private string toast = "";
         private float toastUntil;
-        private GUIStyle h2, menuTitle, menuSub, body, small, smallBold, button, cardName, tagStyle, nameField, bigInitial, logoShade, logoNow, idStyle, passTitle, stamp, keyName;
-
-        private string AvatarPath => Path.Combine(Application.persistentDataPath, "avatar.png");
+        private GUIStyle h2, menuTitle, menuSub, body, small, smallBold, button, cardName, tagStyle, logoShade, logoNow, idStyle, passTitle, stamp, keyName;
 
         private void Start()
         {
             music = PlayerPrefs.GetInt(MusicKey, music);
             sfx = PlayerPrefs.GetInt(SfxKey, sfx);
             AudioListener.volume = sfx / 8f;
-            if (PlayerPrefs.HasKey(NameKey)) LoadAccount(false);
-        }
-
-        private void OnDestroy()
-        {
-            if (uploadedPicture != null) Destroy(uploadedPicture);
         }
 
         private void Update()
@@ -82,12 +65,9 @@ namespace Escape4Now.Menus
             if (k == null) return;
             if (k.escapeKey.wasPressedThisFrame)
             {
-                if (GUIUtility.keyboardControl != 0) GUIUtility.keyboardControl = 0;
-                else Back();
+                Back();
                 return;
             }
-            //While the name box is being typed in, letters belong to the name.
-            if (GUIUtility.keyboardControl != 0) return;
             if (k.upArrowKey.wasPressedThisFrame || k.wKey.wasPressedThisFrame) section = (Section)(((int)section + 5) % 6);
             if (k.downArrowKey.wasPressedThisFrame || k.sKey.wasPressedThisFrame) section = (Section)(((int)section + 1) % 6);
             if (section == Section.GameMode)
@@ -105,8 +85,6 @@ namespace Escape4Now.Menus
             {
                 case Section.GameMode: StartMode(); break;
                 case Section.Tutorial: OpenScene(tutorialScene, "The tutorial scene"); break;
-                case Section.Leaderboard: OpenScene(leaderboardScene, "The leaderboard screen"); break;
-                case Section.Account: SignUp(); break;
                 case Section.Quit: QuitGame(); break;
             }
         }
@@ -155,26 +133,12 @@ namespace Escape4Now.Menus
             button = Text(Bungee, 26, TextAnchor.MiddleCenter);
             cardName = Text(Bungee, 24, TextAnchor.UpperLeft, true);
             tagStyle = Text(MonoBoldFont, 11, TextAnchor.MiddleCenter);
-            bigInitial = Text(Bungee, 72, TextAnchor.MiddleCenter);
             logoShade = Text(BungeeShade, 40);
             logoNow = Text(Bungee, 32);
             idStyle = Text(Bungee, 13, TextAnchor.MiddleCenter);
             passTitle = Text(Bungee, 20);
             stamp = Text(Bungee, 26, TextAnchor.MiddleCenter);
             keyName = Text(MonoBoldFont, 13, TextAnchor.MiddleCenter);
-            nameField = new GUIStyle(GUI.skin.textField)
-            {
-                font = Bungee,
-                fontSize = 20,
-                alignment = TextAnchor.MiddleLeft,
-                padding = new RectOffset(14, 14, 0, 0),
-                border = new RectOffset(0, 0, 0, 0)
-            };
-            foreach (GUIStyleState s in new[] { nameField.normal, nameField.hover, nameField.focused, nameField.active, nameField.onNormal, nameField.onFocused })
-            {
-                s.background = null;
-                s.textColor = Color.white;
-            }
         }
 
         private void OnGUI()
@@ -202,7 +166,7 @@ namespace Escape4Now.Menus
                 case Section.GameMode: DrawGameMode(inner); break;
                 case Section.Tutorial: DrawTutorial(inner); break;
                 case Section.Settings: DrawSettings(inner); break;
-                case Section.Leaderboard: DrawLeaderboard(inner, t); break;
+                case Section.Leaderboard: leaderboard.Draw(inner, h2, headingColor, accent); break;
                 case Section.Account: DrawAccount(inner); break;
                 case Section.Quit: DrawQuit(inner); break;
             }
@@ -234,7 +198,7 @@ namespace Escape4Now.Menus
             Rect me = new Rect(back.x - 14f - 236f, 40f, 236f, 48f);
             Block(me, Ink, Line, 2f, Color.clear, 0f);
             DrawAvatar(new Rect(me.x + 10f, me.y + 7f, 34f, 34f), Text(Bungee, 15, TextAnchor.MiddleCenter), 2f);
-            Label(new Rect(me.x + 54f, me.y + 6f, 170f, 14f), "SIGNED IN AS", menuSub, Muted);
+            Label(new Rect(me.x + 54f, me.y + 6f, 170f, 14f), AccountService.IsSignedIn ? "SIGNED IN AS" : "PLAYING AS", menuSub, Muted);
             Label(new Rect(me.x + 54f, me.y + 20f, 176f, 22f), DisplayName, Text(Bungee, 16), Color.white);
             if (Hit(me)) section = Section.Account;
         }
@@ -252,11 +216,7 @@ namespace Escape4Now.Menus
                 Label(new Rect(r.x + 64f, r.y + 12f, 300f, 28f), MenuTitles[i], menuTitle, text);
                 Label(new Rect(r.x + 64f, r.y + 42f, 300f, 16f), MenuSubtitles[i], menuSub, WithAlpha(text, 0.75f));
                 if (on) TriangleRight(new Rect(r.xMax - 40f + Mathf.Sin(t * 7f) * 3f, r.center.y - 9f, 16f, 18f), Ink);
-                if (Hit(r))
-                {
-                    section = (Section)i;
-                    GUIUtility.keyboardControl = 0;
-                }
+                if (Hit(r)) section = (Section)i;
             }
         }
 
@@ -309,7 +269,7 @@ namespace Escape4Now.Menus
             Fill(strip, Navy);
             Rect photo = new Rect(strip.center.x - 55f, strip.y + 20f, 110f, 130f);
             Block(photo, headingColor, Color.white, 3f, Color.clear, 0f);
-            Color me = AvatarColors[avatar];
+            Color me = AvatarColor;
             Fill(new Rect(photo.center.x - 32f, photo.yMax - 3f - 68f, 64f, 68f), me);
             Circle(new Rect(photo.center.x - 32f, photo.yMax - 3f - 100f, 64f, 64f), me);
             Label(new Rect(strip.x, photo.yMax + 12f, strip.width, 20f), "ID 0000-001", idStyle, tapeStripe);
@@ -379,104 +339,14 @@ namespace Escape4Now.Menus
             }
         }
 
-        private void DrawLeaderboard(Rect inner, float t)
-        {
-            Label(new Rect(inner.x, inner.y, 480f, 44f), "LEADERBOARD", h2, headingColor);
-            Label(new Rect(inner.x, inner.y + 56f, 560f, 52f), "Who got out of the school the fastest? See every record on the full leaderboard.", body, Soft);
-
-            float top = inner.y + 124f;
-            float bottom = inner.yMax - 84f;
-            Rect art = new Rect(inner.x, top, 250f, bottom - top);
-            Block(art, PanelDark, Line, 2f, Color.clear, 0f);
-            //Slowly turning light rays behind a gold trophy medal. Rays stay short enough to fit in the box.
-            Vector2 c = art.center;
-            float reach = Mathf.Min(art.width, art.height) * 0.5f - 6f;
-            for (int i = 0; i < 12; i++)
-            {
-                Matrix4x4 rm = BeginRotate(i * 30f + t * 8f, c);
-                Fill(new Rect(c.x - 6f, c.y - reach, 12f, reach), WithAlpha(Gold, 0.16f));
-                EndRotate(rm);
-            }
-            float bob = Mathf.Sin(t * Mathf.PI * 2f / 1.6f) * 3f - 3f;
-            Circle(new Rect(c.x - 87f, c.y - 87f + bob, 174f, 174f), WithAlpha(Gold, 0.25f));
-            Circle(new Rect(c.x - 81f, c.y - 81f + bob, 162f, 162f), Gold);
-            Circle(new Rect(c.x - 75f, c.y - 75f + bob, 150f, 150f), Navy);
-            DrawIcon(3, new Rect(c.x - 44f, c.y - 44f + bob, 88f, 88f), Gold);
-
-            string[] titles = { "FASTEST ESCAPES", "MOST WINS", "YOUR BEST" };
-            string[] subs = { "Fewest turns to the EXIT", "Race and Survival champions", "Your own personal records" };
-            Color[] colors = { Gold, Teal, Pink };
-            float rx = art.xMax + 18f;
-            float rh = (art.height - 20f) / 3f;
-            for (int i = 0; i < 3; i++)
-            {
-                Rect r = new Rect(rx, top + i * (rh + 10f), inner.xMax - rx, rh);
-                Block(r, Ink, colors[i], 3f, Color.clear, 0f);
-                DrawModeIcon(i == 0 ? 1 : i == 1 ? 0 : 3, new Rect(r.x + 16f, r.center.y - 15f, 30f, 30f), colors[i]);
-                Label(new Rect(r.x + 62f, r.center.y - 22f, r.width - 70f, 24f), titles[i], Text(Bungee, 18), Color.white);
-                Label(new Rect(r.x + 62f, r.center.y + 4f, r.width - 70f, 18f), subs[i], Text(MonoFont, 12), Hex("#bdbdbd"));
-            }
-
-            if (BigButton(new Rect(inner.x, inner.yMax - 64f, 0f, 64f), "OPEN LEADERBOARD  >", true))
-                OpenScene(leaderboardScene, "The leaderboard screen");
-        }
-
         private void DrawAccount(Rect inner)
         {
             Label(new Rect(inner.x, inner.y, 480f, 44f), "ACCOUNT", h2, headingColor);
-            Label(new Rect(inner.xMax - 300f, inner.y + 10f, 300f, 24f), "SIGNED IN AS " + DisplayName, Text(MonoFont, 13, TextAnchor.MiddleRight), Muted);
+            history.Draw(new Rect(inner.x, inner.y + 50f, inner.width, inner.height - 50f), accent);
 
-            Rect big = new Rect(inner.x + 10f, inner.y + 76f, 150f, 150f);
-            Fill(new Rect(big.x + 6f, big.y + 6f, big.width, big.height), accent);
-            DrawAvatar(big, bigInitial, 4f);
-            Label(new Rect(inner.x - 10f, big.yMax + 12f, 190f, 24f), DisplayName, Text(Bungee, 18, TextAnchor.MiddleCenter), Color.white);
-
-            float x = inner.x + 196f;
-            float w = inner.xMax - x;
-            Label(new Rect(x, inner.y + 70f, w, 16f), "PLAYER NAME", menuSub, Muted);
-            Rect field = new Rect(x, inner.y + 92f, w, 50f);
-            Block(field, PanelDark, GUI.GetNameOfFocusedControl() == "PlayerName" ? accent : Hex("#44444f"), 3f, Color.clear, 0f);
-            GUI.SetNextControlName("PlayerName");
-            string typed = GUI.TextField(new Rect(field.x + 3f, field.y + 3f, field.width - 6f, field.height - 6f), playerName, 12, nameField);
-            if (typed != playerName) playerName = typed.ToUpperInvariant();
-
-            Label(new Rect(x, inner.y + 166f, w, 16f), "PICTURE", menuSub, Muted);
-            for (int i = 0; i < AvatarColors.Length; i++)
-            {
-                Rect tile = new Rect(x + i * 56f, inner.y + 188f, 48f, 48f);
-                bool on = uploadedPicture == null && avatar == i;
-                if (on) Fill(new Rect(tile.x - 3f, tile.y - 3f, 54f, 54f), accent);
-                Block(tile, AvatarColors[i], on ? Color.white : Ink, on ? 4f : 3f, Color.clear, 0f);
-                if (Hit(tile))
-                {
-                    avatar = i;
-                    ClearUpload();
-                }
-            }
-            Rect upload = new Rect(x + 6f * 56f, inner.y + 188f, 120f, 48f);
-            bool uploaded = uploadedPicture != null;
-            if (uploaded) Block(upload, accent, accent, 3f, Color.clear, 0f);
-            else
-            {
-                Fill(upload, Ink);
-                for (float dx = 0f; dx < upload.width; dx += 10f)
-                {
-                    Fill(new Rect(upload.x + dx, upload.y, 6f, 3f), Muted);
-                    Fill(new Rect(upload.x + dx, upload.yMax - 3f, 6f, 3f), Muted);
-                }
-                for (float dy = 0f; dy < upload.height; dy += 10f)
-                {
-                    Fill(new Rect(upload.x, upload.y + dy, 3f, 6f), Muted);
-                    Fill(new Rect(upload.xMax - 3f, upload.y + dy, 3f, 6f), Muted);
-                }
-            }
-            Label(upload, "UPLOAD", Text(Bungee, 14, TextAnchor.MiddleCenter), uploaded ? Ink : Color.white);
-            if (Hit(upload)) PickPicture();
-            Label(new Rect(x, inner.y + 248f, w, 40f), "Pick a color or upload your own image (PNG or JPG).", small, Muted);
-
-            float bw = BigButton(new Rect(inner.x, inner.yMax - 64f, 0f, 64f), "SIGN UP", true, out bool signUp);
-            if (signUp) SignUp();
-            if (BigButton(new Rect(inner.x + bw + 16f, inner.yMax - 64f, 0f, 64f), "I HAVE AN ACCOUNT", false)) LoadAccount(true);
+            string text = AccountService.IsSignedIn ? "LOG OUT" : "LOG IN";
+            float width = Text(Bungee, 20, TextAnchor.MiddleCenter).CalcSize(new GUIContent(text)).x + 72f;
+            if (BigButton(new Rect(inner.xMax - width, inner.yMax - 64f, width, 64f), text, false)) LogOut();
         }
 
         private void DrawQuit(Rect inner)
@@ -515,93 +385,23 @@ namespace Escape4Now.Menus
             return Hit(r);
         }
 
-        //The player's picture: an uploaded image, or a color with their first letter.
+        //The player's badge in the header: a color with their first letter.
         private void DrawAvatar(Rect r, GUIStyle letter, float border)
         {
             Fill(r, Color.white);
             Rect inside = new Rect(r.x + border, r.y + border, r.width - border * 2f, r.height - border * 2f);
-            if (uploadedPicture != null) GUI.DrawTexture(inside, uploadedPicture, ScaleMode.ScaleAndCrop);
-            else
-            {
-                Fill(inside, AvatarColors[avatar]);
-                string initial = DisplayName.Length > 0 ? DisplayName.Substring(0, 1) : "?";
-                Label(inside, initial, letter, Ink);
-            }
+            Fill(inside, AvatarColor);
+            string initial = DisplayName.Length > 0 ? DisplayName.Substring(0, 1) : "?";
+            Label(inside, initial, letter, Ink);
         }
 
-        private string DisplayName
-        {
-            get
-            {
-                string n = (playerName ?? "").Trim();
-                return n.Length > 0 ? n : "GUEST";
-            }
-        }
+        private static string DisplayName => AccountService.DisplayName;
 
-        private void PickPicture()
+        //Returns to the start screen, which opens the login panel.
+        private void LogOut()
         {
-#if UNITY_EDITOR
-            string path = UnityEditor.EditorUtility.OpenFilePanel("Choose a picture", "", "png,jpg,jpeg");
-            if (string.IsNullOrEmpty(path)) return;
-#else
-            string path = AvatarPath;
-            if (!File.Exists(path))
-            {
-                ShowToast("Put a picture named avatar.png in " + Application.persistentDataPath);
-                return;
-            }
-#endif
-            var tex = new Texture2D(2, 2);
-            if (tex.LoadImage(File.ReadAllBytes(path)))
-            {
-                ClearUpload();
-                uploadedPicture = tex;
-            }
-            else
-            {
-                Destroy(tex);
-                ShowToast("That file isn't a PNG or JPG picture.");
-            }
-        }
-
-        private void ClearUpload()
-        {
-            if (uploadedPicture != null) Destroy(uploadedPicture);
-            uploadedPicture = null;
-        }
-
-        //Saves the name and picture on this computer.
-        private void SignUp()
-        {
-            PlayerPrefs.SetString(NameKey, DisplayName);
-            PlayerPrefs.SetInt(AvatarKey, avatar);
-            PlayerPrefs.SetInt(UploadKey, uploadedPicture != null ? 1 : 0);
-            PlayerPrefs.Save();
-            if (uploadedPicture != null)
-            {
-                try { File.WriteAllBytes(AvatarPath, uploadedPicture.EncodeToPNG()); }
-                catch (System.Exception e) { Debug.LogWarning("Could not save the picture: " + e.Message); }
-            }
-            ShowToast("Saved! Signed in as " + DisplayName + ".");
-        }
-
-        private void LoadAccount(bool announce)
-        {
-            if (!PlayerPrefs.HasKey(NameKey))
-            {
-                if (announce) ShowToast("No saved account on this computer yet. Press SIGN UP first.");
-                return;
-            }
-            playerName = PlayerPrefs.GetString(NameKey, playerName);
-            avatar = Mathf.Clamp(PlayerPrefs.GetInt(AvatarKey, 0), 0, AvatarColors.Length - 1);
-            ClearUpload();
-            if (PlayerPrefs.GetInt(UploadKey, 0) == 1 && File.Exists(AvatarPath))
-            {
-                var tex = new Texture2D(2, 2);
-                if (tex.LoadImage(File.ReadAllBytes(AvatarPath))) uploadedPicture = tex;
-                else Destroy(tex);
-            }
-            if (announce) ShowToast("Welcome back, " + DisplayName + "!");
+            AccountService.LogOut();
+            Back();
         }
 
         //Simple shape icons for the menu: 0 play, 1 tutorial, 2 settings, 3 trophy, 4 account, 5 quit.

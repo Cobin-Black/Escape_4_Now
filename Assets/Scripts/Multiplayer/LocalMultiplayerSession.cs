@@ -1,6 +1,7 @@
 // Manages shared-device player setup, starts the chosen mode and coordinates Pause and match results.
 
 using System.Collections.Generic;
+using Escape4Now.Accounts;
 using Escape4Now.Map;
 using Escape4Now.Player;
 using Escape4Now.TurnSystem;
@@ -73,6 +74,7 @@ namespace Escape4Now.Multiplayer
         public static bool ShowItemObstacles => instance != null && instance.showItemObstacles;
         public static bool ShowKeyLocation => instance != null && instance.showKeyLocation;
         private int monsterPlayerIndex = -1;
+        private bool statsReported;
 
         private void OnValidate()
         {
@@ -144,6 +146,7 @@ namespace Escape4Now.Multiplayer
 
             if (HasMatchFinished())
             {
+                ReportMatchStats();
                 Time.timeScale = 0f;
                 return;
             }
@@ -511,6 +514,33 @@ namespace Escape4Now.Multiplayer
         private bool HasMatchFinished()
         {
             return gameMode != null && gameMode.TryGetResult(participants, out _);
+        }
+
+        //Survivors win by escaping and the monster wins if none did, so a timeout counts for the monster.
+        //Bots and an AI monster record nothing. Only the local game reports, once per match.
+        private void ReportMatchStats()
+        {
+            if (statsReported || LanMultiplayerSession.Active) return;
+            statsReported = true;
+            var survival = gameMode as SurvivalModeController;
+            gameMode.TryGetWinner(participants, out PlayerCharacter winner);
+            string mode = survival != null ? AccountStats.Survivor : AccountStats.Race;
+            var stats = new List<MatchStat>();
+            bool anyoneEscaped = false;
+            //Bots count as players here, but an AI monster does not.
+            int players = participants.Length + (monsterPlayerIndex >= 0 ? 1 : 0);
+            for (int i = 0; i < participants.Length; i++)
+            {
+                //Participants skip the Monster's lobby slot, the same way CreateParticipants does.
+                int slot = monsterPlayerIndex >= 0 && i >= monsterPlayerIndex ? i + 1 : i;
+                bool won = survival != null ? survival.OutcomeOf(participants[i]) == SurvivorOutcome.Escaped : participants[i] == winner;
+                anyoneEscaped |= won;
+                float seconds = !won ? 0f : survival != null ? survival.EscapeTimeOf(participants[i]) : matchTimer.Elapsed;
+                if (!IsBotPlayer(slot)) stats.Add(new MatchStat(slot, mode, won, players, seconds));
+            }
+            if (monsterPlayerIndex >= 0 && !IsBotPlayer(monsterPlayerIndex))
+                stats.Add(new MatchStat(monsterPlayerIndex, AccountStats.MonsterRole, !anyoneEscaped, players, anyoneEscaped ? 0f : matchTimer.Elapsed));
+            AccountStats.Report(stats);
         }
 
         public string GetPlayerName(int index)

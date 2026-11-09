@@ -16,6 +16,8 @@ namespace Escape4Now.TurnSystem
 
         //Read-only access to the remaining time.
         public float TimeRemaining => timeRemaining;
+        //How long the match has been running, not counting pauses.
+        public float Elapsed => timeLimit - timeRemaining;
         public bool HasExpired => hasStarted && timeRemaining <= 0f;
         public bool ExpirationIsWin => gameMode != null && gameMode.TimerExpirationIsWin;
         private bool timerRunning;
