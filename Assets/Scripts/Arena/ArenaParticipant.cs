@@ -37,6 +37,9 @@ namespace Escape4Now.Arena
         private TextMesh nameLabel;
         [SerializeField]
         private TextMesh nameShadow;
+        [Header("Free For All Invincibility")]
+        [SerializeField] private float invincibilityDuration = 1f;
+        private float invincibilityTimer;
         public PlayerCharacter Character { get; private set; }
         public ArenaLocalInput Input { get; private set; }
         public ArenaMatch Match { get; private set; }
@@ -51,6 +54,7 @@ namespace Escape4Now.Arena
         public bool HasEraserShield => EraserBlocksRemaining > 0;
         public Vector2 FacingDirection { get; private set; } = Vector2.down;
         public Vector2 ScreenVelocity { get; private set; }
+        public bool IsInvincible => invincibilityTimer > 0;
 
         private Vector2 screenVelocity, eventVelocity;
         public event Action<ArenaParticipant> Eliminated;
@@ -60,6 +64,7 @@ namespace Escape4Now.Arena
             Match = match;
             Slot = slot;
             Alive = true;
+            invincibilityTimer = 0;
             Character = GetComponent<PlayerCharacter>();
             Input = GetComponent<ArenaLocalInput>();
             InitialHealth = Character.Health;
@@ -84,6 +89,11 @@ namespace Escape4Now.Arena
         {
             if (!Alive || Match == null || !Match.Playing || Match.Paused)
                 return;
+
+            // Count down invincibility after taking damage in FFA.
+            if (invincibilityTimer > 0)
+                invincibilityTimer = Mathf.Max(0, invincibilityTimer - Time.deltaTime);
+
             if (EffectRemaining > 0)
             {
                 EffectRemaining -= Time.deltaTime;
@@ -143,6 +153,10 @@ namespace Escape4Now.Arena
             if (!Alive || amount <= 0)
                 return;
 
+            // Ignore damage while invincible in Free For All.
+            if (Match is FreeForAllController && IsInvincible)
+                return;
+
             // Block incoming damage while the Eraser shield is active.
             if (EraserBlocksRemaining > 0)
             {
@@ -154,6 +168,11 @@ namespace Escape4Now.Arena
                 Character.TakeDamage();
 
             onDamaged?.Invoke();
+
+            // Start invincibility after taking damage in FFA.
+            if (Match is FreeForAllController && Character.Health > 0)
+                invincibilityTimer = invincibilityDuration;
+
             if (Character.Health <= 0)
                 Eliminate();
         }
@@ -184,6 +203,7 @@ namespace Escape4Now.Arena
             EraserBlocksRemaining = 0;
             eventVelocity = screenVelocity = Vector2.zero;
             ScreenVelocity = Vector2.zero;
+            invincibilityTimer = 0;
         }
     }
 }

@@ -11,6 +11,9 @@ namespace Escape4Now.Items
         [SerializeField] private float knockback = 1.5f;
         [SerializeField] private int damage = 1;
 
+        [Header("Swing Visual")]
+        [SerializeField] private GameObject swingEffectPrefab;
+
         // Attack nearby players in the direction the user is facing.
         public override void Use(PlayerInventory inventory)
         {
@@ -52,6 +55,24 @@ namespace Escape4Now.Items
 
                 if (target.Alive && !blocked)
                     target.Knockback(direction * knockback);
+            }
+
+            // Show the Ruler swing effect.
+            if (swingEffectPrefab != null)
+            {
+                GameObject effect = Instantiate(
+                    swingEffectPrefab,
+                    attacker.transform.position,
+                    Quaternion.identity
+                );
+
+                Vector2 visualDirection = attacker.FacingDirection.normalized;
+
+                effect.GetComponent<RulerSwingEffect>()?.Initialize(
+                    visualDirection,
+                    attackRange,
+                    swingAngle
+                );
             }
 
             ConsumeUse(inventory);

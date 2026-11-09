@@ -66,8 +66,10 @@ MonoBehaviour:
   itemType: 1
   maxUses: 3
   attackRange: 1.5
+  swingAngle: 90
   knockback: 1.5
   damage: 1
+  swingEffectPrefab: {fileID: 4699633113826993072, guid: 4381c53184ead4345b7c682e0d7a5f0e, type: 3}
 --- !u!212 &7633905858574556466
 SpriteRenderer:
   serializedVersion: 2
