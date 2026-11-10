@@ -259,17 +259,22 @@ namespace Escape4Now.Menus
                 Label(new Rect(c.x + 18f, c.y + 54f, cw - 36f, 55f), ModeText[i], small, text);
                 Fill(new Rect(c.x + 18f, c.yMax - 42f, cw - 36f, 2f), on ? WithAlpha(Ink, 0.35f) : Hex("#2e2e38"));
                 Label(new Rect(c.x + 18f, c.yMax - 34f, cw - 36f, 30f), "WIN: " + ModeWin[i], Text(MonoFont, 11, TextAnchor.UpperLeft, true), text);
-                Rect info = new Rect(tagRect.x - 6f - 20f, tagRect.y, 20f, 20f);
-                Block(info, on ? Ink : Hex("#1e1e26"), on ? Ink : Color.white, 2f, Color.clear, 0f);
-                Label(info, "i", Text(Bungee, 13, TextAnchor.MiddleCenter), on ? accent : Color.white);
-                if (Hit(info)) infoMode = i;
+        
                 if (Hit(c)) mode = i;
             }
 
-
-            if (BigButton(new Rect(inner.x, inner.yMax - 64f, 0f, 64f), "START " + ModeNames[mode], true)) StartMode();
+        
+   float bw = BigButton(new Rect(inner.x, inner.yMax - 64f, 0f, 64f), "START " + ModeNames[mode], true, out bool startClicked);
+   if (startClicked) StartMode();
+   Rect info = new Rect(inner.x + bw + 18f, inner.yMax - 64f, 64f, 64f);
+   Rect infoDrawn = info;
+   if (Hover(info)) { infoDrawn.x -= 3f; infoDrawn.y -= 3f; }
+   Block(infoDrawn, Ink, Color.white, 4f, Red, 6f);
+   Label(infoDrawn, "i", Text(Bungee, 30, TextAnchor.MiddleCenter), Color.white);
+   if (Hit(info)) infoMode = mode;
         }
-
+        
+          
            private static readonly string[] ModeDetails =
    {
        "GOAL\nBe the first player to carry the key through the EXIT.\n\nHOW IT WORKS\nOne key is hidden in a locker somewhere in the school. Find it, then carry it to the EXIT. If you are on the same tile as another player, you can battle them for the key.\n\nPLAYERS\nUp to 4 players.",
