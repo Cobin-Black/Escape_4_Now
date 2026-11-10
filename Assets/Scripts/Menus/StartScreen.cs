@@ -1,10 +1,11 @@
+using Escape4Now.Accounts;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using static Escape4Now.Menus.ArcadeMenuKit;
 
 namespace Escape4Now.Menus
 {
-    //The title screen. Press Space (or Enter, or click the Space key) to go to the main menu scene.
+    //The title screen. Press Space (or Enter, or click the Space key) to log in and go to the main menu scene.
     public sealed class StartScreen : MonoBehaviour
     {
         [SerializeField] private string mainMenuScene = "MainMenu";
@@ -18,6 +19,16 @@ namespace Escape4Now.Menus
         private string message = "";
         private float messageUntil;
         private GUIStyle titleStyle, nowStyle, taglineStyle, tapeStyle, exitStyle, keyStyle, pressStyle, messageStyle;
+        private AccountLoginPanel loginPanel;
+        private bool showLogin;
+
+        private void Start()
+        {
+            loginPanel = new AccountLoginPanel(accent);
+            if (AccountService.LoginRequested) OpenLogin();
+            AccountService.LoginRequested = false;
+            _ = AccountService.ConnectAsync();
+        }
 
         private void Update()
         {
@@ -27,11 +38,30 @@ namespace Escape4Now.Menus
                 dieFace = dieFace % 6 + 1;
             }
             Keyboard keyboard = Keyboard.current;
+            if (showLogin)
+            {
+                if (AccountService.CanEnterGame) LoadMainMenu();
+                else if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame && !AccountService.IsBusy) showLogin = false;
+                return;
+            }
             if (keyboard != null && (keyboard.spaceKey.wasPressedThisFrame || keyboard.enterKey.wasPressedThisFrame)) GoToMainMenu();
         }
 
         private void GoToMainMenu()
         {
+            if (AccountService.CanEnterGame) LoadMainMenu();
+            else OpenLogin();
+        }
+
+        private void OpenLogin()
+        {
+            showLogin = true;
+            loginPanel.Open();
+        }
+
+        private void LoadMainMenu()
+        {
+            showLogin = false;
             if (TryLoadScene(mainMenuScene)) return;
             message = "Add the " + mainMenuScene + " scene to Build Settings to continue.";
             messageUntil = Time.unscaledTime + 4f;
@@ -95,7 +125,7 @@ namespace Escape4Now.Menus
             Label(key, "S P A C E", keyStyle, Color.white);
             if ((t % 1.1f) < 0.55f)
                 Label(new Rect(ox, 560f, DesignWidth, 40f), "PRESS SPACE TO ROLL IN", pressStyle, Color.white, default, 0f, Navy, 3f);
-            if (Hit(key) || Hit(new Rect(ox + 300f, 560f, 680f, 40f))) GoToMainMenu();
+            if (!showLogin && (Hit(key) || Hit(new Rect(ox + 300f, 560f, 680f, 40f)))) GoToMainMenu();
 
             DrawTape(new Rect(-40f, 664f, w + 80f, 30f), 1.5f, -t * 45f, null);
 
@@ -105,6 +135,8 @@ namespace Escape4Now.Menus
                 Block(box, Ink, Red, 3f, Color.clear, 0f);
                 Label(box, message, messageStyle, Color.white);
             }
+
+            if (showLogin) loginPanel.Draw(ox);
 
             GUI.matrix = baseMatrix;
         }

@@ -1,3 +1,4 @@
+using Escape4Now.Accounts;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.UI;
@@ -60,7 +61,11 @@ namespace Escape4Now.Arena
             showEvents.gameObject.SetActive(showEventButton && match.Playing && !match.Paused);
             showEventsLabel.text = match.Events.EventLocationsVisible ? eventsOnLabel : eventsOffLabel;
             if (finished)
-                result.text = match.Result;
+            {
+                result.text = string.IsNullOrEmpty(AccountStats.Status) ? match.Result : match.Result + "\n" + AccountStats.Status;
+                //Leaving waits for the save, because it swaps between the players' accounts.
+                replay.interactable = menu.interactable = !AccountStats.IsSaving;
+            }
             if (match.Playing)
                 presentation.Present(match);
         }
