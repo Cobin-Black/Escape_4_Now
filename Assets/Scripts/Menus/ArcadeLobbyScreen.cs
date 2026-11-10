@@ -197,8 +197,8 @@ namespace Escape4Now.Menus
             string rule = IsSurvival
                 ? "Solve puzzles as a team to unlock the exits. Each survivor escapes on their own. Don't get caught."
                 : "One key is hidden in a locker. Find it, battle for it, and carry it through the EXIT first.";
-            Label(new Rect(x, y, w, 64f), rule, smallWrap, Soft);
-            y += 70f;
+            Label(new Rect(x, y, w, 84f), rule, smallWrap, Soft);
+            y += 90f;
             Fill(new Rect(x, y, w, 2f), EdgeBlue);
             y += 14f;
             Label(new Rect(x, y, w, 16f), "HOW MANY PLAYERS?", Text(MonoFont, 12), SoftBlue);
@@ -232,7 +232,7 @@ namespace Escape4Now.Menus
                 DrawMonsterIcon(new Rect(m.x + 7f, m.y + 7f, 26f, 26f), Ink);
                 Label(new Rect(m.xMax + 12f, foot.y + 14f, foot.width - 70f, 16f), "THE MONSTER", tiny, Hex("#ff8a93"));
                 int monster = MonsterIndex();
-                Label(new Rect(m.xMax + 12f, foot.y + 30f, foot.width - 70f, 22f), monster >= 0 ? "PLAYED BY P" + (monster + 1) : "CONTROLLED BY THE AI", Text(Bungee, 15), Color.white);
+                Label(new Rect(m.xMax + 12f, foot.y + 30f, foot.width - 70f, 22f), monster >= 0 ? "PLAYED BY P" + (monster + 1) : "CONTROLLED BY THE AI", Text(Bungee, 12), Color.white);
             }
             else if (session.Mode.SupportsBots)
             {
