@@ -46,6 +46,9 @@ namespace Escape4Now.Menus
         private readonly MatchHistoryPanel history = new MatchHistoryPanel();
         private Section section = Section.GameMode;
         private int mode;
+
+        private int infoMode = -1;
+
         private int music = 5;
         private int sfx = 6;
         private string toast = "";
@@ -222,6 +225,12 @@ namespace Escape4Now.Menus
 
         private void DrawGameMode(Rect inner)
         {
+   if (infoMode >= 0)
+   {
+       DrawModeInfo(inner);
+       return;
+   }
+
             Label(new Rect(inner.x, inner.y, 480f, 44f), "CHOOSE GAME MODE", h2, headingColor);
             Label(new Rect(inner.xMax - 200f, inner.y + 10f, 200f, 24f), ModeNames[mode] + " SELECTED", Text(MonoFont, 13, TextAnchor.MiddleRight), Muted);
 
@@ -250,11 +259,38 @@ namespace Escape4Now.Menus
                 Label(new Rect(c.x + 18f, c.y + 54f, cw - 36f, 55f), ModeText[i], small, text);
                 Fill(new Rect(c.x + 18f, c.yMax - 42f, cw - 36f, 2f), on ? WithAlpha(Ink, 0.35f) : Hex("#2e2e38"));
                 Label(new Rect(c.x + 18f, c.yMax - 34f, cw - 36f, 30f), "WIN: " + ModeWin[i], Text(MonoFont, 11, TextAnchor.UpperLeft, true), text);
+        
                 if (Hit(c)) mode = i;
             }
 
-            if (BigButton(new Rect(inner.x, inner.yMax - 64f, 0f, 64f), "START " + ModeNames[mode], true)) StartMode();
+        
+   float bw = BigButton(new Rect(inner.x, inner.yMax - 64f, 0f, 64f), "START " + ModeNames[mode], true, out bool startClicked);
+   if (startClicked) StartMode();
+   Rect info = new Rect(inner.x + bw + 18f, inner.yMax - 64f, 64f, 64f);
+   Rect infoDrawn = info;
+   if (Hover(info)) { infoDrawn.x -= 3f; infoDrawn.y -= 3f; }
+   Block(infoDrawn, Ink, Color.white, 4f, Red, 6f);
+   Label(infoDrawn, "i", Text(Bungee, 30, TextAnchor.MiddleCenter), Color.white);
+   if (Hit(info)) infoMode = mode;
         }
+        
+          
+           private static readonly string[] ModeDetails =
+   {
+       "GOAL\nBe the first player to carry the key through the EXIT.\n\nHOW IT WORKS\nOne key is hidden in a locker somewhere in the school. Find it, then carry it to the EXIT. If you are on the same tile as another player, you can battle them for the key.\n\nPLAYERS\nUp to 4 players.",
+       "GOAL\nSurvive until time runs out, or complete the task to escape.\n\nHOW IT WORKS\nSomething is loose in the school. Work together as a team and solve puzzles to unlock the exits. Each survivor escapes on their own, so don't get caught.\n\nTHE MONSTER\nOne player can be the Monster. If nobody takes that role, the computer plays it.\n\nPLAYERS\nUp to 4 players.",
+       "GOAL\nBe the last player standing.\n\nHOW IT WORKS\nEveryone moves freely around the gym and fights to be the last one left. Combat rules are still being developed, so details may change.\n\nPLAYERS\nUp to 4 players.",
+       "GOAL\nBe the last player standing.\n\nHOW IT WORKS\nOne player starts with the potato. Chase, tag and pass it to someone else before it explodes. Whoever is holding it when it explodes is out.\n\nPLAYERS\nUp to 4 players."
+   };
+
+   private void DrawModeInfo(Rect inner)
+   {
+       Label(new Rect(inner.x, inner.y, 480f, 44f), ModeNames[infoMode], h2, headingColor);
+       Label(new Rect(inner.xMax - 200f, inner.y + 10f, 200f, 24f), "HOW TO PLAY", Text(MonoFont, 13, TextAnchor.MiddleRight), Muted);
+       Label(new Rect(inner.x, inner.y + 64f, inner.width, 330f), ModeDetails[infoMode], body, Soft);
+       if (BigButton(new Rect(inner.x, inner.yMax - 64f, 0f, 64f), "BACK", true)) infoMode = -1;
+   }
+
 
         private void DrawTutorial(Rect inner)
         {
