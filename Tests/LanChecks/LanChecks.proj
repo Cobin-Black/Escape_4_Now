@@ -12,6 +12,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Program.cs" />
+    <Compile Include="../../Assets/Scripts/Multiplayer/IMatchMessageConnection.cs" Link="IMatchMessageConnection.cs" />
     <Compile Include="../../Assets/Scripts/Multiplayer/LanConnection.cs" Link="LanConnection.cs" />
     <Compile Include="../../Assets/Scripts/Multiplayer/LanDiscovery.cs" Link="LanDiscovery.cs" />
   </ItemGroup>

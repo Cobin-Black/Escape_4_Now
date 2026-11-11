@@ -48,7 +48,7 @@ namespace Escape4Now.Multiplayer
         private bool searching;
         private TcpClient connectingClient;
         private Task connectTask;
-        private LanConnection server;
+        private IMatchMessageConnection server;
         private readonly List<Peer> peers = new List<Peer>();
         private bool active, host, failed, choosingNumber;
         private int capacity = 2, localPlayer, lobbyCount, sequence;
@@ -59,7 +59,7 @@ namespace Escape4Now.Multiplayer
 
         private sealed class Peer
         {
-            public LanConnection wire;
+            public IMatchMessageConnection wire;
             public int slot = -1, sequence, requests;
             public float lastSeen, rateWindow, joined;
         }
@@ -71,6 +71,51 @@ namespace Escape4Now.Multiplayer
             previousBackground = Application.runInBackground;
             local = owner;
             world = new LanWorldView(owner);
+        }
+
+        // Online play reuses the same authoritative Race commands and snapshots through a Relay channel.
+        // These entry points never open a LAN socket or run broadcast discovery.
+        public bool StartRelayedHost(int count, string code)
+        {
+            if (active || Connecting || local.MatchStarted || count < 2 || count > 4) return false;
+            capacity = count;
+            roomCode = code;
+            active = host = true;
+            failed = false;
+            localPlayer = 0;
+            Application.runInBackground = true;
+            status = "Online room ready. Waiting for players.";
+            return true;
+        }
+
+        public bool JoinRelayedHost(IMatchMessageConnection connection, string code)
+        {
+            if (active || Connecting || local.MatchStarted || connection == null || connection.Closed) return false;
+            server = connection;
+            roomCode = code;
+            active = true;
+            host = failed = false;
+            localPlayer = -1;
+            lastServerMessage = Time.realtimeSinceStartup;
+            Application.runInBackground = true;
+            Send(server, new LanMessage { kind = "hello", code = roomCode });
+            status = "Online: waiting for host.";
+            return true;
+        }
+
+        public bool AcceptRelayedGuest(IMatchMessageConnection connection)
+        {
+            if (!active || !host || local.MatchStarted || peers.Count >= capacity - 1) return false;
+            peers.Add(new Peer { wire = connection, joined = Time.realtimeSinceStartup, lastSeen = Time.realtimeSinceStartup });
+            return true;
+        }
+
+        public void ReportRelayFailure(string reason) { if (active && !failed) Fail(reason); }
+
+        public int GetRelayedSlot(IMatchMessageConnection connection)
+        {
+            Peer peer = peers.Find(value => ReferenceEquals(value.wire, connection));
+            return peer != null ? peer.slot : -1;
         }
 
         //Starts a small lobby on this computer's local network.
@@ -459,7 +504,7 @@ namespace Escape4Now.Multiplayer
             choosingNumber = false;
         }
 
-        private static void Send(LanConnection wire, LanMessage message) => wire.Send(LanMessageCodec.Serialize(message));
+        private static void Send(IMatchMessageConnection wire, LanMessage message) => wire.Send(LanMessageCodec.Serialize(message));
 
         //Keeps all controls stopped after a disconnect until the player leaves the match.
         private void Fail(string message)

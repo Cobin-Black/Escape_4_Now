@@ -26,6 +26,9 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/HotPotato.unity
     guid: 42412020125d13249816998987d923b8
+  - enabled: 1
+    path: Assets/Scenes/OnlineRace.unity
+    guid: cb4de426a47a4ed4f923541e5d43499a
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}
