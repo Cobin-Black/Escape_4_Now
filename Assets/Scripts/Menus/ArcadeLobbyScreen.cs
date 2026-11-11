@@ -1,3 +1,4 @@
+using Escape4Now.Accounts;
 using Escape4Now.GameModes;
 using Escape4Now.Multiplayer;
 using Escape4Now.Player;
@@ -33,7 +34,20 @@ namespace Escape4Now.Menus
         private LocalMultiplayerSession session;
         private bool hidOldLobby;
         private readonly string[] nameBuffers = new string[4];
-        private GUIStyle modeName, smallWrap, tiny, tinyBold, chipBig, h2, bandLabel, field, startStyle, arrowStyle, logoShade, logoNow, hintStyle;
+        private GUIStyle modeName, smallWrap, tiny, tinyBold, chipBig, h2, bandLabel, field, monoField, startStyle, arrowStyle, logoShade, logoNow, hintStyle;
+
+        //Account linking. Players 2-4 can link an account so their stats are saved; Player 1 is the logged in account.
+        private const string LinkUserControl = "ArcadeLinkUser";
+        private const string LinkPassControl = "ArcadeLinkPass";
+        private static readonly Color ErrorText = Hex("#ff8a93");
+        private readonly bool[] linked = new bool[4];
+        private bool signedIn;
+        private int linkingSlot = -1;
+        private string linkUser = "";
+        private string linkPass = "";
+        private string linkStatus = "";
+        private bool focusLinkUser;
+        private int linkOpenedFrame;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Hook()
@@ -81,9 +95,16 @@ namespace Escape4Now.Menus
                 hidOldLobby = false;
             }
             if (!Showing) return;
+            SyncAccounts();
 
             Keyboard k = Keyboard.current;
             if (k == null) return;
+            if (linkingSlot >= 0)
+            {
+                //The link popup takes Escape, so it never sends the players back to the menu.
+                if (k.escapeKey.wasPressedThisFrame && !AccountService.IsBusy) CloseLink();
+                return;
+            }
             if (k.escapeKey.wasPressedThisFrame)
             {
                 if (GUIUtility.keyboardControl != 0) GUIUtility.keyboardControl = 0;
@@ -106,9 +127,36 @@ namespace Escape4Now.Menus
 
         private void StartMatch()
         {
+            if (linkingSlot >= 0 || AccountService.IsBusy) return;
             GUIUtility.keyboardControl = 0;
-            for (int i = 0; i < session.PlayerCount && i < nameBuffers.Length; i++) session.SetPlayerName(i, nameBuffers[i]);
+            for (int i = 0; i < session.PlayerCount && i < nameBuffers.Length; i++) session.SetPlayerName(i, NameFor(i));
             session.StartLocalMatch();
+        }
+
+        //A linked player always plays under their account name.
+        private string NameFor(int i)
+        {
+            return linked[i] && !session.IsBotPlayer(i) ? AccountService.LinkedName(i) : nameBuffers[i];
+        }
+
+        //Player 1 is briefly signed out while another account links, so the last state is kept until that finishes.
+        //Linking swaps the slot to the account name, and unlinking puts the typed name back.
+        private void SyncAccounts()
+        {
+            if (AccountService.IsBusy) return;
+            signedIn = AccountService.IsSignedIn;
+            for (int i = 0; i < linked.Length; i++)
+            {
+                bool now = AccountService.IsLinked(i);
+                if (now && !session.IsBotPlayer(i))
+                {
+                    string accountName = AccountService.LinkedName(i);
+                    if (session.GetPlayerName(i) != accountName) session.SetPlayerName(i, accountName);
+                }
+                else if (!now && linked[i]) session.SetPlayerName(i, nameBuffers[i]);
+                linked[i] = now;
+            }
+            if (linkingSlot >= 0 && (!signedIn || session.IsBotPlayer(linkingSlot))) CloseLink();
         }
 
         private void CreateStyles()
@@ -139,6 +187,8 @@ namespace Escape4Now.Menus
                 s.background = null;
                 s.textColor = Color.white;
             }
+            //Usernames and passwords keep their real case, so the link popup uses the mono font.
+            monoField = new GUIStyle(field) { font = MonoFont, fontSize = 16, padding = new RectOffset(12, 12, 0, 0) };
         }
 
         private void OnGUI()
@@ -157,10 +207,15 @@ namespace Escape4Now.Menus
             for (float y = 0f; y < DesignHeight; y += 40f) Fill(new Rect(0f, y, Width, 1f), gridLine);
             Stripes(new Rect(0f, 0f, Width, 18f), Tape, Navy, t * 36f, 22f);
 
+            //Everything behind the link popup stops taking clicks while it is open.
+            bool linking = linkingSlot >= 0;
+            GUI.enabled = !linking;
             DrawHeader(ox);
             DrawModePanel(new Rect(ox + 56f, 118f, 290f, 470f));
             DrawPlayers(new Rect(ox + 378f, 118f, 846f, 470f), t);
             DrawBottomBar(new Rect(ox + 56f, 612f, 1168f, 72f));
+            GUI.enabled = true;
+            if (linking) DrawLinkPopup(ox);
 
             GUI.matrix = baseMatrix;
         }
@@ -275,8 +330,9 @@ namespace Escape4Now.Menus
         {
             bool survival = IsSurvival;
             bool isMonster = survival && session.IsMonsterPlayer(i);
-            bool canBot = session.Mode.SupportsBots && !(session.PlayerCount == 1 && i == 0);
             bool bot = session.IsBotPlayer(i);
+            //A linked player must be unlinked before their slot can become a bot.
+            bool canBot = session.Mode.SupportsBots && !(session.PlayerCount == 1 && i == 0) && !(i > 0 && linked[i] && !bot);
             Color c = isMonster ? Red : SlotColors[i];
 
             Fill(new Rect(card.x + 5f, card.y + 5f, card.width, card.height), DeepNavy);
@@ -356,6 +412,13 @@ namespace Escape4Now.Menus
                 Block(nameRect, Hex("#12284d"), EdgeBlue, 2f, Color.clear, 0f);
                 Label(new Rect(nameRect.x + 10f, nameRect.y, nameRect.width - 20f, nameRect.height), "BOT " + (i + 1), Text(Bungee, 15), OffText);
             }
+            else if (linked[i])
+            {
+                //Linked names come from the account and can't be typed over.
+                Block(nameRect, Hex("#12284d"), c, 2f, Color.clear, 0f);
+                Label(new Rect(nameRect.x + 10f, nameRect.y, nameRect.width - 44f, nameRect.height), AccountService.LinkedName(i), Text(Bungee, 15), Color.white);
+                DrawChainIcon(new Rect(nameRect.xMax - 30f, nameRect.center.y - 6f, 20f, 12f), c);
+            }
             else
             {
                 string control = "ArcadeLobbyName" + i;
@@ -384,7 +447,158 @@ namespace Escape4Now.Menus
                 int pickRole = Segmented(new Rect(x, y, w, segH), "SURVIVOR", "MONSTER", isMonster ? 1 : 0, SlotColors[i], Red, true);
                 //SetMonsterPlayer switches the Monster on and off for that slot.
                 if ((pickRole == 1 && !isMonster) || (pickRole == 0 && isMonster)) session.SetMonsterPlayer(i);
+                y += segH + 8f;
             }
+            //Account link sits at the bottom of the card. It only shows when Player 1 is logged in, and never for bots.
+            if (signedIn && !bot) DrawLinkRow(new Rect(x, y, w, segH), i, c);
+        }
+
+        //Player 1 shows they are logged in. Players 2-4 click to link an account, or click again to unlink it.
+        private void DrawLinkRow(Rect r, int i, Color c)
+        {
+            bool on = linked[i];
+            bool playerOne = i == 0;
+            bool hover = !playerOne && GUI.enabled && Hover(r);
+            if (on) Block(r, hover ? Red : c, hover ? Red : c, 2f, Color.clear, 0f);
+            else Block(r, DeepNavy, hover ? c : DashBlue, 2f, Color.clear, 0f);
+
+            Color ink = on ? Ink : hover ? c : OffText;
+            string text = playerOne ? "LOGGED IN" : on ? (hover ? "UNLINK" : "LINKED") : "LINK ACCOUNT";
+            GUIStyle style = Text(Bungee, 12);
+            float tw = style.CalcSize(new GUIContent(text)).x;
+            float sx = r.center.x - (24f + 8f + tw) * 0.5f;
+            DrawChainIcon(new Rect(sx, r.center.y - 7f, 24f, 14f), ink);
+            Label(new Rect(sx + 32f, r.y, tw + 4f, r.height), text, style, ink);
+
+            if (playerOne || !Hit(r) || AccountService.IsBusy) return;
+            if (on) AccountService.UnlinkPlayer(i);
+            else OpenLink(i);
+        }
+
+        //Two overlapping rings, the same chain shape the old lobby used.
+        private static void DrawChainIcon(Rect r, Color c)
+        {
+            float d = r.height;
+            RingShape(new Rect(r.x, r.y, d, d), c);
+            RingShape(new Rect(r.xMax - d, r.y, d, d), c);
+        }
+
+        private void OpenLink(int slot)
+        {
+            linkingSlot = slot;
+            linkUser = "";
+            linkPass = "";
+            linkStatus = "";
+            //A focused box keeps showing its old text, so focus is dropped before moving to the username box.
+            GUIUtility.keyboardControl = 0;
+            focusLinkUser = true;
+            linkOpenedFrame = Time.frameCount;
+        }
+
+        private void CloseLink()
+        {
+            linkingSlot = -1;
+            linkPass = "";
+            GUIUtility.keyboardControl = 0;
+        }
+
+        //Login popup for linking a player. Tab moves between the boxes, Enter links and Escape cancels.
+        private void DrawLinkPopup(float ox)
+        {
+            int slot = linkingSlot;
+            Color c = SlotColors[slot];
+            bool busy = AccountService.IsBusy;
+
+            Fill(new Rect(0f, 0f, Width, DesignHeight), WithAlpha(Ink, 0.7f));
+            Rect box = new Rect(ox + 640f - 240f, 160f, 480f, 400f);
+            Block(box, PanelNavy, Color.white, 4f, accent, 8f);
+
+            Rect band = new Rect(box.x + 4f, box.y + 4f, box.width - 8f, 40f);
+            Fill(band, c);
+            Label(new Rect(band.x + 14f, band.y, 40f, band.height), "P" + (slot + 1), bandLabel, Ink);
+            for (int v = 0; v < 3; v++) Fill(new Rect(band.x + 54f, band.y + 13f + v * 6f, 20f, 3f), WithAlpha(Ink, 0.35f));
+            const string tagText = "ACCOUNT";
+            float tagW = tinyBold.CalcSize(new GUIContent(tagText)).x + 12f;
+            Rect tag = new Rect(band.xMax - 12f - tagW, band.y + 10f, tagW, 20f);
+            Fill(tag, Ink);
+            Label(tag, tagText, tinyBold, c);
+
+            float x = box.x + 28f;
+            float w = box.width - 56f;
+            float y = band.yMax + 14f;
+            Label(new Rect(x, y, w, 36f), "LINK PLAYER " + (slot + 1), Text(Bungee, 26), PaleBlue);
+            y += 38f;
+            Label(new Rect(x, y, w, 20f), "Log in so this player's stats are saved.", Text(MonoFont, 12), Soft);
+            y += 28f;
+
+            bool ready = Time.frameCount > linkOpenedFrame;
+            Event e = Event.current;
+            bool submit = ready && !busy && e.type == EventType.KeyDown && (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter);
+            if (submit) e.Use();
+
+            GUI.enabled = !busy;
+            linkUser = LinkBox(new Rect(x, y + 20f, w, 42f), "USERNAME", LinkUserControl, linkUser, AccountService.UsernameLimit, false, c);
+            y += 76f;
+            linkPass = LinkBox(new Rect(x, y + 20f, w, 42f), "PASSWORD", LinkPassControl, linkPass, AccountService.PasswordLimit, true, c);
+            y += 76f;
+            if (focusLinkUser && ready)
+            {
+                GUI.FocusControl(LinkUserControl);
+                focusLinkUser = false;
+            }
+
+            string status = busy ? "LINKING..." : linkStatus;
+            Label(new Rect(x, y, w, 32f), status, Text(MonoFont, 12, TextAnchor.MiddleCenter, true), busy ? Tape : ErrorText);
+
+            float bw = (w - 14f) * 0.5f;
+            float by = box.yMax - 24f - 52f;
+            if (LinkButton(new Rect(x, by, bw, 52f), "CANCEL", false)) CloseLink();
+            if (LinkButton(new Rect(x + bw + 14f, by, bw, 52f), "LINK", true)) submit = true;
+            GUI.enabled = true;
+            if (submit) SubmitLink();
+        }
+
+        private string LinkBox(Rect box, string title, string control, string value, int limit, bool hidden, Color focusColor)
+        {
+            Label(new Rect(box.x, box.y - 20f, box.width, 16f), title, Text(MonoFont, 12), SoftBlue);
+            Block(box, DeepNavy, GUI.GetNameOfFocusedControl() == control ? focusColor : DashBlue, 2f, Color.clear, 0f);
+            Rect text = new Rect(box.x + 2f, box.y + 2f, box.width - 4f, box.height - 4f);
+            GUI.SetNextControlName(control);
+            return hidden ? GUI.PasswordField(text, value ?? "", '*', limit, monoField) : GUI.TextField(text, value ?? "", limit, monoField);
+        }
+
+        private bool LinkButton(Rect r, string text, bool primary)
+        {
+            Rect drawn = r;
+            if (GUI.enabled && Hover(r)) { drawn.x -= 3f; drawn.y -= 3f; }
+            if (primary) Block(drawn, accent, Ink, 4f, Red, 6f);
+            else Block(drawn, CardNavy, Color.white, 3f, DeepNavy, 6f);
+            Label(drawn, text, Text(Bungee, 18, TextAnchor.MiddleCenter), primary ? Ink : Color.white);
+            return Hit(r);
+        }
+
+        private async void SubmitLink()
+        {
+            if (AccountService.IsBusy || linkingSlot < 0) return;
+            int slot = linkingSlot;
+            string username = linkUser.Trim();
+            if (username.Length == 0 || linkPass.Length == 0)
+            {
+                linkStatus = "Enter your username and password.";
+                return;
+            }
+            linkStatus = "";
+            string error = await AccountService.LinkPlayerAsync(slot, username, linkPass);
+            if (this == null) return;
+            if (error == null)
+            {
+                if (linkingSlot == slot) CloseLink();
+                return;
+            }
+            //Drop focus so the cleared password box shows empty.
+            GUIUtility.keyboardControl = 0;
+            linkPass = "";
+            linkStatus = error;
         }
 
         //Two-option switch. Returns the clicked option, or -1.
