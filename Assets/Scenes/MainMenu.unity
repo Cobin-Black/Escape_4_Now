@@ -287,7 +287,6 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   startScreenScene: StartScreen
   tutorialScene: Tutorial
-  leaderboardScene: Leaderboard
   onlineRaceScene: OnlineRace
   modeScenes:
   - Race_Gamemode
@@ -317,8 +316,8 @@ MonoBehaviour:
   - Pick how you want to play
   - New here? Start with this
   - Sound, screen, controls
-  - Fastest escapes
-  - Sign up, name and picture
+  - Wins and fastest times
+  - Match history and log out
   - Close the game
   onlineHeading: ONLINE MODE
   onlineSubtitle: Play with teammates on different internet connections.

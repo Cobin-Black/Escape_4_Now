@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.EventSystems;
@@ -14,9 +13,9 @@ namespace Escape4Now.Multiplayer.RelayTesting
         private sealed class PlayerRow
         {
             public GameObject root;
-            public Image swatch;
             public Image portrait;
             public Text name;
+            public Text role;
             public Text state;
             public Image badge;
         }
@@ -31,7 +30,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
         [SerializeField] private CanvasGroup mainControls;
         [SerializeField] private InputActionReference cancel;
         [Header("Setup Controls")]
-        [SerializeField] private Dropdown players;
+        [SerializeField] private Toggle[] roomSizes;
         [SerializeField] private InputField joinCode;
         [SerializeField] private Button host;
         [SerializeField] private Button join;
@@ -60,12 +59,16 @@ namespace Escape4Now.Multiplayer.RelayTesting
         [SerializeField] private Color errorColor = new Color(1f, .55f, .52f);
         [SerializeField] private Color normalColor = new Color(.84f, .84f, .88f);
         [SerializeField] private Color readyTextColor = new Color(.04f, .08f, .07f);
+        [SerializeField] private Color waitingTextColor = Color.white;
         [Header("Player Row Copy")]
         [SerializeField] private string readyText = "READY";
         [SerializeField] private string notReadyText = "NOT READY";
         [SerializeField] private string emptySlotText = "WAITING";
-        [SerializeField] private string hostSuffix = "  (HOST)";
-        [SerializeField] private string localSuffix = "  - YOU";
+        [SerializeField] private string closedSlotText = "CLOSED";
+        [SerializeField] private string hostRole = "HOST";
+        [SerializeField] private string localRole = "YOU";
+        [SerializeField] private string localHostRole = "HOST / YOU";
+        [SerializeField] private string guestRole = "PLAYER";
         [SerializeField] private string connectedFormat = "{0} / {1} CONNECTED";
         [Header("Lobby Messages")]
         [SerializeField] private string setupMessage = "Host a room or join a friend using their room code.";
@@ -73,10 +76,11 @@ namespace Escape4Now.Multiplayer.RelayTesting
         [SerializeField] private string failureMessage = "Connection failed. Open Connection Settings to see the error or save a report.";
         [SerializeField] private string hostMessage = "Share the room code. Everyone must select Ready before you can start.";
         [SerializeField] private string guestMessage = "You are in the room. Select Ready when you are ready to play.";
-        [SerializeField] private string waitingMessage = "You are ready. Waiting for the other players and host.";
+        [SerializeField] private string waitingMessage = "You are ready. Waiting for the match to start.";
         [SerializeField] private string allReadyMessage = "Everyone is ready. Start the match!";
         private InputAction cancelAction;
         private bool previousRoom;
+        private int selectedCapacity = 2;
 
         private void OnEnable()
         {
@@ -88,10 +92,14 @@ namespace Escape4Now.Multiplayer.RelayTesting
 
         private void Start()
         {
-            var counts = new List<string>();
-            for (int count = 2; count <= session.Relay.Settings.maximumPlayers; count++) counts.Add(count + " Players");
-            players.ClearOptions();
-            players.AddOptions(counts);
+            for (int index = 0; index < roomSizes.Length; index++)
+            {
+                int capacity = index + 2;
+                roomSizes[index].onValueChanged.AddListener(selected =>
+                {
+                    if (selected) selectedCapacity = capacity;
+                });
+            }
             protocol.SetValueWithoutNotify((int)session.Relay.Protocol);
             protocol.onValueChanged.AddListener(session.Relay.SelectProtocol);
             host.onClick.AddListener(Host);
@@ -116,7 +124,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             EventSystem.current?.SetSelectedGameObject(visible ? protocol.gameObject : openDiagnostics.gameObject);
         }
 
-        private async void Host() { await session.HostAsync(players.value + 2); }
+        private async void Host() { await session.HostAsync(selectedCapacity); }
         private async void Join() { await session.JoinAsync(joinCode.text); }
         private void Export()
         {
@@ -143,7 +151,9 @@ namespace Escape4Now.Multiplayer.RelayTesting
                 EventSystem.current?.SetSelectedGameObject(inRoom ? ready.gameObject : host.gameObject);
             previousRoom = inRoom;
             bool canConnect = connection.CanStart;
-            host.interactable = players.interactable = joinCode.interactable = protocol.interactable = canConnect;
+            host.interactable = joinCode.interactable = protocol.interactable = canConnect;
+            for (int index = 0; index < roomSizes.Length; index++)
+                roomSizes[index].interactable = canConnect && index + 2 <= connection.Settings.maximumPlayers;
             join.interactable = canConnect && !string.IsNullOrWhiteSpace(joinCode.text);
             ready.interactable = inRoom && session.LocalSlot >= 0;
             readyLabel.text = session.Ready ? notReadyText : readyText;
@@ -155,16 +165,19 @@ namespace Escape4Now.Multiplayer.RelayTesting
             for (int slot = 0; slot < rows.Length; slot++)
             {
                 var row = rows[slot];
-                row.root.SetActive(slot < session.Capacity);
+                row.root.SetActive(slot < connection.Settings.maximumPlayers);
                 if (!row.root.activeSelf) continue;
-                bool connected = slot < session.PlayerCount;
+                bool available = slot < session.Capacity;
+                bool connected = available && slot < session.PlayerCount;
                 bool isReady = connected && session.IsSlotReady(slot);
-                row.name.text = session.SlotName(slot) + (slot == 0 ? hostSuffix : "") + (slot == session.LocalSlot ? localSuffix : "");
-                row.swatch.color = session.SlotColor(slot);
+                row.name.text = connected ? session.SlotName(slot).ToUpperInvariant() : "";
+                row.role.text = !connected ? "" : slot == 0 ? (slot == session.LocalSlot ? localHostRole : hostRole)
+                    : slot == session.LocalSlot ? localRole : guestRole;
                 row.portrait.sprite = session.SlotPortrait(slot);
+                row.portrait.enabled = available && row.portrait.sprite != null;
                 row.portrait.color = connected ? Color.white : new Color(1, 1, 1, .25f);
-                row.state.text = !connected ? emptySlotText : isReady ? readyText : notReadyText;
-                row.state.color = isReady ? readyTextColor : normalColor;
+                row.state.text = !available ? closedSlotText : !connected ? emptySlotText : isReady ? readyText : notReadyText;
+                row.state.color = isReady ? readyTextColor : waitingTextColor;
                 row.badge.color = isReady ? readyColor : waitingColor;
             }
             bool failed = !string.IsNullOrEmpty(connection.Error);

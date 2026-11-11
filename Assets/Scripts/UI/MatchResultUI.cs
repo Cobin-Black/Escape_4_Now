@@ -1,5 +1,6 @@
 // Shows the result supplied by the mode and lets the player return to setup.
 
+using Escape4Now.Accounts;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -25,13 +26,14 @@ namespace Escape4Now.UI
             panel.SetActive(finished);
             if (!finished || !context.Session.TryGetResult(out var result)) return;
             title.text = result.Title;
-            message.text = result.Message;
+            message.text = string.IsNullOrEmpty(AccountStats.Status) ? result.Message : result.Message + "\n\n" + AccountStats.Status;
             title.color = accent.color = result.Won ? winColor : loseColor;
             time.gameObject.SetActive(context.Timer != null);
             if (context.Timer != null)
                 time.text = string.Format(timeFormat, MatchUIContext.FormatTime(context.Timer.TimeRemaining));
         }
 
-        public void BackToLobby() { context.Session?.ReturnToSetup(); }
+        //Leaving waits for the save, because it swaps between the players' accounts.
+        public void BackToLobby() { if (!AccountStats.IsSaving) context.Session?.ReturnToSetup(); }
     }
 }

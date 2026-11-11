@@ -33,6 +33,7 @@ namespace Escape4Now.GameModes
         public void ConfigureMonster(MonsterCharacter actor) { if (!started) monsterActor = actor; }
         private readonly Dictionary<PlayerCharacter, SurvivalRole> roles = new Dictionary<PlayerCharacter, SurvivalRole>();
         private readonly Dictionary<PlayerCharacter, SurvivorOutcome> outcomes = new Dictionary<PlayerCharacter, SurvivorOutcome>();
+        private readonly Dictionary<PlayerCharacter, float> escapeTimes = new Dictionary<PlayerCharacter, float>();
         private bool started;
         public SurvivalRulesSettings Rules => rules;
         public SurvivalEventController Events => events;
@@ -40,6 +41,7 @@ namespace Escape4Now.GameModes
         public SurvivalObjectiveLayout Objectives => map.Objectives;
         public override IPlayerGridMap GridMap => map;
         public override GameModeType Type => GameModeType.Monster;
+        public override bool SupportsBots => true;
         public override int MinimumPlayers => 1;
         public override int MaximumTurnParticipants => 5;
 
@@ -78,6 +80,7 @@ namespace Escape4Now.GameModes
 
         public SurvivalRole RoleOf(PlayerCharacter player) => player != null && roles.TryGetValue(player, out var role) ? role : SurvivalRole.Survivor;
         public SurvivorOutcome OutcomeOf(PlayerCharacter player) => player != null && outcomes.TryGetValue(player, out var outcome) ? outcome : SurvivorOutcome.Active;
+        public float EscapeTimeOf(PlayerCharacter player) => player != null && escapeTimes.TryGetValue(player, out float seconds) ? seconds : 0f;
         public override bool IsParticipantActive(PlayerCharacter player) => player != null && (!started || outcomes.TryGetValue(player, out var outcome) && outcome == SurvivorOutcome.Active);
         public bool IsActiveSurvivor(PlayerCharacter player) => IsParticipantActive(player) && RoleOf(player) == SurvivalRole.Survivor;
         public List<PlayerCharacter> ActiveSurvivors
@@ -181,6 +184,7 @@ namespace Escape4Now.GameModes
         {
             roles.Clear();
             outcomes.Clear();
+            escapeTimes.Clear();
             CompletedPuzzles = 0;
             for (int i = 0; i < participants.Count; i++)
             {
@@ -221,6 +225,7 @@ namespace Escape4Now.GameModes
         {
             if (!CanUseExit(player) || !map.IsExit(player.GridPosition) || Timer.HasExpired)
                 return false;
+            escapeTimes[player] = Timer.Elapsed;
             Retire(player, SurvivorOutcome.Escaped);
             return true;
         }

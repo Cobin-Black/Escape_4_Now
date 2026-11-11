@@ -7,8 +7,9 @@ using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.InputSystem;
 using Object = UnityEngine.Object;
+using RaceStyle = Escape4Now.Menus.ArcadeLobbyScreen;
 
-// Builds saved, editable Canvas objects using the same palette and fonts as the main menu.
+// Builds saved, editable Canvas objects using the local Race lobby palette and fonts.
 public static class OnlineLobbyAuthoring
 {
     private static readonly Color Ink = new Color(.067f, .067f, .067f);
@@ -16,9 +17,9 @@ public static class OnlineLobbyAuthoring
     private static readonly Color Navy = new Color(.114f, .227f, .4f);
     private static readonly Color Teal = new Color(.212f, .945f, .804f);
     private static readonly Color Red = new Color(.9f, .224f, .275f);
-    private static readonly Color Panel = new Color(.082f, .082f, .102f);
-    private static readonly Color Line = new Color(.2f, .2f, .24f);
-    private static readonly Color Muted = new Color(.65f, .65f, .7f);
+    private static readonly Color Panel = RaceStyle.BoxNavy;
+    private static readonly Color Line = RaceStyle.EdgeBlue;
+    private static readonly Color Muted = RaceStyle.SoftBlue;
     private static Font heading, mono, bold;
 
     [MenuItem("Tools/Escape 4 Now/Relay Test/Style Online Lobby")]
@@ -51,9 +52,11 @@ public static class OnlineLobbyAuthoring
         scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
         scaler.referenceResolution = new Vector2(1280, 720);
         scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
-        var backdrop = Box(canvas.transform, "Screen Backdrop", 0, 0, 1280, 720, Paper);
+        var lobby = Rect(canvas.transform, "Lobby", 0, 0, 1280, 720);
+        Stretch(lobby, Vector2.zero, Vector2.zero);
+        var backdrop = Box(lobby, "Screen Backdrop", 0, 0, 1280, 720, Paper);
         Stretch(backdrop, Vector2.zero, Vector2.zero);
-        var screen = Rect(canvas.transform, "Lobby Screen", 0, 0, 1280, 720);
+        var screen = Rect(lobby, "Lobby Screen", 0, 0, 1280, 720);
         var controls = screen.gameObject.AddComponent<CanvasGroup>();
         screen.anchorMin = screen.anchorMax = screen.pivot = new Vector2(.5f, .5f);
         screen.anchoredPosition = Vector2.zero;
@@ -62,67 +65,114 @@ public static class OnlineLobbyAuthoring
         for (int y = 0; y <= 720; y += 40) Box(screen, "Grid Horizontal", 0, y, 1280, 1, new Color(Navy.r, Navy.g, Navy.b, .12f));
         var tape = Rect(screen, "Striped Tape", 0, 0, 1280, 18);
         tape.gameObject.AddComponent<RectMask2D>();
-        for (int x = -30; x < 1310; x += 44)
+        Box(tape, "Tape Backing", 0, 0, 1280, 18, RaceStyle.Tape);
+        for (int x = -60; x < 1310; x += 44)
         {
-            var stripe = Box(tape, "Stripe", x, -20, 18, 60, Navy);
+            var stripe = Box(tape, "Stripe", x, -35, 16, 100, Navy);
             stripe.localRotation = Quaternion.Euler(0, 0, 45);
         }
-        Text(screen, "Online Race Heading", "ONLINE RACE", 32, heading, 80, 34, 850, 52, Navy);
-        var back = Button(screen, "BACK TO MENU", 980, 40, 220, 42, false, 15);
-        Frame(screen, "Main Panel", 80, 110, 1120, 550, Panel, Color.white, true);
-        Text(screen, "Room Heading", "PRIVATE ROOM", 25, heading, 112, 130, 750, 42, Paper);
-        Text(screen, "Room Guide", "One host. One room code. Everyone ready.", 13, mono, 112, 178, 1000, 26, Muted);
-        Text(screen, "Mode Badge", "RACE  /  2-4 PLAYERS", 12, bold, 936, 138, 230, 24, Teal).alignment = TextAnchor.MiddleRight;
-        Box(screen, "Header Divider", 112, 214, 1056, 2, Line);
+        var logo = Resources.Load<Font>("Fonts/BungeeShade-Regular");
+        var wordmark = Text(screen, "Escape Wordmark", "ESCAPE", 40, logo, 56, 36, 197, 56, Color.white);
+        var shadow = wordmark.gameObject.AddComponent<Shadow>();
+        shadow.effectColor = Escape4Now.Menus.ArcadeMenuKit.ShadowBlue;
+        shadow.effectDistance = new Vector2(4, -4);
+        var outline = wordmark.gameObject.AddComponent<Outline>();
+        outline.effectColor = Navy;
+        outline.effectDistance = new Vector2(2, -2);
+        var die = Box(screen, "Logo Die", 254, 45, 38, 38, Color.white);
+        for (int x = 0; x < 2; x++)
+            for (int y = 0; y < 2; y++)
+                Box(die, "Pip", 8 + x * 16, 8 + y * 16, 5, 5, Ink);
+        Text(screen, "Now Wordmark", "NOW", 32, heading, 306, 36, 120, 56, Navy);
+        var back = Button(screen, "MAIN MENU", 1034, 40, 190, 48, false, 15);
 
-        var setup = Rect(screen, "Host or Join", 112, 234, 1056, 272);
-        Frame(setup, "Create Room Card", 0, 0, 510, 272, Ink, Line);
-        Text(setup, "Create Title", "CREATE ROOM", 21, heading, 22, 14, 466, 34, Color.white);
-        Text(setup, "Create Help", "Choose a room size and invite your teammates.", 12, mono, 22, 54, 466, 40, Muted);
-        var players = Dropdown(setup, "Room Size", 22, 108, 466, new[] { "2 Players", "3 Players", "4 Players" });
-        var host = Button(setup, "HOST ROOM", 22, 194, 466, 48, true);
-        Frame(setup, "Join Room Card", 546, 0, 510, 272, Ink, Line);
-        Text(setup, "Join Title", "JOIN ROOM", 21, heading, 568, 14, 466, 34, Color.white);
-        Text(setup, "Join Help", "Have a code? Enter it below to join your host.", 12, mono, 568, 54, 466, 40, Muted);
-        var joinCode = Input(setup, "ROOM CODE", 568, 108, 466);
+        Frame(screen, "Race Mode Panel", 56, 118, 290, 470, RaceStyle.PanelNavy, Color.white, true);
+        var flag = Box(screen, "Race Flag", 78, 140, 52, 52, Teal);
+        Box(flag, "Flag Pole", 12, 11, 4, 30, Ink);
+        Box(flag, "Flag Cloth", 16, 11, 23, 14, Ink);
+        Text(screen, "Mode Type", "ONLINE MODE", 11, mono, 142, 143, 172, 17, Muted);
+        Text(screen, "Mode Title", "RACE", 30, heading, 142, 157, 172, 40, Color.white);
+        Text(screen, "Race Objective", "One key is hidden in a locker. Find it, battle for it, and carry it through the EXIT first.",
+            13, mono, 78, 205, 246, 91, RaceStyle.Tape);
+        Box(screen, "Mode Divider", 78, 308, 246, 2, Line);
+        Frame(screen, "Players Panel", 378, 118, 846, 470, Panel, Color.white, true);
+
+        var setup = Rect(screen, "Host or Join", 0, 0, 1280, 720);
+        Text(setup, "Setup Heading", "PRIVATE ROOM", 32, heading, 400, 128, 500, 60, RaceStyle.PaleBlue);
+        Text(setup, "Room Size Label", "HOW MANY PLAYERS?", 12, mono, 78, 329, 246, 20, Muted);
+        var sizes = Rect(setup, "Room Size", 78, 363, 246, 72);
+        var sizeGroup = sizes.gameObject.AddComponent<ToggleGroup>();
+        var roomSizes = new Toggle[3];
+        for (int i = 0; i < roomSizes.Length; i++)
+        {
+            var tile = Box(sizes, "Room Size " + (i + 2), i * 84, 0, 78, 72, Line);
+            var face = Box(tile, "Face", 3, 3, 72, 66, RaceStyle.CardNavy).GetComponent<Image>();
+            var selected = Box(tile, "Selection Accent", 3, 65, 72, 4, Teal).GetComponent<Image>();
+            var toggle = tile.gameObject.AddComponent<Toggle>();
+            toggle.targetGraphic = face;
+            toggle.graphic = selected;
+            toggle.isOn = i == 0;
+            toggle.group = sizeGroup;
+            Text(tile, "Capacity", (i + 2).ToString(), 26, heading, 4, 1, 70, 44, Color.white).alignment = TextAnchor.MiddleCenter;
+            Text(tile, "Unit", "PLAYERS", 10, mono, 4, 43, 70, 20, RaceStyle.Tape).alignment = TextAnchor.MiddleCenter;
+            roomSizes[i] = toggle;
+        }
+
+        Frame(setup, "Create Room Card", 400, 202, 393, 334, RaceStyle.CardNavy, Line);
+        Text(setup, "Create Title", "CREATE ROOM", 22, heading, 421, 228, 351, 38, Color.white);
+        Text(setup, "Create Help", "Choose a room size and share your code with friends.", 13, mono, 421, 280, 351, 70, Muted);
+        var host = Button(setup, "HOST ROOM", 421, 446, 351, 54, true);
+
+        Frame(setup, "Join Room Card", 809, 202, 393, 334, RaceStyle.CardNavy, Line);
+        Text(setup, "Join Title", "JOIN ROOM", 22, heading, 830, 228, 351, 38, Color.white);
+        Text(setup, "Join Help", "Enter the code from your host.", 13, mono, 830, 280, 351, 70, Muted);
+        var joinCode = Input(setup, "ROOM CODE", 830, 367, 351);
         joinCode.characterLimit = 12;
         joinCode.characterValidation = InputField.CharacterValidation.Alphanumeric;
-        var join = Button(setup, "JOIN ROOM", 568, 194, 466, 48, false);
+        var join = Button(setup, "JOIN ROOM", 830, 446, 351, 54, false);
 
-        var room = Rect(screen, "Connected Room", 112, 234, 1056, 272);
-        Frame(room, "Share Code Card", 0, 0, 310, 272, Ink, Line);
-        Text(room, "Code Heading", "ROOM CODE", 13, bold, 20, 18, 270, 26, Muted);
-        var code = Text(room, "Room Code", "", 28, heading, 20, 64, 270, 52, Teal);
-        var copy = Button(room, "COPY CODE", 20, 130, 270, 42, false, 16);
-        Text(room, "Code Help", "Share this code with your teammates.", 12, mono, 20, 196, 270, 52, Muted);
-        Frame(room, "Players Card", 334, 0, 722, 272, Ink, Line);
-        Text(room, "Players Heading", "PLAYERS", 20, heading, 350, 10, 300, 38, Color.white);
-        var summary = Text(room, "Connected Count", "", 12, bold, 782, 14, 258, 30, Teal);
+        var room = Rect(screen, "Connected Room", 0, 0, 1280, 720);
+        Text(room, "Code Heading", "ROOM CODE", 12, bold, 78, 327, 246, 26, Muted);
+        var code = Text(room, "Room Code", "", 28, heading, 78, 355, 246, 45, Teal);
+        var copy = Button(room, "COPY CODE", 78, 412, 246, 42, false, 15);
+        Text(room, "Players Heading", "WHO'S PLAYING?", 32, heading, 400, 128, 475, 60, RaceStyle.PaleBlue);
+        var summary = Text(room, "Connected Count", "", 13, mono, 928, 142, 274, 30, Muted);
         summary.alignment = TextAnchor.MiddleRight;
         var rowObjects = new List<Object[]>();
         for (int slot = 0; slot < 4; slot++)
         {
-            var row = Box(room, "Player " + (slot + 1) + " Row", 350, 60 + slot * 48, 690, 42, Panel);
-            var swatch = Box(row, "Player Color", 0, 0, 4, 42, Teal).GetComponent<Image>();
-            var portrait = Box(row, "Skin Portrait", 16, 3, 28, 36, Color.white).GetComponent<Image>();
+            Color color = RaceStyle.LockerColor(slot);
+            var card = Rect(room, "Player " + (slot + 1) + " Locker", 400 + slot * 204, 192, 190, 374);
+            Frame(card, "Locker", 0, 0, 190, 374, RaceStyle.CardNavy, color);
+            Box(card, "Locker Band", 3, 3, 184, 36, color);
+            Text(card, "Slot", "P" + (slot + 1), 20, heading, 12, 4, 40, 34, Ink);
+            for (int vent = 0; vent < 3; vent++)
+                Box(card, "Locker Vent", 53, 12 + vent * 6, 17, 3, Escape4Now.Menus.ArcadeMenuKit.WithAlpha(Ink, .35f));
+            Box(card, "Role Tag", 78, 11, 101, 20, Ink);
+            var role = Text(card, "Role", "", 11, bold, 80, 11, 97, 20, color);
+            role.alignment = TextAnchor.MiddleCenter;
+
+            Frame(card, "Portrait Frame", 14, 52, 162, 172, RaceStyle.DeepNavy, Line);
+            var portrait = Box(card, "Skin Portrait", 46, 64, 98, 148, Color.white).GetComponent<Image>();
             portrait.preserveAspect = true;
-            var name = Text(row, "Player Name", "", 13, bold, 60, 0, 470, 42, Color.white);
-            var badge = Box(row, "Ready Badge", 540, 9, 134, 24, Line).GetComponent<Image>();
-            var state = Text(badge.transform, "Ready Text", "", 11, bold, 0, 0, 134, 24, Color.white);
+            Frame(card, "Name Plate", 14, 240, 162, 43, RaceStyle.DeepNavy, Line);
+            var name = Text(card, "Player Name", "", 14, bold, 20, 241, 150, 41, Color.white);
+            name.alignment = TextAnchor.MiddleCenter;
+            var badge = Box(card, "Ready Badge", 14, 300, 162, 40, Line).GetComponent<Image>();
+            var state = Text(badge.transform, "Ready Text", "", 12, bold, 0, 0, 162, 40, Color.white);
             state.alignment = TextAnchor.MiddleCenter;
-            rowObjects.Add(new Object[] { row.gameObject, swatch, portrait, name, state, badge });
+            rowObjects.Add(new Object[] { card.gameObject, portrait, name, role, state, badge });
         }
-        var actions = Rect(screen, "Room Actions", 112, 528, 1056, 48);
+        var actions = Rect(screen, "Room Actions", 614, 612, 610, 62);
         var layout = actions.gameObject.AddComponent<HorizontalLayoutGroup>();
-        layout.spacing = 18;
+        layout.spacing = 16;
         layout.childControlWidth = layout.childControlHeight = true;
         layout.childForceExpandWidth = layout.childForceExpandHeight = true;
-        var ready = Button(actions, "READY", 0, 0, 340, 48, false);
-        var start = Button(actions, "START MATCH", 0, 0, 340, 48, true);
-        var leave = Button(actions, "LEAVE ROOM", 0, 0, 340, 48, false);
-        var status = Text(screen, "Player Status", "", 12, mono, 112, 598, 1056, 46, Color.white);
-        var openDiagnostics = Button(screen, "CONNECTION SETTINGS", 902, 678, 298, 30, false, 12);
-        Text(screen, "Footer", "PLAY TOGETHER. ESCAPE FIRST.", 12, bold, 80, 678, 700, 30, Navy);
+        var ready = Button(actions, "READY", 0, 0, 192, 62, false, 17);
+        var start = Button(actions, "START RACE", 0, 0, 192, 62, true, 17);
+        var leave = Button(actions, "LEAVE ROOM", 0, 0, 192, 62, false, 17);
+        var status = Text(screen, "Player Status", "", 13, bold, 56, 612, 530, 62, Navy);
+        var openDiagnostics = Button(screen, "CONNECTION SETTINGS", 78, 514, 246, 36, false, 12);
 
         // Connection details are available on demand, rather than filling the normal lobby.
         var diagnostics = Box(screen, "Connection Settings Overlay", 0, 0, 1280, 720, new Color(0, 0, 0, .65f));
@@ -150,18 +200,23 @@ public static class OnlineLobbyAuthoring
             cancel = InputActionReference.Create(input.FindAction("UI/Cancel", true));
             AssetDatabase.CreateAsset(cancel, cancelPath);
         }
-        Assign(view, "session", session, "panel", screen.gameObject, "setup", setup.gameObject,
+        Assign(view, "session", session, "panel", lobby.gameObject, "setup", setup.gameObject,
             "room", room.gameObject, "actions", actions.gameObject, "diagnosticsPanel", diagnostics.gameObject,
             "mainControls", controls, "cancel", cancel,
-            "players", players, "joinCode", joinCode, "host", host, "join", join, "back", back,
+            "joinCode", joinCode, "host", host, "join", join, "back", back,
             "ready", ready, "start", start, "leave", leave, "copy", copy,
             "readyLabel", ready.GetComponentInChildren<Text>(), "code", code, "status", status, "summary", summary,
             "openDiagnostics", openDiagnostics, "closeDiagnostics", close, "protocol", protocol,
             "networkLabel", networkLabel, "export", export, "diagnosticStatus", diagnosticStatus, "reportPath", report);
         var serialized = new SerializedObject(view);
+        var sizeToggles = serialized.FindProperty("roomSizes");
+        sizeToggles.arraySize = roomSizes.Length;
+        for (int i = 0; i < roomSizes.Length; i++) sizeToggles.GetArrayElementAtIndex(i).objectReferenceValue = roomSizes[i];
+        serialized.FindProperty("normalColor").colorValue = Navy;
+        serialized.FindProperty("errorColor").colorValue = new Color(.63f, .1f, .13f);
         var rows = serialized.FindProperty("rows");
         rows.arraySize = rowObjects.Count;
-        string[] fields = { "root", "swatch", "portrait", "name", "state", "badge" };
+        string[] fields = { "root", "portrait", "name", "role", "state", "badge" };
         for (int i = 0; i < rowObjects.Count; i++)
             for (int j = 0; j < fields.Length; j++) rows.GetArrayElementAtIndex(i).FindPropertyRelative(fields[j]).objectReferenceValue = rowObjects[i][j];
         serialized.ApplyModifiedPropertiesWithoutUndo();
@@ -215,7 +270,7 @@ public static class OnlineLobbyAuthoring
         Stretch(shadow, new Vector2(5, -5), new Vector2(5, -5));
         var border = Box(rect, "Border", 0, 0, w, h, primary ? Ink : Color.white);
         Stretch(border, Vector2.zero, Vector2.zero);
-        var face = Box(rect, "Face", 3, 3, w - 6, h - 6, primary ? Teal : Ink).GetComponent<Image>();
+        var face = Box(rect, "Face", 3, 3, w - 6, h - 6, primary ? Teal : RaceStyle.PanelNavy).GetComponent<Image>();
         Stretch(face.rectTransform, new Vector2(3, 3), new Vector2(-3, -3));
         var button = rect.gameObject.AddComponent<Button>();
         button.targetGraphic = face;
@@ -232,7 +287,7 @@ public static class OnlineLobbyAuthoring
     private static InputField Input(Transform parent, string name, float x, float y, float w)
     {
         var rect = Box(parent, name, x, y, w, 44, Color.white);
-        Box(rect, "Dark Input", 2, 2, w - 4, 40, Ink);
+        Box(rect, "Dark Input", 2, 2, w - 4, 40, RaceStyle.DeepNavy);
         var input = rect.gameObject.AddComponent<InputField>();
         input.targetGraphic = rect.GetComponent<Image>();
         input.textComponent = Text(rect, "Entered Text", "", 15, mono, 14, 0, w - 28, 44, Color.white);
@@ -243,7 +298,7 @@ public static class OnlineLobbyAuthoring
     private static Dropdown Dropdown(Transform parent, string name, float x, float y, float w, string[] options)
     {
         var rect = Box(parent, name, x, y, w, 44, Line);
-        Box(rect, "Dark Field", 2, 2, w - 4, 40, Ink);
+        Box(rect, "Dark Field", 2, 2, w - 4, 40, RaceStyle.DeepNavy);
         var dropdown = rect.gameObject.AddComponent<Dropdown>();
         dropdown.targetGraphic = rect.GetComponent<Image>();
         dropdown.captionText = Text(rect, "Selected", "", 15, mono, 14, 0, w - 52, 44, Color.white);
@@ -254,7 +309,7 @@ public static class OnlineLobbyAuthoring
         var viewport = Rect(template, "Viewport", 2, 2, w - 4, 128);
         viewport.gameObject.AddComponent<RectMask2D>();
         var content = Rect(viewport, "Content", 0, 0, w - 4, 42);
-        var item = Box(content, "Item", 0, 0, w - 4, 42, Ink);
+        var item = Box(content, "Item", 0, 0, w - 4, 42, RaceStyle.CardNavy);
         var toggle = item.gameObject.AddComponent<Toggle>();
         toggle.targetGraphic = item.GetComponent<Image>();
         toggle.graphic = Box(item, "Selected Marker", 10, 15, 10, 10, Teal).GetComponent<Image>();

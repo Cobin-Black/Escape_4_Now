@@ -28,11 +28,11 @@ The latest Netcode 3.x requires a newer editor and was not selected. No standalo
 
 1. Open Project Settings > Services and confirm this is the intended team's cloud project.
 2. A project owner/admin should verify that Authentication anonymous sign-in and Relay are available for the selected environment. Both computers must use the same project and environment.
-3. Keep **production** as the environment unless the team deliberately selects another existing environment in the connection settings asset.
+3. Online Race uses **development**, matching the account service on main. Set the same environment on the standalone Relay tester when testing the Online Race configuration.
 4. Review usage/billing in Unity Dashboard before enabling paid usage. No service account, private API key, or password is needed in the game.
 5. Let Package Manager resolve the manifest. The scene uses the Input System UI module for pointer/navigation input.
 
-Authentication uses a separate anonymous profile per app launch so two local test processes do not share an identity. It is separated into its own component so account login can replace it later. These test identities are not durable accounts.
+Online Race uses the signed-in game account when available. Otherwise it signs in with a temporary Relay profile and restores the previous profile when the scene closes.
 
 ## Open or build
 

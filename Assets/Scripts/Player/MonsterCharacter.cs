@@ -698,6 +698,158 @@ namespace Escape4Now.Player
             Debug.Log("Monster rolled " + rolledMoves);
         }
 
+        private List<Vector2Int> FindPathToSurvivor()
+        {
+            Vector2Int start = gridPosition;
+
+            Queue<Vector2Int> queue = new Queue<Vector2Int>();
+            Dictionary<Vector2Int, Vector2Int> previous =
+                new Dictionary<Vector2Int, Vector2Int>();
+            HashSet<Vector2Int> visited = new HashSet<Vector2Int>();
+
+            Vector2Int[] directions =
+            {
+                Vector2Int.up,
+                Vector2Int.down,
+                Vector2Int.left,
+                Vector2Int.right
+            };
+
+            queue.Enqueue(start);
+            visited.Add(start);
+
+            Vector2Int closestPosition = start;
+            int closestDistance = int.MaxValue;
+
+            while (queue.Count > 0)
+            {
+                Vector2Int current = queue.Dequeue();
+
+                // Find the closest living Survivor to this position.
+                foreach (PlayerCharacter survivor in players)
+                {
+                    if (survivor == null || !survivor.isActiveAndEnabled
+                        || survivor.Health <= 0)
+                        continue;
+
+                    Vector2Int position = survivor.GridPosition;
+
+                    // Distance from the Survivor to the 2x2 footprint.
+                    int distanceX = Mathf.Max(0,
+                        Mathf.Max(current.x - position.x,
+                            position.x - (current.x + 1)));
+
+                    int distanceY = Mathf.Max(0,
+                        Mathf.Max(current.y - position.y,
+                            position.y - (current.y + 1)));
+
+                    int distance = distanceX + distanceY;
+
+                    if (distance < closestDistance)
+                    {
+                        closestDistance = distance;
+                        closestPosition = current;
+                    }
+
+                    // A Survivor is inside the Monster's footprint.
+                    if (distance == 0)
+                    {
+                        closestPosition = current;
+                        break;
+                    }
+                }
+
+                if (closestDistance == 0)
+                    break;
+
+                // Search all positions the Monster can reach.
+                foreach (Vector2Int direction in directions)
+                {
+                    Vector2Int next = current + direction;
+
+                    if (visited.Contains(next) || !IsFootprintWalkable(next))
+                        continue;
+
+                    visited.Add(next);
+                    previous[next] = current;
+                    queue.Enqueue(next);
+                }
+            }
+            // Reconstruct the path to the closest reachable position.
+            List<Vector2Int> path = new List<Vector2Int>();
+            Vector2Int step = closestPosition;
+
+            while (step != start)
+            {
+                path.Add(step);
+                step = previous[step];
+            }
+
+            path.Reverse();
+            return path;
+        }
+
+        private Vector2Int GetAIChargeDirection()
+        {
+            if (monsterTurn < chargeReadyTurn)
+                return Vector2Int.zero;
+
+            PlayerCharacter target = FindClosestPlayer();
+
+            if (target == null)
+                return Vector2Int.zero;
+
+            Vector2Int[] directions =
+            {
+                Vector2Int.up,
+                Vector2Int.down,
+                Vector2Int.left,
+                Vector2Int.right
+            };
+            Vector2Int bestDirection = Vector2Int.zero;
+            int currentDistance = GetDistanceToFootprint(target.GridPosition);
+            int bestDistance = currentDistance;
+
+            foreach (Vector2Int direction in directions)
+            {
+                Vector2Int destination = gridPosition;
+                int steps = 0;
+
+                for (int i = 0; i < chargeDistance; i++)
+                {
+                    Vector2Int next = destination + direction;
+
+                    if (!IsFootprintWalkable(next))
+                        break;
+
+                    destination = next;
+                    steps++;
+                }
+
+                // Avoid charging into an obstacle.
+                if (steps < chargeDistance)
+                    continue;
+
+                int distanceX = Mathf.Max(0,
+                    Mathf.Max(destination.x - target.GridPosition.x,
+                        target.GridPosition.x - (destination.x + 1)));
+
+                int distanceY = Mathf.Max(0,
+                    Mathf.Max(destination.y - target.GridPosition.y,
+                        target.GridPosition.y - (destination.y + 1)));
+
+                int distance = distanceX + distanceY;
+
+                if (distance < bestDistance)
+                {
+                    bestDistance = distance;
+                    bestDirection = direction;
+                }
+            }
+
+            return bestDirection;
+        }
+
         // Lets the AI move toward the closest player during its turn.
         private void TakeAITurn()
         {
@@ -712,7 +864,7 @@ namespace Escape4Now.Player
                 return;
             }
 
-            // The AI rolls for its moves the same way a player-controlled Monster does.
+            // Roll the dice before moving.
             if (!hasRolled)
             {
                 if (!isRolling)
@@ -721,6 +873,23 @@ namespace Escape4Now.Player
                 return;
             }
 
+            // Try Charge when a Survivor is in a straight line.
+            Vector2Int chargeDirection = GetAIChargeDirection();
+
+            if (chargeDirection != Vector2Int.zero)
+            {
+                TryCharge(chargeDirection);
+                return;
+            }
+
+            // Use Roar when a Survivor is nearby.
+            if (monsterTurn >= roarReadyTurn
+                && IsInsideAbilityArea(target.GridPosition))
+            {
+                TryRoar();
+            }
+
+            // Use Stomp when a Survivor is nearby.
             if (monsterTurn >= stompReadyTurn
                 && IsInsideAbilityArea(target.GridPosition))
             {
@@ -738,20 +907,18 @@ namespace Escape4Now.Player
                 return;
             }
 
-            Vector2Int direction = GetMovementDirection();
+            // Find the shortest reachable path to a Survivor.
+            List<Vector2Int> path = FindPathToSurvivor();
 
-            if (direction == Vector2Int.zero)
+            if (path == null || path.Count == 0)
             {
                 EndMonsterTurn();
                 return;
             }
 
-            Vector2Int destination = gridPosition + direction;
-
-            if (IsFootprintWalkable(destination))
-                TryMove(direction);
-            else
-                EndMonsterTurn();
+            // Move one tile along the calculated path.
+            Vector2Int direction = path[0] - gridPosition;
+            TryMove(direction);
         }
 
         // Finishes the Monster turn and returns control to the player turn cycle.
@@ -765,4 +932,3 @@ namespace Escape4Now.Player
         }
     }
 }
-

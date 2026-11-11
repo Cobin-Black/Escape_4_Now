@@ -31,7 +31,6 @@ namespace Escape4Now.Multiplayer.RelayTesting
         public int LocalSlot => match.LocalPlayerIndex;
         public bool IsSlotReady(int slot) => ready.Contains(slot);
         public string SlotName(int slot) => local.GetPlayerName(slot);
-        public Color SlotColor(int slot) => local.GetPlayerColor(slot);
         public Sprite SlotPortrait(int slot) => local.Skins != null ? local.Skins.GetPlayerSkin(slot)?.front : null;
         public bool CanStart => IsHost && relay.Active && !Playing && match.ConnectedPlayers == match.Capacity
             && ready.Count == match.Capacity && ready.All(slot => slot >= 0 && slot < match.Capacity);

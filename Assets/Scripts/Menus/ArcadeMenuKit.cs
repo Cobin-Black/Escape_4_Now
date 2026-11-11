@@ -224,6 +224,14 @@ public static void Label(Rect r, string text, GUIStyle style, Color color, Color
             return GUI.Button(r, GUIContent.none, GUIStyle.none);
         }
 
+        //A small tab or page button. Returns true when clicked.
+        public static bool TabButton(Rect r, string text, bool on, Color accent)
+        {
+            Block(r, on ? accent : Ink, on ? accent : Hex("#44444f"), 3f, Color.clear, 0f);
+            Label(r, text, Text(Bungee, 12, TextAnchor.MiddleCenter), on ? Ink : Color.white);
+            return Hit(r);
+        }
+
         public static bool Hover(Rect r)
         {
             return Event.current != null && r.Contains(Event.current.mousePosition);

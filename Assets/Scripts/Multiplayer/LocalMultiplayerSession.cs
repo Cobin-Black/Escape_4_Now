@@ -1,6 +1,7 @@
 // Manages shared-device player setup, starts the chosen mode and coordinates Pause and match results.
 
 using System.Collections.Generic;
+using Escape4Now.Accounts;
 using Escape4Now.Map;
 using Escape4Now.Player;
 using Escape4Now.TurnSystem;
@@ -73,6 +74,7 @@ namespace Escape4Now.Multiplayer
         public static bool ShowItemObstacles => instance != null && instance.showItemObstacles;
         public static bool ShowKeyLocation => instance != null && instance.showKeyLocation;
         private int monsterPlayerIndex = -1;
+        private bool statsReported;
 
         private void OnValidate()
         {
@@ -144,6 +146,7 @@ namespace Escape4Now.Multiplayer
 
             if (HasMatchFinished())
             {
+                ReportMatchStats();
                 Time.timeScale = 0f;
                 return;
             }
@@ -229,17 +232,33 @@ namespace Escape4Now.Multiplayer
                 return false;
             }
 
-            if (gameMode.SupportsBots && sourcePlayer.GetComponent<BotController>() == null)
+            if (gameMode is SurvivalModeController)
+            {
+                if (sourcePlayer.GetComponent<SurvivalBotController>() == null)
+                {
+                    status = "Assign a Survival Bot Controller on the player template.";
+                    return false;
+                }
+            }
+            else if (gameMode.SupportsBots && sourcePlayer.GetComponent<BotController>() == null)
             {
                 status = "Assign a Bot Controller on the Race player template.";
                 return false;
             }
 
             var survival = gameMode as SurvivalModeController;
+
             int monsterSlot = survival != null ? monsterPlayerIndex : -1;
-            bool monsterIsPlayer = monsterSlot >= 0;
-            bool monsterMode = monsterIsPlayer || survival != null && spawnAIMonsterWhenUnassigned && monster != null && !survival.HasExternalMonsterConfiguration;
-            if (monsterIsPlayer && (monsterSlot >= count || count < 2 || monster == null))
+
+            bool monsterIsBot = monsterSlot >= 0 && IsBotPlayer(monsterSlot);
+            bool monsterIsPlayer = monsterSlot >= 0 && !monsterIsBot;
+
+            bool monsterMode = monsterSlot >= 0 || survival != null
+                && spawnAIMonsterWhenUnassigned
+                && monster != null
+                && !survival.HasExternalMonsterConfiguration;
+
+            if (monsterSlot >= 0 && (monsterSlot >= count || count < 2 || monster == null))
             {
                 status = "Assign a Monster and at least one survivor for the selected role.";
                 return false;
@@ -294,7 +313,7 @@ namespace Escape4Now.Multiplayer
                 monsterSpawn = survival.Objectives.MonsterSpawn;
             }
 
-            int survivorCount = monsterIsPlayer ? count - 1 : count;
+            int survivorCount = monsterSlot >= 0 ? count - 1 : count;
             participants = new PlayerCharacter[survivorCount];
 
             sourcePlayer.gameObject.SetActive(false);
@@ -304,7 +323,7 @@ namespace Escape4Now.Multiplayer
                 int lobbyIndex = i;
 
                 // Skips the lobby slot selected to become the Monster.
-                if (monsterIsPlayer && lobbyIndex >= monsterSlot)
+                if (monsterSlot >= 0 && lobbyIndex >= monsterSlot)
                     lobbyIndex++;
 
                 PlayerCharacter player = lobbyIndex == 0
@@ -332,16 +351,26 @@ namespace Escape4Now.Multiplayer
 
                 player.SetBotControlled(isBot);
 
-                BotController bot = player.GetComponent<BotController>();
+                if (gameMode is SurvivalModeController)
+                {
+                    SurvivalBotController survivalBot = player.GetComponent<SurvivalBotController>();
 
-                if (isBot)
-                {
-                    bot.enabled = true;
-                    bot.ResetSearchMemory();
+                    if (survivalBot != null)
+                        survivalBot.enabled = isBot;
                 }
-                else if (bot != null)
+                else
                 {
-                    bot.enabled = false;
+                    BotController bot = player.GetComponent<BotController>();
+
+                    if (isBot)
+                    {
+                        bot.enabled = true;
+                        bot.ResetSearchMemory();
+                    }
+                    else if (bot != null)
+                    {
+                        bot.enabled = false;
+                    }
                 }
 
                 player.enabled = true;
@@ -354,8 +383,16 @@ namespace Escape4Now.Multiplayer
             }
 
             gameMode.BeginMatch(participants);
+
             if (survival != null) showEventTiles = survival.Events.EventLocationsVisible;
-            turns.ConfigureEnemyTurn(matchMonster != null, matchMonster != null ? GetPlayerName(monsterSlot) : "", ActiveMap.LayoutSeed);
+
+            turns.ConfigureEnemyTurn(
+                matchMonster != null,
+                matchMonster != null && monsterSlot >= 0
+                ? GetPlayerName(monsterSlot)
+                : "Monster",
+                ActiveMap.LayoutSeed);
+
             turns.SetPlayers(gameMode.BuildTurnParticipants(participants), ActiveMap.LayoutSeed);
 
             // Initializes the Monster with the surviving players.
@@ -366,7 +403,7 @@ namespace Escape4Now.Multiplayer
                     turns,
                     participants,
                     monsterSpawn);
-                matchMonster.SetAIControlled(!monsterIsPlayer);
+                matchMonster.SetAIControlled(monsterIsBot || !monsterIsPlayer);
 
                 matchMonster.gameObject.SetActive(true);
                 matchMonster.enabled = true;
@@ -477,6 +514,33 @@ namespace Escape4Now.Multiplayer
         private bool HasMatchFinished()
         {
             return gameMode != null && gameMode.TryGetResult(participants, out _);
+        }
+
+        //Survivors win by escaping and the monster wins if none did, so a timeout counts for the monster.
+        //Bots and an AI monster record nothing. Only the local game reports, once per match.
+        private void ReportMatchStats()
+        {
+            if (statsReported || LanMultiplayerSession.Active) return;
+            statsReported = true;
+            var survival = gameMode as SurvivalModeController;
+            gameMode.TryGetWinner(participants, out PlayerCharacter winner);
+            string mode = survival != null ? AccountStats.Survivor : AccountStats.Race;
+            var stats = new List<MatchStat>();
+            bool anyoneEscaped = false;
+            //Bots count as players here, but an AI monster does not.
+            int players = participants.Length + (monsterPlayerIndex >= 0 ? 1 : 0);
+            for (int i = 0; i < participants.Length; i++)
+            {
+                //Participants skip the Monster's lobby slot, the same way CreateParticipants does.
+                int slot = monsterPlayerIndex >= 0 && i >= monsterPlayerIndex ? i + 1 : i;
+                bool won = survival != null ? survival.OutcomeOf(participants[i]) == SurvivorOutcome.Escaped : participants[i] == winner;
+                anyoneEscaped |= won;
+                float seconds = !won ? 0f : survival != null ? survival.EscapeTimeOf(participants[i]) : matchTimer.Elapsed;
+                if (!IsBotPlayer(slot)) stats.Add(new MatchStat(slot, mode, won, players, seconds));
+            }
+            if (monsterPlayerIndex >= 0 && !IsBotPlayer(monsterPlayerIndex))
+                stats.Add(new MatchStat(monsterPlayerIndex, AccountStats.MonsterRole, !anyoneEscaped, players, anyoneEscaped ? 0f : matchTimer.Elapsed));
+            AccountStats.Report(stats);
         }
 
         public string GetPlayerName(int index)

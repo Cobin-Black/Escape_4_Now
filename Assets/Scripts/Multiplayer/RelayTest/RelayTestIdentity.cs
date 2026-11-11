@@ -12,6 +12,9 @@ namespace Escape4Now.Multiplayer.RelayTesting
     {
         private Task signIn;
         private string initializedEnvironment;
+        private string guestProfile;
+        private string previousProfile;
+        private bool destroyed;
 
         public Task SignInAsync(string environment, Action<string> stage)
         {
@@ -27,16 +30,47 @@ namespace Escape4Now.Multiplayer.RelayTesting
             stage("Unity Services initialization");
             if (UnityServices.State != ServicesInitializationState.Initialized)
             {
-                // Two test processes must not accidentally reuse the same cached anonymous account.
-                var options = new InitializationOptions()
-                    .SetEnvironmentName(environment)
-                    .SetProfile("relay-" + Guid.NewGuid().ToString("N").Substring(0, 24));
+                var options = new InitializationOptions().SetEnvironmentName(environment);
                 await UnityServices.InitializeAsync(options);
             }
             initializedEnvironment = environment;
+            if (destroyed) return;
+
             stage("Anonymous authentication");
-            if (!AuthenticationService.Instance.IsSignedIn)
-                await AuthenticationService.Instance.SignInAnonymouslyAsync();
+            var authentication = AuthenticationService.Instance;
+            if (authentication.IsSignedIn) return;
+
+            // Keep temporary Relay guests out of the profile used for remembered game accounts.
+            if (guestProfile == null)
+            {
+                previousProfile = authentication.Profile;
+                guestProfile = "relay-" + Guid.NewGuid().ToString("N").Substring(0, 24);
+            }
+            authentication.SwitchProfile(guestProfile);
+            try
+            {
+                await authentication.SignInAnonymouslyAsync();
+            }
+            finally
+            {
+                if (destroyed) ReleaseGuestProfile();
+            }
+        }
+
+        private void OnDestroy()
+        {
+            destroyed = true;
+            if (signIn == null || signIn.IsCompleted) ReleaseGuestProfile();
+        }
+
+        private void ReleaseGuestProfile()
+        {
+            if (guestProfile == null || UnityServices.State != ServicesInitializationState.Initialized) return;
+            var authentication = AuthenticationService.Instance;
+            if (authentication.Profile != guestProfile) return;
+            if (authentication.IsSignedIn) authentication.SignOut(true);
+            else authentication.ClearSessionToken();
+            authentication.SwitchProfile(previousProfile);
         }
     }
 }

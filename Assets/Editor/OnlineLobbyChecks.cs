@@ -2,6 +2,7 @@ using System;
 using System.Collections;
 using System.IO;
 using System.Reflection;
+using Escape4Now.Menus;
 using Escape4Now.Multiplayer.RelayTesting;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -31,7 +32,7 @@ public static class OnlineLobbyChecks
 
     public static void Run()
     {
-        EditorSceneManager.OpenScene("Assets/Scenes/OnlineRace.unity");
+        EditorSceneManager.OpenScene("Assets/Scenes/Race_Gamemode.unity");
         SessionState.SetBool(Running, true);
         EditorWindow.GetWindow(typeof(Editor).Assembly.GetType("UnityEditor.GameView")).Show();
         NativeUiChecks.SetSize(1280, 720);
@@ -43,10 +44,20 @@ public static class OnlineLobbyChecks
         yield return null;
         yield return null;
         Directory.CreateDirectory("Logs/OnlineLobbyPreviews");
+        Require(Object.FindFirstObjectByType<ArcadeLobbyScreen>() != null, "Local Race still opens its arcade lobby");
+        yield return new WaitForEndOfFrame();
+        ScreenCapture.CaptureScreenshot("Logs/OnlineLobbyPreviews/Local-race.png");
+        yield return SceneManager.LoadSceneAsync("OnlineRace");
+        yield return null;
+        Require(Object.FindFirstObjectByType<ArcadeLobbyScreen>() == null, "Local lobby stays out of Online Race");
         var view = Object.FindFirstObjectByType<OnlineRaceLobbyView>();
         var session = Object.FindFirstObjectByType<OnlineRaceSession>();
         Require(Reference<GameObject>(view, "setup").activeSelf, "Host/join cards are the initial view");
         Require(!Reference<GameObject>(view, "diagnosticsPanel").activeSelf, "Diagnostics are hidden initially");
+        var sizes = Reference<Toggle[]>(view, "roomSizes");
+        Require(sizes[0].isOn, "Room size starts at two players");
+        sizes[2].isOn = true;
+        Require(!sizes[0].isOn && !sizes[1].isOn, "Room sizes behave as a single selection");
         yield return new WaitForEndOfFrame();
         ScreenCapture.CaptureScreenshot("Logs/OnlineLobbyPreviews/Setup-wide.png");
         NativeUiChecks.SetSize(987, 699);
@@ -79,7 +90,8 @@ public static class OnlineLobbyChecks
         yield return null;
         Require(Reference<GameObject>(view, "room").activeSelf && !Reference<GameObject>(view, "setup").activeSelf,
             "Connected room replaces the setup cards");
-        Require(!Reference<Button>(view, "start").interactable, "A host alone cannot start a two-player match");
+        Require(session.Capacity == 4, "The selected room size reaches the host");
+        Require(!Reference<Button>(view, "start").interactable, "A host alone cannot start the match");
         Reference<Button>(view, "ready").onClick.Invoke();
         yield return null;
         Require(session.Ready, "Ready button changes the real session state");
