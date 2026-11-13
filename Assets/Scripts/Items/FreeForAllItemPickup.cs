@@ -24,7 +24,7 @@ namespace Escape4Now.Items
             if (collected || item == null)
                 return;
 
-            ArenaMatch match = FindFirstObjectByType<FreeForAllController>();
+            ArenaMatch match = FindFirstObjectByType<KingOfTheHillController>();
 
             if (match == null || !match.Playing || match.Paused)
                 return;

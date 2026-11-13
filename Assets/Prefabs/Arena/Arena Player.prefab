@@ -313,6 +313,7 @@ MonoBehaviour:
   showNameLabels: 0
   nameLabel: {fileID: 4438810257025597603}
   nameShadow: {fileID: 9207690180281733662}
+  invincibilityDuration: 1
 --- !u!114 &7677384710027639072
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -393,7 +394,7 @@ Transform:
   m_GameObject: {fileID: 2406494221715502464}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1.85, z: 0}
+  m_LocalPosition: {x: 0, y: 1.5, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -458,12 +459,12 @@ TextMesh:
   m_GameObject: {fileID: 2406494221715502464}
   m_Text: 
   m_OffsetZ: 0
-  m_CharacterSize: 0.06
+  m_CharacterSize: 0.08
   m_LineSpacing: 1
   m_Anchor: 4
   m_Alignment: 1
   m_TabSize: 4
-  m_FontSize: 40
+  m_FontSize: 80
   m_FontStyle: 0
   m_RichText: 1
   m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
@@ -679,7 +680,7 @@ Transform:
   m_GameObject: {fileID: 8037048726208796380}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.015, y: 1.83, z: 0}
+  m_LocalPosition: {x: 0.015, y: 1.5, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -749,7 +750,7 @@ TextMesh:
   m_Anchor: 4
   m_Alignment: 1
   m_TabSize: 4
-  m_FontSize: 40
+  m_FontSize: 80
   m_FontStyle: 0
   m_RichText: 1
   m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}

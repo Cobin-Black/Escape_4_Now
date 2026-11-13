@@ -203,16 +203,31 @@ namespace Escape4Now.Arena
         {
             if (Remaining > 1)
                 return false;
+
             ArenaParticipant winner = null;
+
             foreach (var p in Players)
                 if (p.Alive)
                     winner = p;
-            Result = winner != null ? winner.name + winnerSuffix : noWinnerMessage;
+
+            EndMatch(winner != null
+                ? winner.name + winnerSuffix
+                : noWinnerMessage);
+
+            return true;
+        }
+
+        // End the match and display the result.
+        protected void EndMatch(string result)
+        {
+            if (!Playing)
+                return;
+
+            Result = result;
             Playing = false;
             Paused = false;
             events?.Stop();
             onMatchEnded?.Invoke();
-            return true;
         }
 
         public void Notify(string message, float duration = 3)

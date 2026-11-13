@@ -51,16 +51,31 @@ namespace Escape4Now.Arena
             holderOutline.enabled = hasPotato;
             holderOutline.effectColor = style.holder;
             int health = player.Character.Health;
-            value.text = player.Alive ? string.Format(healthFormat, health, startingHealth) : eliminatedLabel;
+
+            value.text = player.Alive
+                ? string.Format(healthFormat, health, startingHealth)
+                : eliminatedLabel;
+
             hearts.color = style.healthy;
-            hearts.text = HealthHeartText.Format(player.Alive ? health : 0, startingHealth, "#" + ColorUtility.ToHtmlStringRGB(style.emptyHealth));
+
+            if (!player.Alive && player.Match is KingOfTheHillController hill)
+            {
+                hearts.text = hill.GetRespawnSeconds(player).ToString();
+            }
+            else
+            {
+                hearts.text = HealthHeartText.Format(
+                    player.Alive ? health : 0,
+                    startingHealth,
+                    "#" + ColorUtility.ToHtmlStringRGB(style.emptyHealth));
+            }
             ShowInventory(player);
         }
 
         // Display the player's current FreeForAll item and charges.
         private void ShowInventory(ArenaParticipant player)
         {
-            bool isFFA = player.Match is FreeForAllController;
+            bool isFFA = player.Match is KingOfTheHillController;
 
             if (!isFFA)
             {

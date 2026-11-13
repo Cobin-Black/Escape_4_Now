@@ -14714,11 +14714,11 @@ MonoBehaviour:
   - {r: 1, g: 0.3, b: 0.28, a: 1}
   - {r: 0.3, g: 0.85, b: 0.4, a: 1}
   - {r: 1, g: 0.8, b: 0.2, a: 1}
-  modeTitle: FREE FOR ALL
+  modeTitle: KING OF THE HILL
   instructions: 'Move freely, use cover and survive the gym''s events.
 
-    Last
-    player standing wins. Attacks are not enabled yet.'
+    Player
+    who reaches the designated amount of points first, wins.'
   winnerSuffix: ' wins!'
   noWinnerMessage: No players remain.
   onMatchStarted:
@@ -14727,8 +14727,12 @@ MonoBehaviour:
   onMatchEnded:
     m_PersistentCalls:
       m_Calls: []
-  objective: Be the last player standing.
+  objective: Collect the most points.
+  scoreToWin: 100
+  hillDuration: 30
+  respawnDuration: 10
   itemSpawner: {fileID: 679602290}
+  hillPrefab: {fileID: 3408625964234453311, guid: e9e2cf646a2ef455888605782cf44cde, type: 3}
 --- !u!4 &1659485825
 Transform:
   m_ObjectHideFlags: 0

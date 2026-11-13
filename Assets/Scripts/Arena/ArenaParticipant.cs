@@ -71,17 +71,20 @@ namespace Escape4Now.Arena
             Character.ConfigureArenaIdentity(slot + 1, displayName, color);
             Input.Configure(match.InputActions, slot, gamepad);
             Place(position);
+            bool showScore = Match is KingOfTheHillController;
+            bool showLabel = showScore || showNameLabels;
+
             if (nameLabel != null)
             {
-                nameLabel.gameObject.SetActive(showNameLabels);
-                nameLabel.text = name;
+                nameLabel.gameObject.SetActive(showLabel);
+                nameLabel.text = showScore ? "0" : name;
                 nameLabel.color = color;
             }
 
             if (nameShadow != null)
             {
-                nameShadow.gameObject.SetActive(showNameLabels);
-                nameShadow.text = name;
+                nameShadow.gameObject.SetActive(showLabel);
+                nameShadow.text = showScore ? "0" : name;
             }
         }
 
@@ -154,7 +157,7 @@ namespace Escape4Now.Arena
                 return;
 
             // Ignore damage while invincible in Free For All.
-            if (Match is FreeForAllController && IsInvincible)
+            if (Match is KingOfTheHillController && IsInvincible)
                 return;
 
             // Block incoming damage while the Eraser shield is active.
@@ -170,7 +173,7 @@ namespace Escape4Now.Arena
             onDamaged?.Invoke();
 
             // Start invincibility after taking damage in FFA.
-            if (Match is FreeForAllController && Character.Health > 0)
+            if (Match is KingOfTheHillController && Character.Health > 0)
                 invincibilityTimer = invincibilityDuration;
 
             if (Character.Health <= 0)
@@ -193,6 +196,33 @@ namespace Escape4Now.Arena
             onEliminated?.Invoke();
             Eliminated?.Invoke(this);
             gameObject.SetActive(false);
+        }
+
+        // Bring an eliminated player back into King of the Hill.
+        public void Respawn(Vector2 position)
+        {
+            if (Alive)
+                return;
+
+            Character.RestoreArenaHealth(InitialHealth);
+
+            ClearRoundEffects();
+
+            Alive = true;
+            gameObject.SetActive(true);
+            Place(position);
+        }
+
+        // Update the score displayed above this player's head.
+        public void UpdateScoreLabel(int score)
+        {
+            string scoreText = score.ToString();
+
+            if (nameLabel != null)
+                nameLabel.text = scoreText;
+
+            if (nameShadow != null)
+                nameShadow.text = scoreText;
         }
 
         public void ClearRoundEffects()

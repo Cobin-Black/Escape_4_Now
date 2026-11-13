@@ -147,6 +147,16 @@ namespace Escape4Now.Items
             }
         }
 
+        // Remove all held items when an arena player respawns.
+        public void ClearArenaInventory()
+        {
+            if (player == null || !player.UsesRealTimeMovement)
+                return;
+
+            items.Clear();
+            keyItems.Clear();
+        }
+
         public void UseFirstItem()
         {
             if (player == null || player.IsBotControlled)

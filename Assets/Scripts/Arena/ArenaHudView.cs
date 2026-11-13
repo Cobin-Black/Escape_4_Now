@@ -34,7 +34,14 @@ namespace Escape4Now.Arena
         {
             modeTitle.text = match.Title;
             remaining.text = string.Format(remainingFormat, match.Remaining);
-            objective.text = match.Objective;
+            if (match is KingOfTheHillController hill)
+            {
+                objective.text = "POINTS TO WIN: " + hill.ScoreToWin;
+            }
+            else
+            {
+                objective.text = match.Objective;
+            }
             notice.text = match.Notice;
             if (string.IsNullOrEmpty(notice.text) && match.Events != null && match.Events.EventLocationsVisible)
             {

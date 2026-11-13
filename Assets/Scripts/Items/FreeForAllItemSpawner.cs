@@ -16,11 +16,11 @@ namespace Escape4Now.Items
         private readonly List<FreeForAllItem> floorItems = new();
         private readonly Dictionary<FreeForAllItem, Vector2> itemPositions = new();
         private readonly List<float> spawnTimers = new();
-        private FreeForAllController match;
+        private KingOfTheHillController match;
         private float replacementTimer;
 
         // Start with randomly placed items.
-        public void SpawnItems(FreeForAllController controller)
+        public void SpawnItems(KingOfTheHillController controller)
         {
             ClearItems();
 
