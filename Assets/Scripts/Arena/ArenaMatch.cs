@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Escape4Now.Accounts;
 using Escape4Now.GameModes;
 using Escape4Now.Player;
 using UnityEngine;
@@ -209,25 +210,34 @@ namespace Escape4Now.Arena
             foreach (var p in Players)
                 if (p.Alive)
                     winner = p;
-
             EndMatch(winner != null
                 ? winner.name + winnerSuffix
-                : noWinnerMessage);
+                : noWinnerMessage, winner);
 
             return true;
         }
 
-        // End the match and display the result.
-        protected void EndMatch(string result)
+        // End the match and report the winner.
+        protected void EndMatch(string result, ArenaParticipant winner = null)
         {
             if (!Playing)
                 return;
 
             Result = result;
+            ReportStats(winner);
             Playing = false;
             Paused = false;
             events?.Stop();
             onMatchEnded?.Invoke();
+        }
+
+        private void ReportStats(ArenaParticipant winner)
+        {
+            string mode = Type == GameModeType.HotPotato ? AccountStats.HotPotato : AccountStats.FreeForAll;
+            var stats = new List<MatchStat>();
+            foreach (var p in Players)
+                stats.Add(new MatchStat(p.Slot, mode, p == winner, Players.Count));
+            AccountStats.Report(stats);
         }
 
         public void Notify(string message, float duration = 3)
