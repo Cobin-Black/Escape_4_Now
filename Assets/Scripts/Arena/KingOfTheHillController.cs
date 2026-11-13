@@ -188,7 +188,7 @@ namespace Escape4Now.Arena
 
                     if (scores[participant] >= scoreToWin)
                     {
-                        EndMatch(participant.name + " wins King of the Hill!");
+                        EndMatch(participant.name + " wins King of the Hill!", participant);
                         return;
                     }
                 }
