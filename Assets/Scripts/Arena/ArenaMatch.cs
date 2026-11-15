@@ -233,7 +233,7 @@ namespace Escape4Now.Arena
 
         private void ReportStats(ArenaParticipant winner)
         {
-            string mode = Type == GameModeType.HotPotato ? AccountStats.HotPotato : AccountStats.FreeForAll;
+            string mode = Type == GameModeType.HotPotato ? AccountStats.HotPotato : AccountStats.KingOfTheHill;
             var stats = new List<MatchStat>();
             foreach (var p in Players)
                 stats.Add(new MatchStat(p.Slot, mode, p == winner, Players.Count));

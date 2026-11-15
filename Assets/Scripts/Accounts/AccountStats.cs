@@ -58,7 +58,8 @@ namespace Escape4Now.Accounts
     {
         //Combined with "wins-" these are the leaderboard IDs set up on cloud.unity.com.
         public const string Race = "race";
-        public const string FreeForAll = "freeforall";
+        //King of the Hill keeps the original "freeforall" ID so the existing Cloud Save data and leaderboard still line up.
+        public const string KingOfTheHill = "freeforall";
         public const string HotPotato = "hotpotato";
         public const string MonsterRole = "monster-role";
         public const string Survivor = "survivor";
@@ -86,7 +87,7 @@ namespace Escape4Now.Accounts
             switch (mode)
             {
                 case Race: return "RACE";
-                case FreeForAll: return "FREE FOR ALL";
+                case KingOfTheHill: return "KING OF THE HILL";
                 case HotPotato: return "HOT POTATO";
                 case MonsterRole: return "MONSTER - AS MONSTER";
                 case Survivor: return "MONSTER - AS SURVIVOR";
