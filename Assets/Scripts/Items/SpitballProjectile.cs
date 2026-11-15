@@ -26,7 +26,8 @@ namespace Escape4Now.Items
             owner = shooter;
             match = shooter.Match;
             position = shooter.Position;
-            direction = match.Map.GridDirection(shooter.FacingDirection).normalized;
+            // Fly straight ahead from the way the shooter's sprite is facing.
+            direction = shooter.AttackDirection;
 
             transform.position = match.Map.World(position) + Vector3.back;
         }

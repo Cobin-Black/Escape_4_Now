@@ -28,8 +28,8 @@ namespace Escape4Now.Items
                 attacker.Match.Paused)
                 return;
 
-            Vector2 direction = attacker.Match.Map
-                .GridDirection(attacker.FacingDirection).normalized;
+            // Swing straight ahead from the way the player's sprite is facing.
+            Vector2 direction = attacker.AttackDirection;
 
             foreach (ArenaParticipant target in attacker.Match.Players)
             {
@@ -66,7 +66,8 @@ namespace Escape4Now.Items
                     Quaternion.identity
                 );
 
-                Vector2 visualDirection = attacker.FacingDirection.normalized;
+                // Draw the arc along the same on-screen diagonal the hit check uses.
+                Vector2 visualDirection = attacker.Match.Map.ScreenDirection(direction).normalized;
 
                 effect.GetComponent<RulerSwingEffect>()?.Initialize(
                     visualDirection,
