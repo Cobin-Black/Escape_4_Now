@@ -204,23 +204,36 @@ namespace Escape4Now.Arena
         {
             if (Remaining > 1)
                 return false;
+
             ArenaParticipant winner = null;
+
             foreach (var p in Players)
                 if (p.Alive)
                     winner = p;
-            Result = winner != null ? winner.name + winnerSuffix : noWinnerMessage;
-            //Two players can go out on the same frame, so only the first call counts as the end of the match.
-            if (Playing) ReportStats(winner);
+            EndMatch(winner != null
+                ? winner.name + winnerSuffix
+                : noWinnerMessage, winner);
+
+            return true;
+        }
+
+        // End the match and report the winner.
+        protected void EndMatch(string result, ArenaParticipant winner = null)
+        {
+            if (!Playing)
+                return;
+
+            Result = result;
+            ReportStats(winner);
             Playing = false;
             Paused = false;
             events?.Stop();
             onMatchEnded?.Invoke();
-            return true;
         }
 
         private void ReportStats(ArenaParticipant winner)
         {
-            string mode = Type == GameModeType.HotPotato ? AccountStats.HotPotato : AccountStats.FreeForAll;
+            string mode = Type == GameModeType.HotPotato ? AccountStats.HotPotato : AccountStats.KingOfTheHill;
             var stats = new List<MatchStat>();
             foreach (var p in Players)
                 stats.Add(new MatchStat(p.Slot, mode, p == winner, Players.Count));

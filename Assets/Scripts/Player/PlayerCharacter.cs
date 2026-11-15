@@ -492,7 +492,7 @@ namespace Escape4Now.Player
                              + Mathf.Abs(cell.y - previous.y);
 
                 if (distance != 1 || !MovementMap.IsWalkable(cell)
-                    || (MovementMap.IsExit(cell) && !CanUseExit) 
+                    || (MovementMap.IsExit(cell) && !CanUseExit)
                     || IsMonsterTile(cell))
                     return false;
 
@@ -998,6 +998,15 @@ namespace Escape4Now.Player
 
             // Apply one heart of damage using the existing health system.
             TakeDamage();
+        }
+
+        // Restore health when an arena player respawns.
+        public void RestoreArenaHealth(int amount)
+        {
+            if (!realTimeMovement)
+                return;
+
+            health = Mathf.Max(1, amount);
         }
 
         //Stops tracking this player when the scene or participant is removed.

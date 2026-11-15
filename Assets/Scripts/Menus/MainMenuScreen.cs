@@ -14,7 +14,7 @@ namespace Escape4Now.Menus
         [Header("Scenes")]
         [SerializeField] private string startScreenScene = "StartScreen";
         [SerializeField] private string tutorialScene = "Tutorial";
-        [Tooltip("Scenes in order: Race, Survival, Free For All, Hot Potato.")]
+        [Tooltip("Scenes in order: Race, Survival, King of the Hill, Hot Potato.")]
         [SerializeField] private string[] modeScenes = { "Race_Gamemode", "SurvivalMode", "FreeForAll", "HotPotato" };
 
         [Header("Colors")]
@@ -26,7 +26,7 @@ namespace Escape4Now.Menus
         private static readonly string[] MenuTitles = { "GAME MODE", "START TUTORIAL", "SETTINGS", "LEADERBOARD", "ACCOUNT", "QUIT" };
         private static readonly string[] MenuSubtitles = { "Pick how you want to play", "New here? Start with this", "Sound, screen, controls", "Wins and fastest times", "Match history and log out", "Close the game" };
         [Header("Game Mode Cards (same order as Scenes)")]
-        [SerializeField] private string[] ModeNames = { "RACE", "SURVIVAL", "FREE FOR ALL", "HOT POTATO" };
+        [SerializeField] private string[] ModeNames = { "RACE", "SURVIVAL", "KING OF THE HILL", "HOT POTATO" };
         [SerializeField] private string[] ModePlayers = { "2–4 PLAYERS", "2–4 PLAYERS", "2–4 PLAYERS", "2–4 PLAYERS" };
         [SerializeField,TextArea] private string[] ModeText =
         {

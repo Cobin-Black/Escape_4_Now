@@ -95,7 +95,7 @@ public static class ArenaAuthoring
                 if (controls == null || playerPrefab == null)
                     throw new InvalidOperationException("Arena player or input asset failed to reload after switching scenes.");
                 var root = new GameObject(room == ArenaRoom.Gymnasium ? "Free For All — Gymnasium" : "Hot Potato — Auditorium");
-                var mode = room == ArenaRoom.Gymnasium ? (ArenaMatch)root.AddComponent<FreeForAllController>() : root.AddComponent<HotPotatoController>();
+                var mode = room == ArenaRoom.Gymnasium ? (ArenaMatch)root.AddComponent<KingOfTheHillController>() : root.AddComponent<HotPotatoController>();
                 var map = new GameObject("Procedural " + room).AddComponent<ArenaMap>();
                 Assign(map, "settings", settings);
                 var events = new GameObject("Mode Events").AddComponent<ArenaEventDirector>();
@@ -317,7 +317,6 @@ public static class ArenaAuthoring
                 scenes.Add(new EditorBuildSettingsScene(path, true));
         EditorBuildSettings.scenes = scenes.ToArray();
     }
-
     private static void UpdateMenu()
     {
         EditorSceneManager.OpenScene("Assets/Scenes/MainMenu.unity");

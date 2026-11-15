@@ -10,8 +10,8 @@ namespace Escape4Now.Menus
     {
         private const int Rows = 10;
         private const float RowHeight = 36f;
-        private static readonly string[] Boards = { AccountStats.Race, AccountStats.FreeForAll, AccountStats.HotPotato, AccountStats.MonsterRole, AccountStats.Survivor };
-        private static readonly string[] Tabs = { "RACE", "FREE FOR ALL", "HOT POTATO", "AS MONSTER", "AS SURVIVOR" };
+        private static readonly string[] Boards = { AccountStats.Race, AccountStats.KingOfTheHill, AccountStats.HotPotato, AccountStats.MonsterRole, AccountStats.Survivor };
+        private static readonly string[] Tabs = { "RACE", "KING OF THE HILL", "HOT POTATO", "AS MONSTER", "AS SURVIVOR" };
         //Column positions from the left of the panel.
         private static readonly float[] Columns = { 0f, 44f, 290f, 360f, 430f, 530f };
 
@@ -22,7 +22,7 @@ namespace Escape4Now.Menus
         private List<BoardEntry> entries;
 
         //Only Race and Monster matches have a timer.
-        private bool ShowsFastest => Boards[board] != AccountStats.FreeForAll && Boards[board] != AccountStats.HotPotato;
+        private bool ShowsFastest => Boards[board] != AccountStats.KingOfTheHill && Boards[board] != AccountStats.HotPotato;
 
         public void Draw(Rect inner, GUIStyle title, Color heading, Color accent)
         {

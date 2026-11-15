@@ -30,7 +30,7 @@ Edit these bindings in `Assets/Settings/Arena/Arena Controls.inputactions`. Paus
 - `ArenaHudView`: compact mode information, Hot Potato clock/holder and all-player health.
 - `ArenaHealthRow`: one participant's portrait, identity color, health segments and eliminated state.
 - `ArenaObstaclePlan`: seeded cover groups, protected center routes and connectivity checks.
-- `FreeForAllController`: last player standing; no attacks or final combat rules are implemented.
+- `KingOfTheHillController`: Player who reaches the designated amount of points win
 - `HotPotatoController`: passing, countdown, elimination and successive rounds.
 - `PotatoHolderView`: attached potato, countdown, flashing and ticking.
 
