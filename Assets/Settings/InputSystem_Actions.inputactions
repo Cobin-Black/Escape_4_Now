@@ -686,6 +686,17 @@
                 },
                 {
                     "name": "",
+                    "id": "ef253174-ed0b-4c0f-8b7d-4bf59b482f42",
+                    "path": "<Gamepad>/buttonWest",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Charge",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
                     "id": "ce110b94-7ba7-405e-9903-7f0d65d2f3f4",
                     "path": "<Keyboard>/e",
                     "interactions": "",
@@ -697,8 +708,30 @@
                 },
                 {
                     "name": "",
+                    "id": "2d847380-c61c-469b-abdb-f4d8b46f0fe2",
+                    "path": "<Gamepad>/buttonNorth",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Roar",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
                     "id": "0ae031ff-1826-416d-94fc-f249ca3e0aa2",
                     "path": "<Keyboard>/r",
+                    "interactions": "",
+                    "processors": "",
+                    "groups": "",
+                    "action": "Stomp",
+                    "isComposite": false,
+                    "isPartOfComposite": false
+                },
+                {
+                    "name": "",
+                    "id": "facad221-94be-49a2-ad87-09f8fde6a0c6",
+                    "path": "<Gamepad>/buttonEast",
                     "interactions": "",
                     "processors": "",
                     "groups": "",
