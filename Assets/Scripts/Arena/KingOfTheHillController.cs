@@ -152,9 +152,10 @@ namespace Escape4Now.Arena
         {
             UpdateRespawns(dt);
 
+            // The Input System's Attack action uses the held item (ruler swing, spit ball, ...).
             foreach (ArenaParticipant participant in Players)
             {
-                if (!participant.Alive || !participant.Input.UseItemPressed)
+                if (!participant.Alive || !participant.Input.AttackPressed)
                     continue;
 
                 var inventory = participant.GetComponent<PlayerInventory>();
