@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Escape4Now.Accounts;
 using Escape4Now.GameModes;
+using Escape4Now.Multiplayer;
 using Escape4Now.Player;
 using UnityEngine;
 using UnityEngine.Events;
@@ -22,8 +23,10 @@ namespace Escape4Now.Arena
         [SerializeField]
         private ArenaEventDirector events;
         [Header("Input System")]
-        [SerializeField]
+        [SerializeField, Tooltip("Shared-keyboard layouts (Player1..Player4 maps) used by players without a controller.")]
         private InputActionAsset inputActions;
+        [SerializeField, Tooltip("Actions used by players with a controller (the Player map: Move, Attack, Potato Pass). Empty uses the project-wide Input System actions.")]
+        private InputActionAsset gamepadActions;
         [SerializeField]
         private InputActionReference pause;
         [Header("Player Identity")]
@@ -49,6 +52,9 @@ namespace Escape4Now.Arena
         private bool ownsPause;
         public ArenaMap Map => map;
         public InputActionAsset InputActions => inputActions;
+        public InputActionAsset GamepadActions => gamepadActions != null ? gamepadActions : InputSystem.actions;
+        // True when players were given controllers automatically, so plugging one in mid-match updates the inputs.
+        private bool autoAssignedInput;
         public ArenaEventDirector Events => events;
         public Skin_Handler Skins => skins;
         public string Title => modeTitle;
@@ -85,10 +91,12 @@ namespace Escape4Now.Arena
                 pause.action.Enable();
                 ownsPause = true;
             }
+            ControllerHandling.AssignmentsChanged += ControllersChanged;
         }
 
         protected virtual void OnDisable()
         {
+            ControllerHandling.AssignmentsChanged -= ControllersChanged;
             if (ownsPause && pause != null)
                 pause.action.Disable();
             ownsPause = false;
@@ -110,8 +118,37 @@ namespace Escape4Now.Arena
             Tick(Time.deltaTime);
         }
 
-        // Validate the saved references, create participants, then let the selected mode start its rules.
+        // Controllers come from ControllerHandling: each player slot uses its own controller,
+        // and anyone without one gets a shared-keyboard layout.
+        public bool StartMatch(int count, string[] names, int[] skinIndices)
+        {
+            var pads = new Gamepad[Mathf.Clamp(count, 0, ControllerHandling.MaxSlots)];
+            for (int i = 0; i < pads.Length; i++)
+                pads[i] = ControllerHandling.GetGamepad(i);
+            bool started = StartMatch(count, names, pads, skinIndices);
+            autoAssignedInput = started;
+            return started;
+        }
+
+        // Explicit assignment (used by editor checks): gamepads index Gamepad.all, -1 means keyboard.
         public bool StartMatch(int count, string[] names, int[] gamepads, int[] skinIndices)
+        {
+            var pads = new Gamepad[Mathf.Max(0, count)];
+            for (int i = 0; i < pads.Length && gamepads != null && i < gamepads.Length; i++)
+            {
+                if (gamepads[i] >= Gamepad.all.Count)
+                {
+                    Error = "Connect the selected gamepad or choose Keyboard.";
+                    return false;
+                }
+                pads[i] = gamepads[i] >= 0 ? Gamepad.all[gamepads[i]] : null;
+            }
+            autoAssignedInput = false;
+            return StartMatch(count, names, pads, skinIndices);
+        }
+
+        // Validate the saved references, create participants, then let the selected mode start its rules.
+        private bool StartMatch(int count, string[] names, Gamepad[] pads, int[] skinIndices)
         {
             Error = "";
             if (map == null || map.Settings == null || map.Settings.material == null || playerPrefab == null || inputActions == null || pause == null)
@@ -126,24 +163,26 @@ namespace Escape4Now.Arena
                 return false;
             }
 
-            var pads = new HashSet<int>();
+            var used = new HashSet<Gamepad>();
+            int[] layouts = KeyboardLayouts(pads, count);
             for (int i = 0; i < count; i++)
             {
-                if (gamepads[i] >= Gamepad.all.Count)
-                {
-                    Error = "Connect the selected gamepad or choose Keyboard.";
-                    return false;
-                }
-
-                if (gamepads[i] >= 0 && !pads.Add(gamepads[i]))
+                if (pads[i] != null && !used.Add(pads[i]))
                 {
                     Error = "Give each gamepad to one player only.";
                     return false;
                 }
 
-                if (inputActions.FindActionMap("Player" + (i + 1)) == null)
+                bool primary = pads[i] != null || layouts[i] == 0;
+                if (primary && (GamepadActions == null || GamepadActions.FindActionMap("Player") == null))
                 {
-                    Error = "The arena input asset needs an action map for each player.";
+                    Error = "Player 1 and controller players need the Input System's Player action map.";
+                    return false;
+                }
+
+                if (!primary && inputActions.FindActionMap("Player" + (layouts[i] + 1)) == null)
+                {
+                    Error = "The arena input asset needs an action map for each keyboard player.";
                     return false;
                 }
             }
@@ -162,13 +201,14 @@ namespace Escape4Now.Arena
             for (int i = 0; i < count; i++)
             {
                 var player = Instantiate(playerPrefab, transform);
-                player.Initialize(this, i, names[i], playerColors[i], spawns[i], gamepads[i]);
+                player.Initialize(this, i, names[i], playerColors[i], spawns[i]);
                 player.Eliminated += ParticipantEliminated;
                 Players.Add(player);
                 if (skins != null && skinIndices[i] >= 0)
                     skins.TryAssign(i, skinIndices[i]);
             }
 
+            ApplyInputs(pads);
             skins?.FillMissing();
             for (int i = 0; i < Players.Count; i++)
                 skins?.ApplyTo(Players[i].Character, i);
@@ -180,6 +220,34 @@ namespace Escape4Now.Arena
             BeginRules();
             onMatchStarted?.Invoke();
             return true;
+        }
+
+        // Keyboard players keep their own slot's layout: Player 1 uses the Input System's keyboard bindings,
+        // Players 2-4 use the backup Player2..Player4 maps. -1 means that slot has a controller.
+        private static int[] KeyboardLayouts(Gamepad[] pads, int count) => ControllerHandling.KeyboardLayoutsFor(pads, count);
+
+        private void ApplyInputs(Gamepad[] pads)
+        {
+            int[] layouts = KeyboardLayouts(pads, Players.Count);
+            // Keys used by the other keyboard players are switched off in Player 1's copy so nobody shares a key.
+            var reserved = new HashSet<string>();
+            for (int i = 1; i < layouts.Length; i++)
+                if (layouts[i] >= 0)
+                    ArenaLocalInput.CollectLayoutKeys(inputActions, layouts[i], reserved);
+            for (int i = 0; i < Players.Count; i++)
+                if (Players[i] != null)
+                    Players[i].ConfigureInput(pads[i], layouts[i], reserved);
+        }
+
+        // A controller was plugged in or unplugged: move each player to their current controller or keyboard layout.
+        private void ControllersChanged()
+        {
+            if (!autoAssignedInput || Players.Count == 0)
+                return;
+            var pads = new Gamepad[Players.Count];
+            for (int i = 0; i < pads.Length; i++)
+                pads[i] = ControllerHandling.GetGamepad(Players[i].Slot);
+            ApplyInputs(pads);
         }
 
         // Use the same map and player footprints for normal movement and event knockback.
