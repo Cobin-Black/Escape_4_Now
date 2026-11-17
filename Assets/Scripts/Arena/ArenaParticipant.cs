@@ -74,7 +74,7 @@ namespace Escape4Now.Arena
         private Vector2 screenVelocity, eventVelocity;
         public event Action<ArenaParticipant> Eliminated;
         // Reuse the existing character identity, skin and health instead of creating a second player system.
-        public void Initialize(ArenaMatch match, int slot, string displayName, Color color, Vector2 position, int gamepad)
+        public void Initialize(ArenaMatch match, int slot, string displayName, Color color, Vector2 position, int gamepad, bool isBot = false)
         {
             Match = match;
             Slot = slot;
@@ -87,7 +87,12 @@ namespace Escape4Now.Arena
             Input = GetComponent<ArenaLocalInput>();
             InitialHealth = Character.Health;
             Character.ConfigureArenaIdentity(slot + 1, displayName, color);
-            Input.Configure(match.InputActions, slot, gamepad);
+
+            if (isBot)
+                Input.ConfigureBot();
+            else
+                Input.Configure(match.InputActions, slot, gamepad);
+                
             Place(position);
             bool showScore = Match is KingOfTheHillController;
             bool showLabel = showScore || showNameLabels;

@@ -87,6 +87,8 @@ namespace Escape4Now.Arena
                 };
                 for (int pad = 1; pad <= 4; pad++)
                     deviceOptions.Add(string.Format(gamepadFormat, pad));
+
+                deviceOptions.Add("Bot");
                 controls[i].ClearOptions();
                 controls[i].AddOptions(deviceOptions);
                 identityStrips[i].color = match.GetPlayerColor(i);
@@ -125,14 +127,17 @@ namespace Escape4Now.Arena
             var labels = new string[playerCount];
             var devices = new int[playerCount];
             var looks = new int[playerCount];
+            var bots = new bool[playerCount];
+
             for (int i = 0; i < playerCount; i++)
             {
                 labels[i] = names[i].text;
-                devices[i] = controls[i].value - 1;
+                bots[i] = controls[i].value == 5;
+                devices[i] = bots[i] ? -1 : controls[i].value - 1;
                 looks[i] = skins[i].value - 1;
             }
 
-            match.StartMatch(playerCount, labels, devices, looks);
+            match.StartMatch(playerCount, labels, devices, looks, bots);
             error.text = match.Error;
             error.gameObject.SetActive(!string.IsNullOrEmpty(match.Error));
         }

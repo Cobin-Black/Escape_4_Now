@@ -111,7 +111,7 @@ namespace Escape4Now.Arena
         }
 
         // Validate the saved references, create participants, then let the selected mode start its rules.
-        public bool StartMatch(int count, string[] names, int[] gamepads, int[] skinIndices)
+        public bool StartMatch(int count, string[] names, int[] gamepads, int[] skinIndices, bool[] bots = null)
         {
             Error = "";
             if (map == null || map.Settings == null || map.Settings.material == null || playerPrefab == null || inputActions == null || pause == null)
@@ -129,6 +129,9 @@ namespace Escape4Now.Arena
             var pads = new HashSet<int>();
             for (int i = 0; i < count; i++)
             {
+                if (bots != null && i < bots.Length && bots[i])
+                    continue;
+
                 if (gamepads[i] >= Gamepad.all.Count)
                 {
                     Error = "Connect the selected gamepad or choose Keyboard.";
@@ -162,7 +165,13 @@ namespace Escape4Now.Arena
             for (int i = 0; i < count; i++)
             {
                 var player = Instantiate(playerPrefab, transform);
-                player.Initialize(this, i, names[i], playerColors[i], spawns[i], gamepads[i]);
+                bool isBot = bots != null && i < bots.Length && bots[i];
+
+                player.Initialize(this, i, names[i], playerColors[i], spawns[i], gamepads[i], isBot);
+
+                if (isBot)
+                    player.gameObject.AddComponent<ArenaBotController>();
+
                 player.Eliminated += ParticipantEliminated;
                 Players.Add(player);
                 if (skins != null && skinIndices[i] >= 0)

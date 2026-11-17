@@ -15,6 +15,8 @@ namespace Escape4Now.Items
 
         private readonly List<FreeForAllItem> floorItems = new();
         private readonly Dictionary<FreeForAllItem, Vector2> itemPositions = new();
+        // Allow bots to check available item locations.
+        public IReadOnlyDictionary<FreeForAllItem, Vector2> AvailableItems => itemPositions;
         private readonly List<float> spawnTimers = new();
         private KingOfTheHillController match;
         private float replacementTimer;

@@ -33,6 +33,8 @@ namespace Escape4Now.Arena
         public override GameModeType Type => GameModeType.FreeForAll;
         public override string Objective => objective;
         public int ScoreToWin => scoreToWin;
+        public KingOfTheHillZone ActiveHill => activeHill;
+        public FreeForAllItemSpawner ItemSpawner => itemSpawner;
 
         // Spawn the existing arena items.
         protected override void BeginRules()
