@@ -17,6 +17,9 @@ namespace Escape4Now.Arena
         private int pathIndex;
         private Vector2 lastPathTarget;
         private float pathTimer;
+        // Control how often the bot searches for an escape position.
+        private float escapeTimer;
+        private ArenaParticipant lastPotatoHolder;
         // Time remaining before each attack can be used again.
         private float rulerCooldown;
         private float spitballCooldown;
@@ -53,6 +56,42 @@ namespace Escape4Now.Arena
 
                 if (spitballCooldown <= 0f)
                     TryUseSpitball();
+            }
+
+            // Chase the opponent or run away from the potato holder.
+            if (player.Match is HotPotatoController hotPotato)
+            {
+                bool holdingPotato = IsHoldingPotato(hotPotato);
+
+                // Update the escape timer.
+                escapeTimer -= Time.deltaTime;
+
+                // Immediately update when the potato changes hands.
+                if (lastPotatoHolder != hotPotato.Holder)
+                {
+                    lastPotatoHolder = hotPotato.Holder;
+                    escapeTimer = 0f;
+                }
+
+                if (!hotPotato.BetweenRounds)
+                {
+                    if (holdingPotato)
+                    {
+                        ChasePotatoTarget(hotPotato);
+                    }
+                    else if (escapeTimer <= 0f)
+                    {
+                        RunFromPotatoHolder(hotPotato);
+                        escapeTimer = 0.5f;
+                    }
+                }
+                else
+                {
+                    input.SetBotMovement(Vector2.zero);
+                    ClearTarget();
+                }
+
+                TryPassPotato(hotPotato);
             }
 
             if (player.Match is KingOfTheHillController hill && hill.ActiveHill != null)
@@ -638,6 +677,101 @@ namespace Escape4Now.Arena
             }
 
             return found;
+        }
+
+        // Check whether this bot is holding the potato.
+        private bool IsHoldingPotato(HotPotatoController hotPotato)
+        {
+            return hotPotato.Holder == player;
+        }
+
+        // Chase the nearest player who can receive the potato.
+        private void ChasePotatoTarget(HotPotatoController hotPotato)
+        {
+            ArenaParticipant closest = null;
+            float closestDistance = float.MaxValue;
+
+            foreach (ArenaParticipant opponent in hotPotato.Players)
+            {
+                // Ignore eliminated and shielded players.
+                if (opponent == player || !opponent.Alive || opponent.Shield)
+                    continue;
+
+                float distance = Vector2.Distance(
+                    player.Position,
+                    opponent.Position
+                );
+
+                if (distance < closestDistance)
+                {
+                    closestDistance = distance;
+                    closest = opponent;
+                }
+            }
+
+            if (closest != null)
+            {
+                // Use the existing BFS movement system.
+                SetTarget(closest.Position);
+            }
+            else
+            {
+                ClearTarget();
+            }
+        }
+
+        // Press Tag while holding the potato.
+        private void TryPassPotato(HotPotatoController hotPotato)
+        {
+            if (hotPotato.Holder != player || hotPotato.BetweenRounds)
+            {
+                input.SetBotTag(false);
+                return;
+            }
+
+            // The game mode checks distance, shields, obstacles and cooldown.
+            input.SetBotTag(true);
+        }
+
+        // Find a reachable position away from the potato holder.
+        private void RunFromPotatoHolder(HotPotatoController hotPotato)
+        {
+            ArenaParticipant holder = hotPotato.Holder;
+
+            if (holder == null || !holder.Alive)
+            {
+                ClearTarget();
+                return;
+            }
+
+            ArenaLayout layout = player.Match.Map.Layout;
+            Vector2Int start = Vector2Int.RoundToInt(player.Position);
+
+            Vector2 bestPosition = player.Position;
+            float bestDistance = -1f;
+
+            // Search for reachable tiles away from the holder.
+            foreach (Vector2Int cell in layout.Cells())
+            {
+                if (!layout.Fits(cell, player.Match.Map.Settings.playerRadius))
+                    continue;
+
+                List<Vector2Int> path = FindPath(start, cell);
+
+                if (path.Count == 0 && start != cell)
+                    continue;
+
+                float distance = Vector2.Distance(cell, holder.Position);
+
+                // Prefer positions farther from the holder.
+                if (distance > bestDistance)
+                {
+                    bestDistance = distance;
+                    bestPosition = cell;
+                }
+            }
+
+            SetTarget(bestPosition);
         }
 
         // Stop moving toward the current destination.

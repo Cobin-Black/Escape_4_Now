@@ -12,9 +12,10 @@ namespace Escape4Now.Arena
         private bool isBot;
         private Vector2 botMovement;
         private bool botUseItem;
+        private bool botTag;
         public bool IsBot => isBot;
         public Vector2 Move => isBot ? botMovement : move != null ? Vector2.ClampMagnitude(move.ReadValue<Vector2>(), 1) : Vector2.zero;
-        public bool TagPressed => tagAction != null && tagAction.WasPressedThisFrame();
+        public bool TagPressed => isBot ? botTag : tagAction != null && tagAction.WasPressedThisFrame();
         public bool UseItemPressed => isBot ? botUseItem : useItemAction != null && useItemAction.WasPressedThisFrame();
 
         // Give this slot its own action copy and keyboard layout or explicitly assigned gamepad.
@@ -44,6 +45,7 @@ namespace Escape4Now.Arena
             isBot = true;
             botMovement = Vector2.zero;
             botUseItem = false;
+            botTag = false;
         }
 
         // Set the movement direction chosen by the bot.
@@ -62,6 +64,15 @@ namespace Escape4Now.Arena
                 return;
 
             botUseItem = useItem;
+        }
+
+        // Allow bots to press the Tag button in Hot Potato.
+        public void SetBotTag(bool tag)
+        {
+            if (!isBot)
+                return;
+
+            botTag = tag;
         }
 
         // Disable only the actions owned by this participant.

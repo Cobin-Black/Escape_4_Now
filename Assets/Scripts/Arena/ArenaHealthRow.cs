@@ -75,6 +75,10 @@ namespace Escape4Now.Arena
         // Display the player's current FreeForAll item and charges.
         private void ShowInventory(ArenaParticipant player)
         {
+            // Skip inventory UI if it was not assigned.
+            if (inventorySection == null)
+                return;
+
             bool isFFA = player.Match is KingOfTheHillController;
 
             if (!isFFA)
