@@ -178,7 +178,8 @@ public static void Label(Rect r, string text, GUIStyle style, Color color, Color
         public static Matrix4x4 BeginRotate(float degrees, Vector2 pivot)
         {
             Matrix4x4 previous = GUI.matrix;
-            GUIUtility.RotateAroundPivot(degrees, pivot * Scale);
+            //Works with any scale/offset the screen has set on GUI.matrix (the lobby shrinks to fit its controller panel).
+            GUIUtility.RotateAroundPivot(degrees, previous.MultiplyPoint3x4(pivot));
             return previous;
         }
 

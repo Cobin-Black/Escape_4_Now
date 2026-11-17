@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Escape4Now.Multiplayer;
 using Escape4Now.UI;
 using UnityEngine;
 using UnityEngine.UI;
@@ -49,7 +50,21 @@ namespace Escape4Now.Arena
             "IJKL + O",
             "Numpad 8456 + 0"
         };
+        [Header("Controller Panel (built beside the setup panel at runtime)")]
+        [SerializeField]
+        private bool showControllerPanel = true;
+        [SerializeField, Min(120)]
+        private float controllerPanelWidth = 210;
+        [SerializeField, Min(0)]
+        private float controllerPanelGap = 16;
         private ArenaMatch match;
+        private readonly GameObject[] padRows = new GameObject[ControllerHandling.MaxSlots];
+        private readonly Text[] padNames = new Text[ControllerHandling.MaxSlots];
+        private readonly Button[] padButtons = new Button[ControllerHandling.MaxSlots];
+        private readonly Text[] padButtonLabels = new Text[ControllerHandling.MaxSlots];
+        private readonly Button[] changeButtons = new Button[ControllerHandling.MaxSlots];
+        private readonly Text[] changeLabels = new Text[ControllerHandling.MaxSlots];
+        private Text padFooter;
         public int PlayerCount => playerCount;
 
         // Connect saved Unity widgets to the existing local setup options.
@@ -81,26 +96,252 @@ namespace Escape4Now.Arena
                 skins[i].ClearOptions();
                 skins[i].AddOptions(skinOptions);
                 skins[i].onValueChanged.AddListener(value => RefreshPortrait(slot));
-                var deviceOptions = new List<string>
-                {
-                    string.Format(keyboardFormat, match is HotPotatoController ? tagHints[i] : movementHints[i])
-                };
-                for (int pad = 1; pad <= 4; pad++)
-                    deviceOptions.Add(string.Format(gamepadFormat, pad));
-                controls[i].ClearOptions();
-                controls[i].AddOptions(deviceOptions);
+                // Controls are no longer chosen here: ControllerHandling gives each slot its controller,
+                // so the old dropdown just shows what this player will use.
+                controls[i].interactable = false;
                 identityStrips[i].color = match.GetPlayerColor(i);
                 RefreshPortrait(i);
             }
 
             start.onClick.AddListener(StartMatch);
             AccountLinkUI.Create(gameObject, names, null);
+            ControllerHandling.AssignmentsChanged += Refresh;
+            if (showControllerPanel)
+                BuildControllerPanel();
             Refresh();
+        }
+
+        // ---------- Controller / Vibrate panel ----------
+
+        // A side panel in the same style as the setup panel: each player's controller and a VIBRATE button.
+        private void BuildControllerPanel()
+        {
+            var lobbyRect = (RectTransform)transform;
+            Sprite sprite = GetComponent<Image>() != null ? GetComponent<Image>().sprite : null;
+            float pad = style != null ? style.padding : 18;
+            float gap = style != null ? style.gap : 10;
+
+            var panel = NewRect("Controller Panel", lobbyRect);
+            panel.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
+            panel.anchorMin = panel.anchorMax = new Vector2(1, 1);
+            panel.pivot = new Vector2(0, 1);
+            panel.anchoredPosition = new Vector2(controllerPanelGap, 0);
+            panel.sizeDelta = new Vector2(controllerPanelWidth, 0);
+            AddImage(panel, sprite, StyleColor(s => s.panel, new Color(.025f, .075f, .12f, .98f)));
+            var outline = panel.gameObject.AddComponent<Outline>();
+            Color accent = StyleColor(s => s.accent, new Color(.08f, .72f, .94f, 1));
+            outline.effectColor = new Color(accent.r, accent.g, accent.b, .8f);
+            outline.effectDistance = new Vector2(1.5f, -1.5f);
+            var layout = panel.gameObject.AddComponent<VerticalLayoutGroup>();
+            layout.padding = new RectOffset((int)pad, (int)pad, (int)pad, (int)pad);
+            layout.spacing = gap;
+            layout.childControlWidth = layout.childControlHeight = true;
+            layout.childForceExpandHeight = false;
+            panel.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
+
+            AddText(panel, "Title", "CONTROLLERS", style != null ? style.headingSize : 18, true, StyleColor(s => s.text, Color.white), 28);
+            AddText(panel, "Subtitle", "Press VIBRATE to find which controller is yours.", style != null ? style.smallSize : 12, false, StyleColor(s => s.secondary, Color.gray), 34);
+
+            for (int i = 0; i < ControllerHandling.MaxSlots; i++)
+            {
+                int slot = i;
+                var row = NewRect("Player " + (i + 1), panel);
+                row.gameObject.AddComponent<LayoutElement>().preferredHeight = 76;
+                AddImage(row, sprite, StyleColor(s => s.card, new Color(.055f, .14f, .2f, 1)));
+
+                var strip = NewRect("Identity", row);
+                strip.anchorMin = new Vector2(0, 0);
+                strip.anchorMax = new Vector2(0, 1);
+                strip.pivot = new Vector2(0, .5f);
+                strip.sizeDelta = new Vector2(6, 0);
+                AddImage(strip, null, match.GetPlayerColor(i));
+
+                var label = AddText(row, "Player", "P" + (i + 1), style != null ? style.bodySize : 14, true, match.GetPlayerColor(i), 0);
+                Place(label.rectTransform, new Vector2(14, -6), new Vector2(40, 24));
+                padNames[i] = AddText(row, "Device", "", style != null ? style.smallSize : 12, false, StyleColor(s => s.secondary, Color.gray), 0);
+                Place(padNames[i].rectTransform, new Vector2(52, -6), new Vector2(controllerPanelWidth - pad * 2 - 58, 24));
+
+                // Left: VIBRATE (USE KEYS while waiting). Right: CHANGE (CANCEL while waiting).
+                padButtons[i] = RowButton(row, sprite, accent, new Vector2(0, .55f), new Vector2(14, -4), out padButtonLabels[i], () =>
+                {
+                    if (ControllerHandling.ListeningSlot == slot) ControllerHandling.ClearSlot(slot);
+                    else ControllerHandling.Vibrate(slot);
+                });
+                changeButtons[i] = RowButton(row, sprite, StyleColor(s => s.input, new Color(.09f, .2f, .28f, 1)), new Vector2(.55f, 1), new Vector2(4, -8), out changeLabels[i], () =>
+                {
+                    if (ControllerHandling.ListeningSlot == slot) ControllerHandling.CancelAssign();
+                    else ControllerHandling.BeginAssign(slot);
+                });
+                padRows[i] = row.gameObject;
+            }
+
+            padFooter = AddText(panel, "Connected", "", style != null ? style.smallSize : 12, false, StyleColor(s => s.secondary, Color.gray), 22);
+
+            // Keep both panels on screen: the setup panel shrinks a little when the window is narrow.
+            var responsive = GetComponent<ResponsivePanel>();
+            if (responsive != null)
+                responsive.ReservedRightWidth = (controllerPanelWidth + controllerPanelGap) * 2;
+        }
+
+        private void Update()
+        {
+            if (padFooter == null)
+                return;
+            for (int i = 0; i < padButtons.Length; i++)
+                if (padButtonLabels[i] != null && padButtons[i].interactable && ControllerHandling.ListeningSlot != i)
+                    padButtonLabels[i].text = ControllerHandling.IsVibrating(i) ? "BZZZ!" : "VIBRATE";
+            // Escape stops a reassignment that is waiting for a button press.
+            if (ControllerHandling.ListeningSlot >= 0 && UnityEngine.InputSystem.Keyboard.current != null
+                && UnityEngine.InputSystem.Keyboard.current.escapeKey.wasPressedThisFrame)
+                ControllerHandling.CancelAssign();
+        }
+
+        private void RefreshControllerPanel()
+        {
+            if (padFooter == null)
+                return;
+            int listening = ControllerHandling.ListeningSlot;
+            int[] layouts = ControllerHandling.GetKeyboardLayouts(playerCount);
+            for (int i = 0; i < padRows.Length; i++)
+            {
+                padRows[i].SetActive(i < playerCount);
+                bool connected = ControllerHandling.GetGamepad(i) != null;
+                bool waiting = listening == i;
+                // Keyboard players see their keys here on the setup screen (they are not shown during the match).
+                padNames[i].text = waiting ? "PRESS ANY BUTTON"
+                    : !connected && i < layouts.Length && layouts[i] >= 0 ? KeyboardKeys(layouts[i]).ToUpperInvariant()
+                    : ControllerHandling.DescribeSlot(i);
+                padButtons[i].interactable = connected || waiting;
+                padButtonLabels[i].text = waiting ? "USE KEYS" : connected ? "VIBRATE" : "NO PAD";
+                changeLabels[i].text = waiting ? "CANCEL" : "CHANGE";
+            }
+            int count = ControllerHandling.ConnectedCount;
+            padFooter.text = listening >= 0 ? "Press a button on the controller for P" + (listening + 1) + "."
+                : count == 0 ? "No controllers connected."
+                : count + (count == 1 ? " controller connected." : " controllers connected.") + " CHANGE moves one to that player.";
+        }
+
+        // A button laid out across part of a row's bottom (xRange is the 0-1 share of the row width).
+        private Button RowButton(RectTransform row, Sprite sprite, Color color, Vector2 xRange, Vector2 inset, out Text label, UnityEngine.Events.UnityAction onClick)
+        {
+            var rect = NewRect("Button", row);
+            rect.anchorMin = new Vector2(xRange.x, 0);
+            rect.anchorMax = new Vector2(xRange.y, 0);
+            rect.pivot = new Vector2(.5f, 0);
+            rect.offsetMin = new Vector2(inset.x, 8);
+            rect.offsetMax = new Vector2(inset.y, 40);
+            var image = AddImage(rect, sprite, color);
+            image.raycastTarget = true;
+            var button = rect.gameObject.AddComponent<Button>();
+            button.targetGraphic = image;
+            button.onClick.AddListener(onClick);
+            label = AddText(rect, "Label", "", style != null ? style.smallSize : 12, true, StyleColor(s => s.text, Color.white), 0);
+            label.alignment = TextAnchor.MiddleCenter;
+            var labelRect = label.rectTransform;
+            labelRect.anchorMin = Vector2.zero;
+            labelRect.anchorMax = Vector2.one;
+            labelRect.offsetMin = labelRect.offsetMax = Vector2.zero;
+            return button;
+        }
+
+        private Color StyleColor(System.Func<ArenaInterfaceStyle, Color> pick, Color fallback) => style != null ? pick(style) : fallback;
+
+        private static RectTransform NewRect(string name, Transform parent)
+        {
+            var go = new GameObject(name, typeof(RectTransform));
+            go.layer = parent.gameObject.layer;
+            var rect = (RectTransform)go.transform;
+            rect.SetParent(parent, false);
+            return rect;
+        }
+
+        private static Image AddImage(RectTransform rect, Sprite sprite, Color color)
+        {
+            var image = rect.gameObject.AddComponent<Image>();
+            image.sprite = sprite;
+            image.type = sprite != null ? Image.Type.Sliced : Image.Type.Simple;
+            image.color = color;
+            image.raycastTarget = false;
+            return image;
+        }
+
+        private Text AddText(RectTransform parent, string name, string content, int size, bool bold, Color color, float height)
+        {
+            var rect = NewRect(name, parent);
+            if (height > 0)
+                rect.gameObject.AddComponent<LayoutElement>().preferredHeight = height;
+            var text = rect.gameObject.AddComponent<Text>();
+            text.font = style != null && style.font != null ? style.font : title.font;
+            text.fontSize = size;
+            text.fontStyle = bold ? FontStyle.Bold : FontStyle.Normal;
+            text.color = color;
+            text.alignment = TextAnchor.MiddleLeft;
+            text.horizontalOverflow = HorizontalWrapMode.Wrap;
+            text.text = content;
+            text.raycastTarget = false;
+            return text;
+        }
+
+        private static void Place(RectTransform rect, Vector2 topLeft, Vector2 size)
+        {
+            rect.anchorMin = rect.anchorMax = new Vector2(0, 1);
+            rect.pivot = new Vector2(0, 1);
+            rect.anchoredPosition = topLeft;
+            rect.sizeDelta = size;
+        }
+
+        private void OnDestroy() => ControllerHandling.AssignmentsChanged -= Refresh;
+
+        // Show "Controller 1" or the keyboard layout this slot will get with the current controllers.
+        private void RefreshControls()
+        {
+            int[] layouts = ControllerHandling.GetKeyboardLayouts(playerCount);
+            for (int i = 0; i < controls.Length; i++)
+            {
+                string label;
+                if (i >= layouts.Length)
+                    label = "";
+                else if (layouts[i] < 0)
+                    label = string.Format(gamepadFormat, i + 1);
+                else
+                    label = string.Format(keyboardFormat, KeyboardKeys(layouts[i]));
+                controls[i].ClearOptions();
+                controls[i].AddOptions(new List<string> { label });
+                controls[i].SetValueWithoutNotify(0);
+                controls[i].RefreshShownValue();
+            }
+        }
+
+        // The keys a keyboard player uses: Player 1's come from the Input System bindings, Players 2-4 use the backup
+        // layouts. The layout's action key is Pass in Hot Potato and Attack in King of the Hill.
+        private string KeyboardKeys(int layout)
+        {
+            if (layout == 0)
+                return PrimaryKeyboardHint();
+            string[] hints = tagHints.Length > 0 ? tagHints : movementHints;
+            return hints.Length > 0 ? hints[Mathf.Clamp(layout, 0, hints.Length - 1)] : "";
+        }
+
+        // Player 1's keyboard keys, read from the Input System bindings (e.g. "WASD + ENTER").
+        private string PrimaryKeyboardHint()
+        {
+            var playerMap = match.GamepadActions != null ? match.GamepadActions.FindActionMap("Player") : null;
+            if (playerMap == null)
+                return movementHints.Length > 0 ? movementHints[0] : "";
+            var labels = new List<string>();
+            InputBindingHints.GetPrimaryLabels(playerMap.FindAction("Move"), "Keyboard&Mouse", labels);
+            string move = labels.TrueForAll(l => l.Length == 1) ? string.Concat(labels) : string.Join("/", labels);
+            InputBindingHints.GetPrimaryLabels(playerMap.FindAction(match is KingOfTheHillController ? "Attack" : "Potato Pass"), "Keyboard&Mouse", labels);
+            return labels.Count > 0 ? move + " + " + labels[0] : move;
         }
 
         // A two-player lobby takes only two rows. Layout groups move the footer up automatically.
         private void Refresh()
         {
+            if (match == null)
+                return;
+            RefreshControls();
+            RefreshControllerPanel();
             for (int i = 0; i < rows.Length; i++)
                 rows[i].SetActive(i < playerCount);
             for (int i = 0; i < playerCounts.Length; i++)
@@ -123,16 +364,14 @@ namespace Escape4Now.Arena
         public void StartMatch()
         {
             var labels = new string[playerCount];
-            var devices = new int[playerCount];
             var looks = new int[playerCount];
             for (int i = 0; i < playerCount; i++)
             {
                 labels[i] = names[i].text;
-                devices[i] = controls[i].value - 1;
                 looks[i] = skins[i].value - 1;
             }
 
-            match.StartMatch(playerCount, labels, devices, looks);
+            match.StartMatch(playerCount, labels, looks);
             error.text = match.Error;
             error.gameObject.SetActive(!string.IsNullOrEmpty(match.Error));
         }

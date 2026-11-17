@@ -74,7 +74,7 @@ namespace Escape4Now.Arena
         private Vector2 screenVelocity, eventVelocity;
         public event Action<ArenaParticipant> Eliminated;
         // Reuse the existing character identity, skin and health instead of creating a second player system.
-        public void Initialize(ArenaMatch match, int slot, string displayName, Color color, Vector2 position, int gamepad)
+        public void Initialize(ArenaMatch match, int slot, string displayName, Color color, Vector2 position)
         {
             Match = match;
             Slot = slot;
@@ -87,7 +87,6 @@ namespace Escape4Now.Arena
             Input = GetComponent<ArenaLocalInput>();
             InitialHealth = Character.Health;
             Character.ConfigureArenaIdentity(slot + 1, displayName, color);
-            Input.Configure(match.InputActions, slot, gamepad);
             Place(position);
             bool showScore = Match is KingOfTheHillController;
             bool showLabel = showScore || showNameLabels;
@@ -104,6 +103,21 @@ namespace Escape4Now.Arena
                 nameShadow.gameObject.SetActive(showLabel);
                 nameShadow.text = showScore ? "0" : name;
             }
+        }
+
+        // Use this player's own controller, or their shared-keyboard layout when they have none.
+        // Player 1 on keyboard uses the Input System's keyboard bindings; Players 2-4 use the backup layouts.
+        public void ConfigureInput(UnityEngine.InputSystem.Gamepad pad, int keyboardLayout, System.Collections.Generic.ICollection<string> reservedKeys = null)
+        {
+            if (Input == null)
+                Input = GetComponent<ArenaLocalInput>();
+            if (pad != null)
+                Input.ConfigureGamepad(Match.GamepadActions, pad);
+            else if (keyboardLayout <= 0)
+                Input.ConfigurePrimaryKeyboard(Match.GamepadActions, reservedKeys);
+            else
+                Input.ConfigureKeyboard(Match.InputActions, keyboardLayout);
+            // Keyboard controls are shown on the setup screen (ArenaLobbyView), not during the match.
         }
 
         private void Update()

@@ -40,6 +40,10 @@ namespace Escape4Now.Menus
         private const string LinkUserControl = "ArcadeLinkUser";
         private const string LinkPassControl = "ArcadeLinkPass";
         private static readonly Color ErrorText = Hex("#ff8a93");
+        //Controller panel on the right of WHO'S PLAYING. The layout grows by its width plus the gap.
+        private const float ControllerGap = 24f;
+        private const float ControllerPanelWidth = 176f;
+        private const float LayoutWidth = DesignWidth + ControllerGap + ControllerPanelWidth;
         private readonly bool[] linked = new bool[4];
         private bool signedIn;
         private int linkingSlot = -1;
@@ -107,7 +111,9 @@ namespace Escape4Now.Menus
             }
             if (k.escapeKey.wasPressedThisFrame)
             {
-                if (GUIUtility.keyboardControl != 0) GUIUtility.keyboardControl = 0;
+                //Escape first stops a controller reassignment that is waiting for a button press.
+                if (ControllerHandling.ListeningSlot >= 0) ControllerHandling.CancelAssign();
+                else if (GUIUtility.keyboardControl != 0) GUIUtility.keyboardControl = 0;
                 else BackToMenu();
             }
             else if (GUIUtility.keyboardControl == 0 && (k.enterKey.wasPressedThisFrame || k.numpadEnterKey.wasPressedThisFrame))
@@ -197,15 +203,24 @@ namespace Escape4Now.Menus
             CreateStyles();
             //Draw over the game's own UI.
             GUI.depth = -100;
-            Matrix4x4 baseMatrix = BeginScaled();
+            Matrix4x4 baseMatrix = GUI.matrix;
             float t = Time.unscaledTime;
-            float ox = OffsetX;
 
-            Fill(new Rect(0f, 0f, Width, DesignHeight), background);
+            //Background and grid fill the whole window at the normal menu scale.
+            GUI.matrix = Matrix4x4.Scale(new Vector3(Scale, Scale, 1f));
+            float fullHeight = Screen.height / Scale;
+            Fill(new Rect(0f, 0f, Width, fullHeight), background);
             Color gridLine = WithAlpha(Navy, 0.12f);
-            for (float x = 0f; x < Width; x += 40f) Fill(new Rect(x, 0f, 1f, DesignHeight), gridLine);
-            for (float y = 0f; y < DesignHeight; y += 40f) Fill(new Rect(0f, y, Width, 1f), gridLine);
+            for (float x = 0f; x < Width; x += 40f) Fill(new Rect(x, 0f, 1f, fullHeight), gridLine);
+            for (float y = 0f; y < fullHeight; y += 40f) Fill(new Rect(0f, y, Width, 1f), gridLine);
             Stripes(new Rect(0f, 0f, Width, 18f), Tape, Navy, t * 36f, 22f);
+
+            //The layout is wider than the other menus because of the controller panel, so on narrow
+            //screens it shrinks a little to keep everything visible, centered top to bottom.
+            float fit = Mathf.Min(Scale, Screen.width / LayoutWidth);
+            float top = (Screen.height - DesignHeight * fit) * 0.5f;
+            GUI.matrix = Matrix4x4.TRS(new Vector3(0f, Mathf.Max(0f, top), 0f), Quaternion.identity, new Vector3(fit, fit, 1f));
+            float ox = (Screen.width / fit - LayoutWidth) * 0.5f;
 
             //Everything behind the link popup stops taking clicks while it is open.
             bool linking = linkingSlot >= 0;
@@ -213,7 +228,8 @@ namespace Escape4Now.Menus
             DrawHeader(ox);
             DrawModePanel(new Rect(ox + 56f, 118f, 290f, 470f));
             DrawPlayers(new Rect(ox + 378f, 118f, 846f, 470f), t);
-            DrawBottomBar(new Rect(ox + 56f, 612f, 1168f, 72f));
+            DrawControllerPanel(new Rect(ox + 1224f + ControllerGap, 118f, ControllerPanelWidth, 470f), t);
+            DrawBottomBar(new Rect(ox + 56f, 612f, 1168f + ControllerGap + ControllerPanelWidth, 72f));
             GUI.enabled = true;
             if (linking) DrawLinkPopup(ox);
 
@@ -228,7 +244,7 @@ namespace Escape4Now.Menus
             Die(new Rect(x + w + 14f, 45f, 38f, 38f), 4, Color.white, Ink, Red, 3f);
             Label(new Rect(x + w + 64f, 36f, 120f, 56f), "NOW", logoNow, Navy);
 
-            Rect back = new Rect(ox + 1224f - 190f, 40f, 190f, 48f);
+            Rect back = new Rect(ox + LayoutWidth - 56f - 190f, 40f, 190f, 48f);
             Block(back, PanelNavy, Color.white, 2f, Color.clear, 0f);
             Label(back, "ESC · MAIN MENU", Text(MonoFont, 14, TextAnchor.MiddleCenter), Tape);
             if (Hit(back)) BackToMenu();
@@ -313,6 +329,101 @@ namespace Escape4Now.Menus
                 else DrawOpenSlot(card, i);
                 EndRotate(m);
             }
+        }
+
+        //Lists which controller belongs to each player slot, with a VIBRATE button to find it in your hands.
+        private void DrawControllerPanel(Rect r, float t)
+        {
+            Block(r, PanelNavy, Color.white, 4f, CardNavy, 8f);
+            float x = r.x + 18f;
+            float w = r.width - 36f;
+            float y = r.y + 20f;
+
+            Rect icon = new Rect(x, y, 40f, 40f);
+            Fill(icon, accent);
+            DrawGamepadIcon(new Rect(icon.x + 6f, icon.y + 10f, 28f, 20f), Ink);
+            Label(new Rect(icon.xMax + 10f, y + 2f, w - 50f, 14f), "CONTROLLERS", tiny, SoftBlue);
+            Label(new Rect(icon.xMax + 10f, y + 14f, w - 50f, 26f), "VIBRATE", Text(Bungee, 18), Color.white);
+            y += 54f;
+            Fill(new Rect(x, y, w, 2f), EdgeBlue);
+            y += 12f;
+
+            const float rowHeight = 78f;
+            for (int i = 0; i < ControllerHandling.MaxSlots; i++)
+            {
+                bool playing = i < session.PlayerCount;
+                bool bot = playing && session.IsBotPlayer(i);
+                Color c = playing ? OwnerColor(i) : WithAlpha(SoftBlue, 0.35f);
+                bool connected = ControllerHandling.GetGamepad(i) != null;
+
+                bool listening = ControllerHandling.ListeningSlot == i;
+
+                Rect chip = new Rect(x, y, 34f, 22f);
+                Fill(chip, c);
+                Label(chip, "P" + (i + 1), Text(Bungee, 12, TextAnchor.MiddleCenter), Ink);
+                string device = listening ? "PRESS ANY BUTTON"
+                    : bot && !connected ? "BOT" : ControllerHandling.DescribeSlot(i);
+                Color deviceColor = listening ? Color.Lerp(Color.white, accent, 0.5f + 0.5f * Mathf.Sin(t * 8f))
+                    : connected ? Color.white : OffText;
+                Label(new Rect(chip.xMax + 8f, y + 2f, w - 42f, 18f), device, tiny, deviceColor);
+
+                //Left: VIBRATE (or USE KEYS while waiting). Right: CHANGE, which waits for the controller to press a button.
+                Rect left = new Rect(x, y + 30f, 78f, 34f);
+                Rect right = new Rect(left.xMax + 6f, y + 30f, w - 84f, 34f);
+                if (listening)
+                {
+                    if (RowButton(left, "USE KEYS", CardNavy, c, Color.white)) ControllerHandling.ClearSlot(i);
+                    if (RowButton(right, "CANCEL", accent, Ink, Ink)) ControllerHandling.CancelAssign();
+                }
+                else
+                {
+                    if (connected)
+                    {
+                        bool buzzing = ControllerHandling.IsVibrating(i);
+                        Rect shaken = left;
+                        if (buzzing) shaken.x += Mathf.Sin(t * 70f) * 2f;
+                        if (RowButton(shaken, buzzing ? "BZZZ!" : "VIBRATE", buzzing ? (playing ? c : accent) : CardNavy,
+                            playing ? c : DashBlue, buzzing ? Ink : Color.white)) ControllerHandling.Vibrate(i);
+                    }
+                    else
+                    {
+                        Fill(left, WithAlpha(DeepNavy, 0.6f));
+                        DashedOutline(left, 2f, WithAlpha(DashBlue, 0.6f));
+                        Label(left, "NO PAD", Text(Bungee, 11, TextAnchor.MiddleCenter), WithAlpha(OffText, 0.6f));
+                    }
+                    if (RowButton(right, "CHANGE", CardNavy, playing ? c : DashBlue, Color.white)) ControllerHandling.BeginAssign(i);
+                }
+                y += rowHeight;
+            }
+
+            int count = ControllerHandling.ConnectedCount;
+            string help = ControllerHandling.ListeningSlot >= 0 ? "Press a button on the controller for P" + (ControllerHandling.ListeningSlot + 1) + "."
+                : count == 0 ? "Plug in a controller to give each player their own."
+                : count + " connected. CHANGE moves a controller to that player.";
+            Label(new Rect(x, r.yMax - 46f, w, 32f), help, Text(MonoFont, 10, TextAnchor.UpperLeft, true), Tape);
+        }
+
+        //Small panel button in the lobby's style: lifts on hover, returns true when clicked.
+        private static bool RowButton(Rect r, string text, Color fill, Color edge, Color textColor)
+        {
+            Rect drawn = r;
+            if (GUI.enabled && Hover(r)) { drawn.x -= 2f; drawn.y -= 2f; }
+            Block(drawn, fill, edge, 2f, DeepNavy, 4f);
+            Label(drawn, text, Text(Bungee, 11, TextAnchor.MiddleCenter), textColor);
+            return Hit(r);
+        }
+
+        private static void DrawGamepadIcon(Rect r, Color c)
+        {
+            float u = r.width / 28f;
+            Fill(new Rect(r.x + 3f * u, r.y + 2f * u, 22f * u, 12f * u), c);
+            Circle(new Rect(r.x, r.y + 4f * u, 12f * u, 14f * u), c);
+            Circle(new Rect(r.x + 16f * u, r.y + 4f * u, 12f * u, 14f * u), c);
+            Color hole = Hex("#36f1cd");
+            Fill(new Rect(r.x + 5f * u, r.y + 7f * u, 6f * u, 2f * u), hole);
+            Fill(new Rect(r.x + 7f * u, r.y + 5f * u, 2f * u, 6f * u), hole);
+            Fill(new Rect(r.x + 18f * u, r.y + 5f * u, 2.5f * u, 2.5f * u), hole);
+            Fill(new Rect(r.x + 21f * u, r.y + 8f * u, 2.5f * u, 2.5f * u), hole);
         }
 
         private void DrawOpenSlot(Rect card, int i)
@@ -509,8 +620,12 @@ namespace Escape4Now.Menus
             Color c = SlotColors[slot];
             bool busy = AccountService.IsBusy;
 
-            Fill(new Rect(0f, 0f, Width, DesignHeight), WithAlpha(Ink, 0.7f));
-            Rect box = new Rect(ox + 640f - 240f, 160f, 480f, 400f);
+            //Dim the whole window, including any space above and below the fitted layout.
+            Matrix4x4 fitted = GUI.matrix;
+            GUI.matrix = Matrix4x4.identity;
+            Fill(new Rect(0f, 0f, Screen.width, Screen.height), WithAlpha(Ink, 0.7f));
+            GUI.matrix = fitted;
+            Rect box = new Rect(ox + LayoutWidth * 0.5f - 240f, 160f, 480f, 400f);
             Block(box, PanelNavy, Color.white, 4f, accent, 8f);
 
             Rect band = new Rect(box.x + 4f, box.y + 4f, box.width - 8f, 40f);
