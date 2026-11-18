@@ -21,6 +21,9 @@ namespace Escape4Now.Multiplayer.RelayTesting
             var relay = session.Relay;
             try
             {
+                await Escape4Now.Accounts.AccountService.ConnectAsync();
+                if (!Escape4Now.Accounts.AccountService.IsSignedIn)
+                    throw new InvalidOperationException("Sign in with a game account on this test installation before running the online Race check.");
                 if (Enum.TryParse(Argument("-relayProtocol"), true, out RelayTestProtocol protocol)) relay.SelectProtocol((int)protocol);
                 await (role == "host" ? session.HostAsync(2) : session.JoinAsync(Argument("-relayCode")));
                 string roomFile = Argument("-relayRoomFile");

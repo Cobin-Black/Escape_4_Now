@@ -151,8 +151,9 @@ namespace Escape4Now.UI
         private void LateUpdate()
         {
             bool playable = context.Playing && !context.Finished && !LocalMultiplayerSession.GameplayPaused;
-            var attempt = mode.Tasks.Puzzle;
-            var task = playable && attempt == null ? mode.Tasks.NearbyTask(context.ActivePlayer) : null;
+            var attempt = mode.Tasks.CanShowLocalPuzzle(mode.Tasks.Actor) ? mode.Tasks.Puzzle : null;
+            var task = playable && attempt == null && mode.Tasks.CanShowLocalPuzzle(context.ActivePlayer)
+                ? mode.Tasks.NearbyTask(context.ActivePlayer) : null;
             interact.gameObject.SetActive(task != null);
             if (task != null)
                 interactLabel.text = string.Format(interactFormat, task.Definition.title,

@@ -33,10 +33,10 @@ namespace Escape4Now.Arena
 
         public readonly List<EquipmentView> EquipmentViews = new List<EquipmentView>();
         // Build a seeded room, then accept it only when routes and player spawns are valid.
-        public bool Generate(int players, out List<Vector2Int> spawns)
+        public bool Generate(int players, out List<Vector2Int> spawns, int? hostSeed = null)
         {
             Clear();
-            Seed = settings.fixedSeed ? settings.seed : unchecked(Environment.TickCount ^ Guid.NewGuid().GetHashCode());
+            Seed = hostSeed ?? (settings.fixedSeed ? settings.seed : unchecked(Environment.TickCount ^ Guid.NewGuid().GetHashCode()));
             Random = new System.Random(Seed);
             spawns = null;
             for (int i = 0; i < Mathf.Max(1, settings.generationAttempts); i++)

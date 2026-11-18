@@ -6,7 +6,7 @@ using Unity.Netcode;
 
 namespace Escape4Now.Multiplayer.RelayTesting
 {
-    // Adapts reliable Relay messages to the existing Race command/snapshot code.
+    // Adapts reliable Relay messages to the shared match messages used by all four modes.
     // It owns no player, dice, inventory, or map-generation rules.
     public sealed class RelayMessageChannel : IMatchMessageConnection
     {

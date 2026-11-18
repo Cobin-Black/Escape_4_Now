@@ -79,7 +79,7 @@ public static class ArenaPresentationChecks
             yield return next;
         }
 
-        Debug.Log("ARENA PRESENTATION PASSED: native setup selection, start/pause/resume, all-player health, portraits, HUD bounds, room labels removed and real obstacle groups.");
+        Debug.Log("ARENA PRESENTATION PASSED: native setup, pause/resume, Free For All health, Hot Potato timer, portraits and HUD bounds.");
         Finish(0);
     }
 
@@ -109,20 +109,26 @@ public static class ArenaPresentationChecks
             mapSettings.seed = 1234;
             Set(match.Map, "settings", mapSettings);
             var lobby = (RectTransform)ui.transform.Find("Match Setup");
-            var rows = lobby.Find("Player Rows");
-            float shortHeight = lobby.rect.height;
-            Require(rows.GetChild(0).gameObject.activeSelf && rows.GetChild(1).gameObject.activeSelf && !rows.GetChild(2).gameObject.activeSelf, "Two-player rows by default");
-            yield return Click(lobby.Find("Player Count/Count Buttons/4 PLAYERS").GetComponent<Button>());
-            Require(rows.GetChild(3).gameObject.activeSelf && lobby.rect.height > shortHeight, "Four-player setup expands without an empty reserved gap");
-            CheckBounds(lobby);
+            var screen = (RectTransform)lobby.Find("Lobby Screen");
+            var rows = screen.Find("Player Rows");
+            Require(rows.GetChild(0).gameObject.activeSelf && rows.GetChild(1).gameObject.activeSelf && !rows.GetChild(2).gameObject.activeSelf, "Two locker cards by default");
+            yield return Click(screen.Find("Available Lockers/Add Player 4").GetComponent<Button>());
+            Require(rows.GetChild(3).gameObject.activeSelf, "The fourth locker can add a player");
+            CheckBounds(screen);
             yield return Capture(scene + "-setup-4");
-            yield return Click(lobby.Find("Player Count/Count Buttons/3 PLAYERS").GetComponent<Button>());
+            yield return Click(screen.Find("Player Count/Count Buttons/3 PLAYERS").GetComponent<Button>());
             Require(!rows.GetChild(3).gameObject.activeSelf, "Three-player setup");
-            yield return Click(lobby.Find("Player Count/Count Buttons/2 PLAYERS").GetComponent<Button>());
+            yield return Click(screen.Find("Player Count/Count Buttons/2 PLAYERS").GetComponent<Button>());
             yield return Capture(scene + "-setup-2");
             Require(rows.GetChild(0).Find("Skin Portrait").GetComponent<Image>().sprite != null, "Reuse real skin portraits in setup");
-            yield return Click(lobby.Find("Player Count/Count Buttons/4 PLAYERS").GetComponent<Button>());
-            yield return Click(lobby.Find("START MATCH").GetComponent<Button>());
+            var skin = rows.GetChild(0).Find("Skin Selection").GetComponent<Dropdown>();
+            int initialSkin = skin.value;
+            yield return Click(rows.GetChild(0).Find(">").GetComponent<Button>());
+            Require(skin.value != initialSkin, "Locker arrows select the player's skin");
+            var controls = rows.GetChild(0).Find("Controls").GetComponent<Dropdown>();
+            Require(controls.options.Count > 1, "Each local locker still has controls for keyboard and gamepads");
+            yield return Click(screen.Find("Player Count/Count Buttons/4 PLAYERS").GetComponent<Button>());
+            yield return Click(screen.Find("START MATCH").GetComponent<Button>());
             Require(match.Playing && match.Remaining == 4, "Native Start Match keeps existing player setup");
             yield return new WaitForSeconds(.8f);
             Canvas.ForceUpdateCanvases();
@@ -134,18 +140,29 @@ public static class ArenaPresentationChecks
             Require(match.Map.Layout.groupedProps.Count >= 4, "Actual themed obstacles appear in the play area");
             Require(match.Map.Layout.Connected(), "Added cover preserves connected routes");
             var health = hud.Find("Player Health");
-            for (int i = 0; i < 4; i++)
-                Require(health.GetChild(i).gameObject.activeInHierarchy, "Health is shown for every participant");
-            match.Players[1].Damage(1);
-            yield return null;
-            yield return null;
-            Require(health.GetChild(1).Find("HP").GetComponent<Text>().text == "4/5", "HUD follows Player 2's own health");
-            Require(health.GetChild(0).Find("HP").GetComponent<Text>().text == "5/5", "Other players keep their own health");
-            var hearts = health.GetChild(1).Find("Hearts").GetComponent<Text>();
-            Require(hearts.text.StartsWith(new string ('♥', 4)) && hearts.text.Contains("<color="), "Filled and empty shared hearts");
+            if (match is HotPotatoController)
+            {
+                Require(!health.gameObject.activeSelf && !hud.Find("Health Divider").gameObject.activeSelf,
+                    "Hot Potato hides health and its divider");
+                Require(hud.Find("Potato Details").gameObject.activeInHierarchy, "Hot Potato still shows the round, timer and holder");
+            }
+            else
+            {
+                for (int i = 0; i < 4; i++)
+                    Require(health.GetChild(i).gameObject.activeInHierarchy, "Free For All shows every participant's health");
+                match.Players[1].Damage(1);
+                yield return null;
+                yield return null;
+                Require(health.GetChild(1).Find("HP").GetComponent<Text>().text == "4/5", "HUD follows Player 2's own health");
+                Require(health.GetChild(0).Find("HP").GetComponent<Text>().text == "5/5", "Other players keep their own health");
+                var hearts = health.GetChild(1).Find("Hearts").GetComponent<Text>();
+                Require(hearts.text.StartsWith(new string ('♥', 4)) && hearts.text.Contains("<color="), "Filled and empty shared hearts");
+            }
             foreach (var player in match.Players)
             {
-                Require(player.GetComponentsInChildren<TextMesh>().Length == 0, "Player name labels are hidden");
+                foreach (var label in player.GetComponentsInChildren<TextMesh>())
+                    Require(match is KingOfTheHillController && int.TryParse(label.text, out _),
+                        "King of the Hill shows the score without adding a player-name label");
                 Require(player.GetComponent<ArenaPlayerIndicator>() != null, "Colored player ring component");
             }
 
@@ -190,8 +207,8 @@ public static class ArenaPresentationChecks
             yield return null;
             match.ReturnToSetup();
             yield return null;
-            yield return Click(lobby.Find("Player Count/Count Buttons/2 PLAYERS").GetComponent<Button>());
-            yield return Click(lobby.Find("START MATCH").GetComponent<Button>());
+            yield return Click(screen.Find("Player Count/Count Buttons/2 PLAYERS").GetComponent<Button>());
+            yield return Click(screen.Find("START MATCH").GetComponent<Button>());
             yield return new WaitForSeconds(.4f);
             CheckMapFrame(match);
             Require(hud.rect.height < (scene == "FreeForAll" ? 180 : 245), "Two-player HUD stays compact");

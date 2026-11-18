@@ -517,9 +517,31 @@ namespace Escape4Now.Map
             {
                 SchoolFurniturePlacement item = furniture[i];
                 int target = item.Kind == SchoolFurnitureKind.StudentDesk ? whiteboard : -1;
-                ObstacleFacing facing = ObstacleOrientation.Choose(map, item.Cell, blocked, target);
+                //Row furniture shares its room's front so a row never points in mixed directions.
+                //Wall pieces and perimeter layouts keep their backs to the nearest wall.
+                ObstacleFacing facing = target < 0 && SharesRoomFront(item, out ObstacleFacing front)
+                    ? front : ObstacleOrientation.Choose(map, item.Cell, blocked, target);
                 furniture[i] = new SchoolFurniturePlacement(item.Cell, item.Kind, facing);
             }
+        }
+
+        //True for furniture laid out in rows or aisles, when the tile in front of it is open floor in the same room.
+        //Then it faces the room's chosen front instead of turning on its own toward the nearest open side.
+        private bool SharesRoomFront(SchoolFurniturePlacement item, out ObstacleFacing front)
+        {
+            front = ObstacleFacing.South;
+            if (item.Kind != SchoolFurnitureKind.Bookshelf && item.Kind != SchoolFurnitureKind.ReadingTable
+                && item.Kind != SchoolFurnitureKind.ComputerDesk && item.Kind != SchoolFurnitureKind.LabTable) return false;
+            int x = item.Cell % SchoolMapLayout.Size, y = item.Cell / SchoolMapLayout.Size;
+            SchoolRoomType room = map.GetRoomType(x, y);
+            SchoolRoomArrangement arrangement = arrangements.Find(value => value.Room == room);
+            if (arrangement == null || arrangement.Pattern == SchoolFurniturePattern.Perimeter) return false;
+            ObstacleOrientation.GetStep(arrangement.FrontWall, out int dx, out int dy);
+            int frontX = x + dx, frontY = y + dy;
+            if (map.GetTile(frontX, frontY) != SchoolTileType.Floor || map.GetRoomType(frontX, frontY) != room
+                || blocked.Contains(frontY * SchoolMapLayout.Size + frontX)) return false;
+            front = arrangement.FrontWall;
+            return true;
         }
 
         //Small rooms get one or two matching obstacles, away from their entrance.

@@ -23,7 +23,16 @@ namespace Escape4Now.Map
         [Header("Outdoor Visual and Audio Feedback")]
         [SerializeField] private SurvivalWorldFeedback worldFeedback;
         public SurvivalWorldFeedback WorldFeedback => worldFeedback;
-        public bool RainActive => temporary.Exists(effect => effect.type == SurvivalEventType.RainStorm);
+        public bool RainActive => replicaRain || temporary.Exists(effect => effect.type == SurvivalEventType.RainStorm);
+        private bool replicaRain;
+        private GameObject replicaRainVisual;
+        public void ApplyOnlineRain(bool raining)
+        {
+            if (replicaRain == raining) return;
+            replicaRain = raining;
+            if (raining) replicaRainVisual = SpawnAmbient(settings.rainEffectPrefab, map.transform.position);
+            else if (replicaRainVisual != null) Destroy(replicaRainVisual);
+        }
         private readonly Dictionary<Vector2Int, SurvivalEventRule> tiles = new Dictionary<Vector2Int, SurvivalEventRule>();
         private readonly List<SurvivalWorldMarker> markers = new List<SurvivalWorldMarker>();
         private readonly List<TemporaryEffect> temporary = new List<TemporaryEffect>();

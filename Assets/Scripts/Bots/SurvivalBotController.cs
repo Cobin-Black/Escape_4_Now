@@ -33,7 +33,7 @@ namespace Escape4Now.Bots
         // Start a bot turn only when Survival Mode is active.
         private void Update()
         {
-            if (Escape4Now.Multiplayer.LanMultiplayerSession.Active)
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.Active && !Escape4Now.Multiplayer.LanMultiplayerSession.RunsOnlineBots)
                 return;
 
             if (player == null || !(player.Mode is SurvivalModeController))

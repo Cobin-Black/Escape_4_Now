@@ -1,3 +1,4 @@
+using Escape4Now.Accounts;
 using Escape4Now.GameModes;
 using Escape4Now.Multiplayer;
 using Escape4Now.Multiplayer.RelayTesting;
@@ -23,20 +24,36 @@ namespace Escape4Now.Menus
         public static readonly Color CardNavy = Hex("#0f2447");
         public static readonly Color DeepNavy = Hex("#0b1c38");
         public static readonly Color EdgeBlue = Hex("#2f5590");
-        private static readonly Color DashBlue = Hex("#4a6fa8");
+        public static readonly Color DashBlue = Hex("#4a6fa8");
         public static readonly Color SoftBlue = Hex("#a9c4e6");
         public static readonly Color PaleBlue = Hex("#8fd0ff");
-        private static readonly Color OffText = Hex("#8fa6c8");
+        public static readonly Color OffText = Hex("#8fa6c8");
         public static readonly Color Tape = Hex("#d4f0ff");
         private static readonly Color MonsterCard = Hex("#3a1024");
-        private static readonly Color[] SlotColors = { Hex("#ffd500"), Hex("#36f1cd"), Hex("#ff4fd8"), Hex("#7dff9a") };
-
-        public static Color LockerColor(int slot) => SlotColors[slot];
+        // Use the same slot color as the character and HUD.
+        private Color SlotColor(int slot) => session.GetPlayerColor(slot);
 
         private LocalMultiplayerSession session;
         private bool hidOldLobby;
         private readonly string[] nameBuffers = new string[4];
-        private GUIStyle modeName, smallWrap, tiny, tinyBold, chipBig, h2, bandLabel, field, startStyle, arrowStyle, logoShade, logoNow, hintStyle;
+        private GUIStyle modeName, smallWrap, tiny, tinyBold, chipBig, h2, bandLabel, field, monoField, startStyle, arrowStyle, logoShade, logoNow, hintStyle;
+
+        //Account linking. Players 2-4 can link an account so their stats are saved; Player 1 is the logged in account.
+        private const string LinkUserControl = "ArcadeLinkUser";
+        private const string LinkPassControl = "ArcadeLinkPass";
+        private static readonly Color ErrorText = Hex("#ff8a93");
+        //Controller panel on the right of WHO'S PLAYING. The layout grows by its width plus the gap.
+        private const float ControllerGap = 24f;
+        private const float ControllerPanelWidth = 176f;
+        private const float LayoutWidth = DesignWidth + ControllerGap + ControllerPanelWidth;
+        private readonly bool[] linked = new bool[4];
+        private bool signedIn;
+        private int linkingSlot = -1;
+        private string linkUser = "";
+        private string linkPass = "";
+        private string linkStatus = "";
+        private bool focusLinkUser;
+        private int linkOpenedFrame;
 
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.BeforeSceneLoad)]
         private static void Hook()
@@ -86,12 +103,21 @@ namespace Escape4Now.Menus
                 hidOldLobby = false;
             }
             if (!Showing) return;
+            SyncAccounts();
 
             Keyboard k = Keyboard.current;
             if (k == null) return;
+            if (linkingSlot >= 0)
+            {
+                //The link popup takes Escape, so it never sends the players back to the menu.
+                if (k.escapeKey.wasPressedThisFrame && !AccountService.IsBusy) CloseLink();
+                return;
+            }
             if (k.escapeKey.wasPressedThisFrame)
             {
-                if (GUIUtility.keyboardControl != 0) GUIUtility.keyboardControl = 0;
+                //Escape first stops a controller reassignment that is waiting for a button press.
+                if (ControllerHandling.ListeningSlot >= 0) ControllerHandling.CancelAssign();
+                else if (GUIUtility.keyboardControl != 0) GUIUtility.keyboardControl = 0;
                 else BackToMenu();
             }
             else if (GUIUtility.keyboardControl == 0 && (k.enterKey.wasPressedThisFrame || k.numpadEnterKey.wasPressedThisFrame))
@@ -111,9 +137,36 @@ namespace Escape4Now.Menus
 
         private void StartMatch()
         {
+            if (linkingSlot >= 0 || AccountService.IsBusy) return;
             GUIUtility.keyboardControl = 0;
-            for (int i = 0; i < session.PlayerCount && i < nameBuffers.Length; i++) session.SetPlayerName(i, nameBuffers[i]);
+            for (int i = 0; i < session.PlayerCount && i < nameBuffers.Length; i++) session.SetPlayerName(i, NameFor(i));
             session.StartLocalMatch();
+        }
+
+        //A linked player always plays under their account name.
+        private string NameFor(int i)
+        {
+            return linked[i] && !session.IsBotPlayer(i) ? AccountService.LinkedName(i) : nameBuffers[i];
+        }
+
+        //Player 1 is briefly signed out while another account links, so the last state is kept until that finishes.
+        //Linking swaps the slot to the account name, and unlinking puts the typed name back.
+        private void SyncAccounts()
+        {
+            if (AccountService.IsBusy) return;
+            signedIn = AccountService.IsSignedIn;
+            for (int i = 0; i < linked.Length; i++)
+            {
+                bool now = AccountService.IsLinked(i);
+                if (now && !session.IsBotPlayer(i))
+                {
+                    string accountName = AccountService.LinkedName(i);
+                    if (session.GetPlayerName(i) != accountName) session.SetPlayerName(i, accountName);
+                }
+                else if (!now && linked[i]) session.SetPlayerName(i, nameBuffers[i]);
+                linked[i] = now;
+            }
+            if (linkingSlot >= 0 && (!signedIn || session.IsBotPlayer(linkingSlot))) CloseLink();
         }
 
         private void CreateStyles()
@@ -144,6 +197,8 @@ namespace Escape4Now.Menus
                 s.background = null;
                 s.textColor = Color.white;
             }
+            //Usernames and passwords keep their real case, so the link popup uses the mono font.
+            monoField = new GUIStyle(field) { font = MonoFont, fontSize = 16, padding = new RectOffset(12, 12, 0, 0) };
         }
 
         private void OnGUI()
@@ -152,20 +207,35 @@ namespace Escape4Now.Menus
             CreateStyles();
             //Draw over the game's own UI.
             GUI.depth = -100;
-            Matrix4x4 baseMatrix = BeginScaled();
+            Matrix4x4 baseMatrix = GUI.matrix;
             float t = Time.unscaledTime;
-            float ox = OffsetX;
 
-            Fill(new Rect(0f, 0f, Width, DesignHeight), background);
+            //Background and grid fill the whole window at the normal menu scale.
+            GUI.matrix = Matrix4x4.Scale(new Vector3(Scale, Scale, 1f));
+            float fullHeight = Screen.height / Scale;
+            Fill(new Rect(0f, 0f, Width, fullHeight), background);
             Color gridLine = WithAlpha(Navy, 0.12f);
-            for (float x = 0f; x < Width; x += 40f) Fill(new Rect(x, 0f, 1f, DesignHeight), gridLine);
-            for (float y = 0f; y < DesignHeight; y += 40f) Fill(new Rect(0f, y, Width, 1f), gridLine);
+            for (float x = 0f; x < Width; x += 40f) Fill(new Rect(x, 0f, 1f, fullHeight), gridLine);
+            for (float y = 0f; y < fullHeight; y += 40f) Fill(new Rect(0f, y, Width, 1f), gridLine);
             Stripes(new Rect(0f, 0f, Width, 18f), Tape, Navy, t * 36f, 22f);
 
+            //The layout is wider than the other menus because of the controller panel, so on narrow
+            //screens it shrinks a little to keep everything visible, centered top to bottom.
+            float fit = Mathf.Min(Scale, Screen.width / LayoutWidth);
+            float top = (Screen.height - DesignHeight * fit) * 0.5f;
+            GUI.matrix = Matrix4x4.TRS(new Vector3(0f, Mathf.Max(0f, top), 0f), Quaternion.identity, new Vector3(fit, fit, 1f));
+            float ox = (Screen.width / fit - LayoutWidth) * 0.5f;
+
+            //Everything behind the link popup stops taking clicks while it is open.
+            bool linking = linkingSlot >= 0;
+            GUI.enabled = !linking;
             DrawHeader(ox);
             DrawModePanel(new Rect(ox + 56f, 118f, 290f, 470f));
             DrawPlayers(new Rect(ox + 378f, 118f, 846f, 470f), t);
-            DrawBottomBar(new Rect(ox + 56f, 612f, 1168f, 72f));
+            DrawControllerPanel(new Rect(ox + 1224f + ControllerGap, 118f, ControllerPanelWidth, 470f), t);
+            DrawBottomBar(new Rect(ox + 56f, 612f, 1168f + ControllerGap + ControllerPanelWidth, 72f));
+            GUI.enabled = true;
+            if (linking) DrawLinkPopup(ox);
 
             GUI.matrix = baseMatrix;
         }
@@ -178,7 +248,7 @@ namespace Escape4Now.Menus
             Die(new Rect(x + w + 14f, 45f, 38f, 38f), 4, Color.white, Ink, Red, 3f);
             Label(new Rect(x + w + 64f, 36f, 120f, 56f), "NOW", logoNow, Navy);
 
-            Rect back = new Rect(ox + 1224f - 190f, 40f, 190f, 48f);
+            Rect back = new Rect(ox + LayoutWidth - 56f - 190f, 40f, 190f, 48f);
             Block(back, PanelNavy, Color.white, 2f, Color.clear, 0f);
             Label(back, "ESC · MAIN MENU", Text(MonoFont, 14, TextAnchor.MiddleCenter), Tape);
             if (Hit(back)) BackToMenu();
@@ -265,6 +335,101 @@ namespace Escape4Now.Menus
             }
         }
 
+        //Lists which controller belongs to each player slot, with a VIBRATE button to find it in your hands.
+        private void DrawControllerPanel(Rect r, float t)
+        {
+            Block(r, PanelNavy, Color.white, 4f, CardNavy, 8f);
+            float x = r.x + 18f;
+            float w = r.width - 36f;
+            float y = r.y + 20f;
+
+            Rect icon = new Rect(x, y, 40f, 40f);
+            Fill(icon, accent);
+            DrawGamepadIcon(new Rect(icon.x + 6f, icon.y + 10f, 28f, 20f), Ink);
+            Label(new Rect(icon.xMax + 10f, y + 2f, w - 50f, 14f), "CONTROLLERS", tiny, SoftBlue);
+            Label(new Rect(icon.xMax + 10f, y + 14f, w - 50f, 26f), "VIBRATE", Text(Bungee, 18), Color.white);
+            y += 54f;
+            Fill(new Rect(x, y, w, 2f), EdgeBlue);
+            y += 12f;
+
+            const float rowHeight = 78f;
+            for (int i = 0; i < ControllerHandling.MaxSlots; i++)
+            {
+                bool playing = i < session.PlayerCount;
+                bool bot = playing && session.IsBotPlayer(i);
+                Color c = playing ? OwnerColor(i) : WithAlpha(SoftBlue, 0.35f);
+                bool connected = ControllerHandling.GetGamepad(i) != null;
+
+                bool listening = ControllerHandling.ListeningSlot == i;
+
+                Rect chip = new Rect(x, y, 34f, 22f);
+                Fill(chip, c);
+                Label(chip, "P" + (i + 1), Text(Bungee, 12, TextAnchor.MiddleCenter), Ink);
+                string device = listening ? "PRESS ANY BUTTON"
+                    : bot && !connected ? "BOT" : ControllerHandling.DescribeSlot(i);
+                Color deviceColor = listening ? Color.Lerp(Color.white, accent, 0.5f + 0.5f * Mathf.Sin(t * 8f))
+                    : connected ? Color.white : OffText;
+                Label(new Rect(chip.xMax + 8f, y + 2f, w - 42f, 18f), device, tiny, deviceColor);
+
+                //Left: VIBRATE (or USE KEYS while waiting). Right: CHANGE, which waits for the controller to press a button.
+                Rect left = new Rect(x, y + 30f, 78f, 34f);
+                Rect right = new Rect(left.xMax + 6f, y + 30f, w - 84f, 34f);
+                if (listening)
+                {
+                    if (RowButton(left, "USE KEYS", CardNavy, c, Color.white)) ControllerHandling.ClearSlot(i);
+                    if (RowButton(right, "CANCEL", accent, Ink, Ink)) ControllerHandling.CancelAssign();
+                }
+                else
+                {
+                    if (connected)
+                    {
+                        bool buzzing = ControllerHandling.IsVibrating(i);
+                        Rect shaken = left;
+                        if (buzzing) shaken.x += Mathf.Sin(t * 70f) * 2f;
+                        if (RowButton(shaken, buzzing ? "BZZZ!" : "VIBRATE", buzzing ? (playing ? c : accent) : CardNavy,
+                            playing ? c : DashBlue, buzzing ? Ink : Color.white)) ControllerHandling.Vibrate(i);
+                    }
+                    else
+                    {
+                        Fill(left, WithAlpha(DeepNavy, 0.6f));
+                        DashedOutline(left, 2f, WithAlpha(DashBlue, 0.6f));
+                        Label(left, "NO PAD", Text(Bungee, 11, TextAnchor.MiddleCenter), WithAlpha(OffText, 0.6f));
+                    }
+                    if (RowButton(right, "CHANGE", CardNavy, playing ? c : DashBlue, Color.white)) ControllerHandling.BeginAssign(i);
+                }
+                y += rowHeight;
+            }
+
+            int count = ControllerHandling.ConnectedCount;
+            string help = ControllerHandling.ListeningSlot >= 0 ? "Press a button on the controller for P" + (ControllerHandling.ListeningSlot + 1) + "."
+                : count == 0 ? "Plug in a controller to give each player their own."
+                : count + " connected. CHANGE moves a controller to that player.";
+            Label(new Rect(x, r.yMax - 46f, w, 32f), help, Text(MonoFont, 10, TextAnchor.UpperLeft, true), Tape);
+        }
+
+        //Small panel button in the lobby's style: lifts on hover, returns true when clicked.
+        private static bool RowButton(Rect r, string text, Color fill, Color edge, Color textColor)
+        {
+            Rect drawn = r;
+            if (GUI.enabled && Hover(r)) { drawn.x -= 2f; drawn.y -= 2f; }
+            Block(drawn, fill, edge, 2f, DeepNavy, 4f);
+            Label(drawn, text, Text(Bungee, 11, TextAnchor.MiddleCenter), textColor);
+            return Hit(r);
+        }
+
+        private static void DrawGamepadIcon(Rect r, Color c)
+        {
+            float u = r.width / 28f;
+            Fill(new Rect(r.x + 3f * u, r.y + 2f * u, 22f * u, 12f * u), c);
+            Circle(new Rect(r.x, r.y + 4f * u, 12f * u, 14f * u), c);
+            Circle(new Rect(r.x + 16f * u, r.y + 4f * u, 12f * u, 14f * u), c);
+            Color hole = Hex("#36f1cd");
+            Fill(new Rect(r.x + 5f * u, r.y + 7f * u, 6f * u, 2f * u), hole);
+            Fill(new Rect(r.x + 7f * u, r.y + 5f * u, 2f * u, 6f * u), hole);
+            Fill(new Rect(r.x + 18f * u, r.y + 5f * u, 2.5f * u, 2.5f * u), hole);
+            Fill(new Rect(r.x + 21f * u, r.y + 8f * u, 2.5f * u, 2.5f * u), hole);
+        }
+
         private void DrawOpenSlot(Rect card, int i)
         {
             Fill(card, WithAlpha(CardNavy, 0.55f));
@@ -280,9 +445,10 @@ namespace Escape4Now.Menus
         {
             bool survival = IsSurvival;
             bool isMonster = survival && session.IsMonsterPlayer(i);
-            bool canBot = session.Mode.SupportsBots && !(session.PlayerCount == 1 && i == 0);
             bool bot = session.IsBotPlayer(i);
-            Color c = isMonster ? Red : SlotColors[i];
+            //A linked player must be unlinked before their slot can become a bot.
+            bool canBot = session.Mode.SupportsBots && !(session.PlayerCount == 1 && i == 0) && !(i > 0 && linked[i] && !bot);
+            Color c = SlotColor(i);
 
             Fill(new Rect(card.x + 5f, card.y + 5f, card.width, card.height), DeepNavy);
             Block(card, isMonster ? MonsterCard : CardNavy, c, 4f, Color.clear, 0f);
@@ -361,6 +527,13 @@ namespace Escape4Now.Menus
                 Block(nameRect, Hex("#12284d"), EdgeBlue, 2f, Color.clear, 0f);
                 Label(new Rect(nameRect.x + 10f, nameRect.y, nameRect.width - 20f, nameRect.height), "BOT " + (i + 1), Text(Bungee, 15), OffText);
             }
+            else if (linked[i])
+            {
+                //Linked names come from the account and can't be typed over.
+                Block(nameRect, Hex("#12284d"), c, 2f, Color.clear, 0f);
+                Label(new Rect(nameRect.x + 10f, nameRect.y, nameRect.width - 44f, nameRect.height), AccountService.LinkedName(i), Text(Bungee, 15), Color.white);
+                DrawChainIcon(new Rect(nameRect.xMax - 30f, nameRect.center.y - 6f, 20f, 12f), c);
+            }
             else
             {
                 string control = "ArcadeLobbyName" + i;
@@ -386,10 +559,165 @@ namespace Escape4Now.Menus
             }
             if (survival)
             {
-                int pickRole = Segmented(new Rect(x, y, w, segH), "SURVIVOR", "MONSTER", isMonster ? 1 : 0, SlotColors[i], Red, true);
+                int pickRole = Segmented(new Rect(x, y, w, segH), "SURVIVOR", "MONSTER", isMonster ? 1 : 0, SlotColor(i), Red, true);
                 //SetMonsterPlayer switches the Monster on and off for that slot.
                 if ((pickRole == 1 && !isMonster) || (pickRole == 0 && isMonster)) session.SetMonsterPlayer(i);
+                y += segH + 8f;
             }
+            //Account link sits at the bottom of the card. It only shows when Player 1 is logged in, and never for bots.
+            if (signedIn && !bot) DrawLinkRow(new Rect(x, y, w, segH), i, c);
+        }
+
+        //Player 1 shows they are logged in. Players 2-4 click to link an account, or click again to unlink it.
+        private void DrawLinkRow(Rect r, int i, Color c)
+        {
+            bool on = linked[i];
+            bool playerOne = i == 0;
+            bool hover = !playerOne && GUI.enabled && Hover(r);
+            if (on) Block(r, hover ? Red : c, hover ? Red : c, 2f, Color.clear, 0f);
+            else Block(r, DeepNavy, hover ? c : DashBlue, 2f, Color.clear, 0f);
+
+            Color ink = on ? Ink : hover ? c : OffText;
+            string text = playerOne ? "LOGGED IN" : on ? (hover ? "UNLINK" : "LINKED") : "LINK ACCOUNT";
+            GUIStyle style = Text(Bungee, 12);
+            float tw = style.CalcSize(new GUIContent(text)).x;
+            float sx = r.center.x - (24f + 8f + tw) * 0.5f;
+            DrawChainIcon(new Rect(sx, r.center.y - 7f, 24f, 14f), ink);
+            Label(new Rect(sx + 32f, r.y, tw + 4f, r.height), text, style, ink);
+
+            if (playerOne || !Hit(r) || AccountService.IsBusy) return;
+            if (on) AccountService.UnlinkPlayer(i);
+            else OpenLink(i);
+        }
+
+        //Two overlapping rings, the same chain shape the old lobby used.
+        private static void DrawChainIcon(Rect r, Color c)
+        {
+            float d = r.height;
+            RingShape(new Rect(r.x, r.y, d, d), c);
+            RingShape(new Rect(r.xMax - d, r.y, d, d), c);
+        }
+
+        private void OpenLink(int slot)
+        {
+            linkingSlot = slot;
+            linkUser = "";
+            linkPass = "";
+            linkStatus = "";
+            //A focused box keeps showing its old text, so focus is dropped before moving to the username box.
+            GUIUtility.keyboardControl = 0;
+            focusLinkUser = true;
+            linkOpenedFrame = Time.frameCount;
+        }
+
+        private void CloseLink()
+        {
+            linkingSlot = -1;
+            linkPass = "";
+            GUIUtility.keyboardControl = 0;
+        }
+
+        //Login popup for linking a player. Tab moves between the boxes, Enter links and Escape cancels.
+        private void DrawLinkPopup(float ox)
+        {
+            int slot = linkingSlot;
+            Color c = SlotColor(slot);
+            bool busy = AccountService.IsBusy;
+
+            //Dim the whole window, including any space above and below the fitted layout.
+            Matrix4x4 fitted = GUI.matrix;
+            GUI.matrix = Matrix4x4.identity;
+            Fill(new Rect(0f, 0f, Screen.width, Screen.height), WithAlpha(Ink, 0.7f));
+            GUI.matrix = fitted;
+            Rect box = new Rect(ox + LayoutWidth * 0.5f - 240f, 160f, 480f, 400f);
+            Block(box, PanelNavy, Color.white, 4f, accent, 8f);
+
+            Rect band = new Rect(box.x + 4f, box.y + 4f, box.width - 8f, 40f);
+            Fill(band, c);
+            Label(new Rect(band.x + 14f, band.y, 40f, band.height), "P" + (slot + 1), bandLabel, Ink);
+            for (int v = 0; v < 3; v++) Fill(new Rect(band.x + 54f, band.y + 13f + v * 6f, 20f, 3f), WithAlpha(Ink, 0.35f));
+            const string tagText = "ACCOUNT";
+            float tagW = tinyBold.CalcSize(new GUIContent(tagText)).x + 12f;
+            Rect tag = new Rect(band.xMax - 12f - tagW, band.y + 10f, tagW, 20f);
+            Fill(tag, Ink);
+            Label(tag, tagText, tinyBold, c);
+
+            float x = box.x + 28f;
+            float w = box.width - 56f;
+            float y = band.yMax + 14f;
+            Label(new Rect(x, y, w, 36f), "LINK PLAYER " + (slot + 1), Text(Bungee, 26), PaleBlue);
+            y += 38f;
+            Label(new Rect(x, y, w, 20f), "Log in so this player's stats are saved.", Text(MonoFont, 12), Soft);
+            y += 28f;
+
+            bool ready = Time.frameCount > linkOpenedFrame;
+            Event e = Event.current;
+            bool submit = ready && !busy && e.type == EventType.KeyDown && (e.keyCode == KeyCode.Return || e.keyCode == KeyCode.KeypadEnter);
+            if (submit) e.Use();
+
+            GUI.enabled = !busy;
+            linkUser = LinkBox(new Rect(x, y + 20f, w, 42f), "USERNAME", LinkUserControl, linkUser, AccountService.UsernameLimit, false, c);
+            y += 76f;
+            linkPass = LinkBox(new Rect(x, y + 20f, w, 42f), "PASSWORD", LinkPassControl, linkPass, AccountService.PasswordLimit, true, c);
+            y += 76f;
+            if (focusLinkUser && ready)
+            {
+                GUI.FocusControl(LinkUserControl);
+                focusLinkUser = false;
+            }
+
+            string status = busy ? "LINKING..." : linkStatus;
+            Label(new Rect(x, y, w, 32f), status, Text(MonoFont, 12, TextAnchor.MiddleCenter, true), busy ? Tape : ErrorText);
+
+            float bw = (w - 14f) * 0.5f;
+            float by = box.yMax - 24f - 52f;
+            if (LinkButton(new Rect(x, by, bw, 52f), "CANCEL", false)) CloseLink();
+            if (LinkButton(new Rect(x + bw + 14f, by, bw, 52f), "LINK", true)) submit = true;
+            GUI.enabled = true;
+            if (submit) SubmitLink();
+        }
+
+        private string LinkBox(Rect box, string title, string control, string value, int limit, bool hidden, Color focusColor)
+        {
+            Label(new Rect(box.x, box.y - 20f, box.width, 16f), title, Text(MonoFont, 12), SoftBlue);
+            Block(box, DeepNavy, GUI.GetNameOfFocusedControl() == control ? focusColor : DashBlue, 2f, Color.clear, 0f);
+            Rect text = new Rect(box.x + 2f, box.y + 2f, box.width - 4f, box.height - 4f);
+            GUI.SetNextControlName(control);
+            return hidden ? GUI.PasswordField(text, value ?? "", '*', limit, monoField) : GUI.TextField(text, value ?? "", limit, monoField);
+        }
+
+        private bool LinkButton(Rect r, string text, bool primary)
+        {
+            Rect drawn = r;
+            if (GUI.enabled && Hover(r)) { drawn.x -= 3f; drawn.y -= 3f; }
+            if (primary) Block(drawn, accent, Ink, 4f, Red, 6f);
+            else Block(drawn, CardNavy, Color.white, 3f, DeepNavy, 6f);
+            Label(drawn, text, Text(Bungee, 18, TextAnchor.MiddleCenter), primary ? Ink : Color.white);
+            return Hit(r);
+        }
+
+        private async void SubmitLink()
+        {
+            if (AccountService.IsBusy || linkingSlot < 0) return;
+            int slot = linkingSlot;
+            string username = linkUser.Trim();
+            if (username.Length == 0 || linkPass.Length == 0)
+            {
+                linkStatus = "Enter your username and password.";
+                return;
+            }
+            linkStatus = "";
+            string error = await AccountService.LinkPlayerAsync(slot, username, linkPass);
+            if (this == null) return;
+            if (error == null)
+            {
+                if (linkingSlot == slot) CloseLink();
+                return;
+            }
+            //Drop focus so the cleared password box shows empty.
+            GUIUtility.keyboardControl = 0;
+            linkPass = "";
+            linkStatus = error;
         }
 
         //Two-option switch. Returns the clicked option, or -1.
@@ -459,7 +787,7 @@ namespace Escape4Now.Menus
 
         private Color OwnerColor(int player)
         {
-            return IsSurvival && session.IsMonsterPlayer(player) ? Red : SlotColors[player];
+            return SlotColor(player);
         }
 
         //Gives the player a skin only when no one in the match has it. A slot that is not playing

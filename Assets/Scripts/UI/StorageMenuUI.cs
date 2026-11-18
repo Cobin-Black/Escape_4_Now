@@ -2,6 +2,8 @@
 
 using Escape4Now.Items;
 using Escape4Now.Obstacles;
+using Escape4Now.Multiplayer;
+using Escape4Now.Map;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -19,23 +21,53 @@ namespace Escape4Now.UI
         [SerializeField, TextArea] private string emptyText = "It's empty.";
         [SerializeField, TextArea] private string contentsFormat = "Inside: {0}\n{1}";
         [SerializeField, TextArea] private string fullText = "You can only carry one item.";
+        private ItemSpawner networkItems;
 
         private void LateUpdate()
         {
             var storage = ObstacleStorage.OpenStorage;
-            panel.SetActive(context.Playing && !context.Finished && !Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused && storage != null);
+            var network = LanMultiplayerSession.Instance;
+            bool online = network?.UsesRaceMatchUI == true;
+            panel.SetActive(context.Playing && !context.Finished && !LocalMultiplayerSession.GameplayPaused
+                && (online ? network.ShowingRaceStorage : storage != null));
             if (!panel.activeSelf) return;
+            if (online)
+            {
+                var snapshot = network.LatestState;
+                networkItems ??= (context.Session.Mode.GridMap as IsometricMapTemplate)?.GetComponent<ItemSpawner>();
+                var contents = networkItems?.GetNetworkPrefab(snapshot.storageItem);
+                var player = snapshot.players[network.LocalPlayerIndex];
+                Present(snapshot.storageName, contents, contents is KeyItem ? !player.hasKey : player.item == 0);
+                return;
+            }
             title.text = storage.name;
             var item = storage.StoredItemPrefab;
             var inventory = storage.ViewingPlayer != null ? storage.ViewingPlayer.Inventory : null;
             bool canTake = item != null && inventory != null
                 && (item is KeyItem ? !inventory.HasKey() : !inventory.IsFull);
-            body.text = item == null ? emptyText : string.Format(contentsFormat, item.ItemName, item.Description)
-                + (canTake ? "" : "\n\n" + fullText);
-            take.interactable = canTake;
+            Present(storage.name, item, canTake);
         }
 
-        public void Take() { ObstacleStorage.OpenStorage?.ConfirmMenu(); }
-        public void Close() { ObstacleStorage.OpenStorage?.DismissMenu(); }
+        private void Present(string storageName, Item item, bool canTake)
+        {
+            title.text = storageName;
+            body.text = item == null ? emptyText : string.Format(contentsFormat, item.ItemName, item.Description)
+                + (canTake ? "" : "\n\n" + fullText);
+            take.interactable = item != null && canTake;
+        }
+
+        public void Take()
+        {
+            var network = LanMultiplayerSession.Instance;
+            if (network?.UsesRaceMatchUI == true) network.Submit("storageConfirm");
+            else ObstacleStorage.OpenStorage?.ConfirmMenu();
+        }
+
+        public void Close()
+        {
+            var network = LanMultiplayerSession.Instance;
+            if (network?.UsesRaceMatchUI == true) network.Submit("storageClose");
+            else ObstacleStorage.OpenStorage?.DismissMenu();
+        }
     }
 }

@@ -223,8 +223,55 @@ namespace Escape4Now.Player
     + ", World: " + transform.position);
         }
 
+        public void ApplyOnlinePose(Vector2Int cell, Vector3 position, int roll, int moves, bool rolled, bool rolling,
+            int chargeCooldown, int roarCooldown, int stompCooldown)
+        {
+            gridPosition = cell;
+            transform.position = position;
+            rolledMoves = roll;
+            movesUsed = Mathf.Max(0, roll - moves);
+            hasRolled = rolled;
+            isRolling = rolling;
+            chargeReadyTurn = monsterTurn + chargeCooldown;
+            roarReadyTurn = monsterTurn + roarCooldown;
+            stompReadyTurn = monsterTurn + stompCooldown;
+        }
+
+        public bool OnlinePlayerControlled { get; set; }
+
+        // The slot owner reads the same action map used in local Survival.
+        public void SendOnlineInput(System.Action<string, Vector2Int> send)
+        {
+            SetupInputActions();
+            var direction = ReadMoveDirection();
+            if (Pressed(rollDiceAction)) send("roll", default);
+            if (Pressed(chargeAction)) send("charge", default);
+            if (direction != Vector2Int.zero) send("move", direction);
+            if (Pressed(roarAction)) send("roar", default);
+            if (Pressed(stompAction)) send("stomp", default);
+        }
+
+        public void ReceiveOnlineInput(string action, Vector2Int direction)
+        {
+            if (!OnlinePlayerControlled || !turnStarted || isMoving || turnSystem.CurrentTurnOwner != TurnOwner.Enemy) return;
+            if (action == "roll" && !hasRolled && !isRolling) { StartCoroutine(RollDice()); return; }
+            if (isChoosingChargeDirection)
+            {
+                if (action == "move" && Mathf.Abs(direction.x) + Mathf.Abs(direction.y) == 1) TryCharge(direction);
+                return;
+            }
+            switch (action)
+            {
+                case "charge" when monsterTurn >= chargeReadyTurn: isChoosingChargeDirection = true; break;
+                case "move" when Mathf.Abs(direction.x) + Mathf.Abs(direction.y) == 1: TryMove(direction); break;
+                case "roar": TryRoar(); break;
+                case "stomp": TryStomp(); break;
+            }
+        }
+
         private void Update()
         {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) return;
             if (map == null || turnSystem == null || isMoving)
                 return;
 
@@ -248,7 +295,7 @@ namespace Escape4Now.Player
 
             if (aiControlled)
                 TakeAITurn();
-            else
+            else if (!OnlinePlayerControlled)
                 ReadMonsterInput();
         }
 

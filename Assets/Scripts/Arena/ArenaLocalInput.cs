@@ -1,32 +1,139 @@
+using System.Collections.Generic;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
 namespace Escape4Now.Arena
 {
     // Each participant owns an action copy. Keyboard layouts and gamepads never feed another slot.
+    // With a controller the player uses the project's Player actions (Move, Attack, Potato Pass) on that controller only.
+    // Without one they use their own keyboard layout from the arena controls asset.
     [DisallowMultipleComponent]
     public sealed class ArenaLocalInput : MonoBehaviour
     {
-        private InputActionAsset owned;
-        private InputAction move, tagAction;
-        public Vector2 Move => move != null ? Vector2.ClampMagnitude(move.ReadValue<Vector2>(), 1) : Vector2.zero;
-        public bool TagPressed => tagAction != null && tagAction.WasPressedThisFrame();
+        private const string GamepadMapName = "Player";
+        private const string MoveAction = "Move";
+        private const string PassAction = "Potato Pass";
+        private const string AttackAction = "Attack";
+        // Older keyboard layouts only have one action key named Tag; it doubles as Pass and Attack.
+        private const string LegacyActionKey = "Tag";
 
-        // Give this slot its own action copy and keyboard layout or explicitly assigned gamepad.
-        public void Configure(InputActionAsset template, int slot, int gamepad)
+        private InputActionAsset owned;
+        private InputAction move, passAction, attackAction;
+        // A bot slot has no keyboard or controller. ArenaBotController sets these values instead.
+        private bool isBot, botPass, botAttack;
+        private Vector2 botMovement;
+        public bool IsBot => isBot;
+        public Vector2 Move => isBot ? botMovement : move != null ? Vector2.ClampMagnitude(move.ReadValue<Vector2>(), 1) : Vector2.zero;
+        public bool PassPressed => isBot ? botPass : passAction != null && passAction.WasPressedThisFrame();
+        public bool AttackPressed => isBot ? botAttack : attackAction != null && attackAction.WasPressedThisFrame();
+        // Kept for existing callers.
+        public bool TagPressed => PassPressed;
+        public Gamepad Gamepad { get; private set; }
+        public bool UsesKeyboard => Gamepad == null;
+        public int KeyboardLayout { get; private set; } = -1;
+
+        // Controller player: a private copy of the Player map that only listens to this controller.
+        public void ConfigureGamepad(InputActionAsset gamepadTemplate, Gamepad pad)
         {
             Release();
-            owned = Instantiate(template);
-            var map = owned.FindActionMap("Player" + (slot + 1), true);
-            map.bindingMask = InputBinding.MaskByGroup(gamepad < 0 ? "Keyboard" : "Gamepad");
-            if (gamepad >= 0)
-                map.devices = new InputDevice[]
-                {
-                    Gamepad.all[gamepad]
-                };
-            move = map.FindAction("Move", true);
-            tagAction = map.FindAction("Tag", true);
+            Gamepad = pad;
+            owned = Instantiate(gamepadTemplate);
+            owned.Disable();
+            var map = owned.FindActionMap(GamepadMapName, true);
+            map.devices = new InputDevice[] { pad };
+            move = map.FindAction(MoveAction, true);
+            passAction = map.FindAction(PassAction, false);
+            attackAction = map.FindAction(AttackAction, false);
             map.Enable();
+        }
+
+        // Player 1 on keyboard: the project's Player map keyboard bindings (Move, Potato Pass, Attack), keyboard only.
+        // Keys another keyboard player's backup layout uses (for example the arrow keys) are switched off in this copy
+        // so the two players never share a key.
+        public void ConfigurePrimaryKeyboard(InputActionAsset primaryTemplate, ICollection<string> reservedKeys)
+        {
+            Release();
+            KeyboardLayout = 0;
+            owned = Instantiate(primaryTemplate);
+            owned.Disable();
+            var map = owned.FindActionMap(GamepadMapName, true);
+            if (Keyboard.current != null)
+                map.devices = new InputDevice[] { Keyboard.current };
+            move = map.FindAction(MoveAction, true);
+            passAction = map.FindAction(PassAction, false);
+            attackAction = map.FindAction(AttackAction, false);
+            if (reservedKeys != null && reservedKeys.Count > 0)
+                foreach (InputAction action in new[] { move, passAction, attackAction })
+                    DisableReservedKeys(action, reservedKeys);
+            map.Enable();
+        }
+
+        private static void DisableReservedKeys(InputAction action, ICollection<string> reservedKeys)
+        {
+            if (action == null) return;
+            for (int i = 0; i < action.bindings.Count; i++)
+            {
+                InputBinding binding = action.bindings[i];
+                if (binding.isComposite || string.IsNullOrEmpty(binding.path)) continue;
+                if (reservedKeys.Contains(NormalizePath(binding.path)))
+                    action.ApplyBindingOverride(i, "");
+            }
+        }
+
+        // The keyboard keys a backup layout (Player2..Player4 map) uses, so Player 1's copy can avoid them.
+        public static void CollectLayoutKeys(InputActionAsset keyboardTemplate, int layout, HashSet<string> keys)
+        {
+            InputActionMap map = keyboardTemplate != null ? keyboardTemplate.FindActionMap("Player" + (layout + 1)) : null;
+            if (map == null) return;
+            foreach (InputBinding binding in map.bindings)
+                if (!binding.isComposite && !string.IsNullOrEmpty(binding.path) && binding.path.StartsWith("<Keyboard>"))
+                    keys.Add(NormalizePath(binding.path));
+        }
+
+        private static string NormalizePath(string path) => path.Trim().ToLowerInvariant();
+
+        // Keyboard player 2-4 without a controller: the backup shared-keyboard layout (Player2..Player4 maps), keyboard only.
+        public void ConfigureKeyboard(InputActionAsset keyboardTemplate, int layout)
+        {
+            Release();
+            KeyboardLayout = layout;
+            owned = Instantiate(keyboardTemplate);
+            owned.Disable();
+            var map = owned.FindActionMap("Player" + (layout + 1), true);
+            // Limit by device rather than binding group so bindings added without a group still work.
+            if (Keyboard.current != null)
+                map.devices = new InputDevice[] { Keyboard.current };
+            else
+                map.bindingMask = InputBinding.MaskByGroup("Keyboard");
+            move = map.FindAction(MoveAction, true);
+            passAction = map.FindAction(PassAction, false) ?? map.FindAction(LegacyActionKey, false);
+            attackAction = map.FindAction(AttackAction, false) ?? map.FindAction(LegacyActionKey, false);
+            map.Enable();
+        }
+
+        // Bot slot: no keyboard or controller, ArenaBotController supplies the movement and button presses.
+        public void ConfigureBot()
+        {
+            Release();
+            isBot = true;
+        }
+
+        // The direction the bot wants to move in.
+        public void SetBotMovement(Vector2 direction)
+        {
+            if (isBot) botMovement = Vector2.ClampMagnitude(direction, 1f);
+        }
+
+        // Lets a bot pass the potato in Hot Potato (the Potato Pass button).
+        public void SetBotTag(bool tag)
+        {
+            if (isBot) botPass = tag;
+        }
+
+        // Lets a bot press Attack, which uses the held item in King of the Hill.
+        public void SetBotUseItem(bool useItem)
+        {
+            if (isBot) botAttack = useItem;
         }
 
         // Disable only the actions owned by this participant.
@@ -39,7 +146,11 @@ namespace Escape4Now.Arena
             }
 
             owned = null;
-            move = tagAction = null;
+            move = passAction = attackAction = null;
+            Gamepad = null;
+            KeyboardLayout = -1;
+            isBot = botPass = botAttack = false;
+            botMovement = Vector2.zero;
         }
 
         private void OnDestroy() => Release();

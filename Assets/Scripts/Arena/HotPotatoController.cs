@@ -42,6 +42,23 @@ namespace Escape4Now.Arena
         // A presentation-only signal, sent before the eliminated holder is hidden.
         public event System.Action<Vector3> PotatoExploded;
         private float cooldown, delay;
+
+        public void ApplyOnlineRound(int round, float seconds, int holder, bool betweenRounds)
+        {
+            Round = round;
+            RemainingSeconds = seconds;
+            Holder = holder >= 0 ? Players[holder] : null;
+            delay = betweenRounds ? 1 : 0;
+        }
+
+        // Guests animate the clock between updates. The host decides expiry and elimination.
+        public void AdvanceOnlineClock(float seconds)
+        {
+            if (Replica && Playing && !Paused && !BetweenRounds)
+                RemainingSeconds = Mathf.Max(0, RemainingSeconds - Mathf.Max(0, seconds));
+        }
+
+        public void ShowOnlineExplosion(Vector3 position) => PotatoExploded?.Invoke(position);
         protected override void BeginRules()
         {
             Round = 0;
@@ -113,7 +130,8 @@ namespace Escape4Now.Arena
                 return;
             }
 
-            if (cooldown <= 0 && (transferOnContact || Holder.Input.TagPressed))
+            bool tag = Holder.TagPressed;
+            if (cooldown <= 0 && (transferOnContact || tag))
                 TryPass();
         }
 

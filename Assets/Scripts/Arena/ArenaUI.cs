@@ -37,14 +37,15 @@ namespace Escape4Now.Arena
         [SerializeField, Min(0)]
         private float resultRevealDelay;
         private float resultAge;
+        public System.Action OnlineLeave { get; set; }
         private void Start()
         {
-            setup.Initialize(match);
+            setup.Initialize(match, () => SceneManager.LoadScene(mainMenuScene));
             showEvents.onClick.AddListener(() => match.Events.SetEventLocationsVisible(!match.Events.EventLocationsVisible));
             pause.onClick.AddListener(() => match.SetPaused(true));
             resume.onClick.AddListener(() => match.SetPaused(false));
-            leave.onClick.AddListener(match.ReturnToSetup);
-            replay.onClick.AddListener(match.ReturnToSetup);
+            leave.onClick.AddListener(ReturnToSetup);
+            replay.onClick.AddListener(ReturnToSetup);
             menu.onClick.AddListener(() => SceneManager.LoadScene(mainMenuScene));
         }
 
@@ -52,7 +53,7 @@ namespace Escape4Now.Arena
         private void LateUpdate()
         {
             bool finished = !string.IsNullOrEmpty(match.Result);
-            lobby.SetActive(!match.Playing && !finished);
+            lobby.SetActive(!match.Online && !match.Playing && !finished);
             hud.SetActive(match.Playing);
             pausePanel.SetActive(match.Playing && match.Paused);
             resultAge = finished ? resultAge + Time.unscaledDeltaTime : 0;
@@ -71,5 +72,11 @@ namespace Escape4Now.Arena
         }
 
         public void StartMatch() => setup.StartMatch();
+
+        private void ReturnToSetup()
+        {
+            if (OnlineLeave != null) OnlineLeave();
+            else match.ReturnToSetup();
+        }
     }
 }

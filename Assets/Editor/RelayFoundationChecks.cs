@@ -16,7 +16,8 @@ public static class RelayFoundationChecks
 {
     public static void Run()
     {
-        foreach (string scene in new[] { RelayTestAuthoring.ScenePath, "Assets/Scenes/OnlineRace.unity" })
+        foreach (string scene in new[] { RelayTestAuthoring.ScenePath, "Assets/Scenes/OnlineRace.unity",
+            "Assets/Scenes/OnlineSurvival.unity", "Assets/Scenes/OnlineFreeForAll.unity", "Assets/Scenes/OnlineHotPotato.unity" })
         {
             EditorSceneManager.OpenScene(scene);
             var relay = Object.FindFirstObjectByType<RelayRoomConnection>();

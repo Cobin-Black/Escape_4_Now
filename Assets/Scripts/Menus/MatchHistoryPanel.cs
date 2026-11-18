@@ -61,7 +61,9 @@ namespace Escape4Now.Menus
                 Fill(row, PanelDark);
                 string date = DateTimeOffset.FromUnixTimeSeconds(match.playedAt).LocalDateTime.ToString("MMM d, yyyy");
                 Label(new Rect(row.x + 6f, row.y, 120f, row.height), date, rowStyle, Soft);
-                Label(new Rect(row.x + ModeColumn, row.y, 290f, row.height), AccountStats.ModeName(match.mode), rowStyle, Color.white);
+                //Online matches are marked so they stand out from games played on one computer.
+                string mode = AccountStats.ModeName(match.mode) + (match.online ? " · ONLINE" : "");
+                Label(new Rect(row.x + ModeColumn, row.y, 290f, row.height), mode, rowStyle, Color.white);
                 Label(new Rect(row.x + PlayersColumn, row.y, 100f, row.height), match.players.ToString(), rowStyle, Color.white);
                 Label(new Rect(row.x + ResultColumn, row.y, 100f, row.height), match.won ? "WIN" : "LOSS", resultStyle, match.won ? accent : Red);
             }

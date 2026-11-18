@@ -109,6 +109,7 @@ GameObject:
   - component: {fileID: 3672517954068740952}
   - component: {fileID: 7677384710027639072}
   - component: {fileID: 3192547701007733102}
+  - component: {fileID: 8780267720536789098}
   m_Layer: 0
   m_Name: Arena Player
   m_TagString: Untagged
@@ -220,6 +221,7 @@ MonoBehaviour:
   diceRollAnimationDuration: 0.9
   sharedTileHorizontalOffset: 0.14
   sharedTileVerticalOffset: 0.08
+  isBotControlled: 0
 --- !u!114 &7980054830112628867
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -227,7 +229,7 @@ MonoBehaviour:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1863342580456237967}
-  m_Enabled: 0
+  m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 738b1edee6be34ec49fbd04565807b5d, type: 3}
   m_Name:
@@ -311,6 +313,7 @@ MonoBehaviour:
   showNameLabels: 0
   nameLabel: {fileID: 4438810257025597603}
   nameShadow: {fileID: 9207690180281733662}
+  invincibilityDuration: 1
 --- !u!114 &7677384710027639072
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -348,6 +351,22 @@ MonoBehaviour:
   stretchAmount: 0.018
   settleSpeed: 16
   movementThreshold: 0.02
+--- !u!114 &8780267720536789098
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1863342580456237967}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e5409ab56f62841558695e7d8e5a8882, type: 3}
+  m_Name:
+  m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Items.EraserShieldVisual
+  eraserSprite: {fileID: 5593030405192582669, guid: fc023447d03b14df597f99ff137e4936, type: 3}
+  orbitRadius: 0.7
+  orbitSpeed: 120
+  spriteScale: 1
 --- !u!1 &2406494221715502464
 GameObject:
   m_ObjectHideFlags: 0
@@ -375,7 +394,7 @@ Transform:
   m_GameObject: {fileID: 2406494221715502464}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0, y: 1.85, z: 0}
+  m_LocalPosition: {x: 0, y: 1.5, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -440,12 +459,12 @@ TextMesh:
   m_GameObject: {fileID: 2406494221715502464}
   m_Text:
   m_OffsetZ: 0
-  m_CharacterSize: 0.06
+  m_CharacterSize: 0.08
   m_LineSpacing: 1
   m_Anchor: 4
   m_Alignment: 1
   m_TabSize: 4
-  m_FontSize: 40
+  m_FontSize: 80
   m_FontStyle: 0
   m_RichText: 1
   m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}
@@ -661,7 +680,7 @@ Transform:
   m_GameObject: {fileID: 8037048726208796380}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
-  m_LocalPosition: {x: 0.015, y: 1.83, z: 0}
+  m_LocalPosition: {x: 0.015, y: 1.5, z: 0}
   m_LocalScale: {x: 1, y: 1, z: 1}
   m_ConstrainProportionsScale: 0
   m_Children: []
@@ -731,7 +750,7 @@ TextMesh:
   m_Anchor: 4
   m_Alignment: 1
   m_TabSize: 4
-  m_FontSize: 40
+  m_FontSize: 80
   m_FontStyle: 0
   m_RichText: 1
   m_Font: {fileID: 10102, guid: 0000000000000000e000000000000000, type: 0}

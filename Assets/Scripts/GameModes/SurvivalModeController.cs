@@ -261,8 +261,23 @@ namespace Escape4Now.GameModes
 
         private bool AllSurvivorsFinished() => started && ActiveSurvivors.Count == 0;
         // Handle deaths and timeout losses without treating survival until zero as a win.
+        public void ApplyOnlineObjectives(int completed, int[] stations)
+        {
+            CompletedPuzzles = completed;
+            foreach (int index in stations)
+                if (index >= 0 && index < Objectives.Tasks.Count) Objectives.TryCompletePuzzleType(Objectives.Tasks[index]);
+            tasks.RefreshMarkers();
+        }
+
+        public void ApplyOnlineOutcome(PlayerCharacter player, SurvivorOutcome outcome)
+        {
+            outcomes[player] = outcome;
+            player.gameObject.SetActive(outcome == SurvivorOutcome.Active);
+        }
+
         private void Update()
         {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) return;
             if (!started) return;
             foreach (var player in ActiveSurvivors)
                 if (player.Health <= 0) MarkSurvivorKilled(player);

@@ -10,6 +10,9 @@ namespace Escape4Now.Puzzles
 {
     public sealed class SurvivalTaskController : MonoBehaviour
     {
+        public System.Func<PlayerCharacter, bool> IsLocalPuzzlePlayer { get; set; }
+        public bool CanShowLocalPuzzle(PlayerCharacter player) =>
+            player != null && (IsLocalPuzzlePlayer == null || IsLocalPuzzlePlayer(player));
         [Header("Scene References")]
         [SerializeField]
         private SurvivalModeController mode;
@@ -36,6 +39,24 @@ namespace Escape4Now.Puzzles
         public SurvivalTaskPlacement CurrentTask { get; private set; }
         public int Revision { get; private set; }
         private bool completionRecorded;
+        private float onlineFinishTime;
+        public int AttemptSeed { get; private set; }
+        public System.Func<PlayerCharacter, bool> OnlineInteract { get; set; }
+        public System.Action OnlineClose { get; set; }
+        public bool OnlineHost { get; set; }
+
+        public void ApplyOnlineAttempt(PlayerCharacter player, int revision, int seed, int station, PuzzleSession.Progress progress,
+            System.Action<string, int, int, string> send)
+        {
+            if (Revision != revision)
+            {
+                Revision = revision;
+                Actor = player;
+                CurrentTask = player == null ? null : map.Objectives.Tasks[station];
+                Puzzle = CurrentTask == null ? null : new PuzzleSession(CurrentTask.Definition, seed) { OnlineAction = send };
+            }
+            if (Puzzle != null && progress != null) Puzzle.ApplyProgress(progress);
+        }
 
         // Create station and gate visuals from the objective layout; this does not choose new positions.
         public void BeginMatch()
@@ -65,7 +86,16 @@ namespace Escape4Now.Puzzles
         {
             if (map.Objectives != null) RefreshStationMarkers();
             if (Puzzle != null && !Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused)
-                Puzzle.Tick(Time.deltaTime);
+            {
+                if (Puzzle.OnlineAction == null) Puzzle.Tick(Time.deltaTime);
+                if (OnlineHost && (Puzzle.Solved || Puzzle.Failed))
+                {
+                    onlineFinishTime += Time.deltaTime;
+                    if (Puzzle.Solved) RecordCompletion();
+                    if (onlineFinishTime >= .8f) FinishAttempt(Puzzle.Solved, true);
+                }
+            }
+            if (OnlineInteract != null) return;
             if (Puzzle != null || !Escape4Now.Multiplayer.LocalMultiplayerSession.MatchIsRunning || Escape4Now.Multiplayer.LocalMultiplayerSession.MatchHasEnded)
                 return;
             foreach (var player in mode.ActiveSurvivors)
@@ -96,12 +126,20 @@ namespace Escape4Now.Puzzles
         // Open one attempt and lock normal player controls while the puzzle UI is open.
         public bool TryInteract(PlayerCharacter player)
         {
+            if (OnlineInteract != null) return OnlineInteract(player);
+            return StartAttempt(player);
+        }
+
+        public bool StartAttempt(PlayerCharacter player)
+        {
             var task = NearbyTask(player);
             if (Puzzle != null || task == null || !player.CanReadTurnInput || player.IsMoving || player.IsRollAnimating || player.IsUsingItem() || player.IsInMenu() || mode.Timer.HasExpired)
                 return false;
             Actor = player;
             CurrentTask = task;
-            Puzzle = new PuzzleSession(task.Definition, random.Next());
+            AttemptSeed = random.Next();
+            onlineFinishTime = 0;
+            Puzzle = new PuzzleSession(task.Definition, AttemptSeed);
             completionRecorded = false;
             Revision++;
             player.SetInMenu(true);
@@ -110,6 +148,12 @@ namespace Escape4Now.Puzzles
 
         public void ClosePuzzle()
         {
+            if (OnlineClose != null) { OnlineClose(); return; }
+            CloseOnlineAttempt();
+        }
+
+        public void CloseOnlineAttempt()
+        {
             if (Puzzle == null || Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused)
                 return;
             FinishAttempt(Puzzle.Solved, true);
@@ -117,14 +161,14 @@ namespace Escape4Now.Puzzles
 
         public void FinishSolvedPuzzle()
         {
-            if (Puzzle != null && Puzzle.Solved)
+            if (Puzzle != null && Puzzle.Solved && Puzzle.OnlineAction == null && !OnlineHost)
                 FinishAttempt(true, true);
         }
 
         //Save a solved task before its short success animation, so the animation cannot delay team progress.
         public void RecordCompletion()
         {
-            if (!completionRecorded && Puzzle != null && Puzzle.Solved)
+            if (!completionRecorded && Puzzle != null && Puzzle.Solved && Puzzle.OnlineAction == null)
                 completionRecorded = mode.CompleteTask(CurrentTask,Actor);
         }
 

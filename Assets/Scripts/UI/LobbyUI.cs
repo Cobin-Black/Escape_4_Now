@@ -63,7 +63,7 @@ namespace Escape4Now.UI
                     });
             }
             if (skinsButton != null) skinsButton.onClick.AddListener(OpenSkins);
-            AccountLinkUI.Create(gameObject, Array.ConvertAll(slots, slot => slot.name), slot => !session.IsBotPlayer(slot));
+            AccountLinkUI.Create(gameObject, Array.ConvertAll(slots, slot => slot.name), slot => !session.IsBotPlayer(slot), session.GetPlayerColor);
         }
 
         public void OpenSkins()

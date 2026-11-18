@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 using System.Threading.Tasks;
+using Escape4Now.Accounts;
 using Unity.Collections;
 using Unity.Netcode;
 using Unity.Netcode.Transports.UTP;
@@ -25,6 +26,10 @@ namespace Escape4Now.Multiplayer.RelayTesting
         public RelayTestSettings Settings => settings;
         public NetworkManager Network => network;
         public bool AcceptingConnections { get; set; } = true;
+        public bool RequiresAccount { get; set; }
+        public bool HasRequiredAccount => !RequiresAccount || (AccountService.IsSignedIn && !AccountService.IsBusy);
+        public string ModeId { get; set; } = "Diagnostics";
+        private string ConnectionSignature => "E4N:" + settings.testVersion + ":" + ModeId;
         public event Action<ulong> PeerConnected;
         public event Action<ulong> PeerDisconnected;
         public RelayTestProtocol Protocol { get; private set; }
@@ -61,6 +66,23 @@ namespace Escape4Now.Multiplayer.RelayTesting
             public int sent, received, replies, pendingSequence;
             public double sentAt;
             public float connectedAt, lastReply;
+            // Smoothed round trip in milliseconds, so one slow reply doesn't jump the value around.
+            public float smoothedRoundTrip;
+        }
+
+        // Host only: how long a guest's input takes to reach this computer on average (half a round trip), in seconds.
+        // Zero when no guest has answered a ping yet.
+        public float AverageGuestInputDelay
+        {
+            get
+            {
+                if (!Active || !Hosting) return 0;
+                float total = 0;
+                int count = 0;
+                foreach (Peer peer in peers.Values)
+                    if (peer.smoothedRoundTrip > 0) { total += peer.smoothedRoundTrip; count++; }
+                return count == 0 ? 0 : total / count * .5f / 1000f;
+            }
         }
 
         private void Awake()
@@ -95,9 +117,15 @@ namespace Escape4Now.Multiplayer.RelayTesting
         }
         public Task JoinAsync(string code) => ConnectAsync(false, code);
 
+        // Set up Relay first, then hand the connection details to Unity Transport.
         private async Task ConnectAsync(bool host, string code)
         {
             if (!CanStart) return;
+            if (!HasRequiredAccount)
+            {
+                Error = "Sign in with your game account to host or join.";
+                return;
+            }
             code = (code ?? "").Trim().ToUpperInvariant();
             if (!host && (code.Length < 4 || code.Length > 12 || !Array.TrueForAll(code.ToCharArray(), char.IsLetterOrDigit)))
             {
@@ -122,11 +150,13 @@ namespace Escape4Now.Multiplayer.RelayTesting
                 if (Protocol != RelayTestProtocol.WSS)
                     throw new NotSupportedException("Browser builds require WSS. Use a standalone desktop build to compare DTLS and UDP.");
 #endif
-                await Service(identity.SignInAsync(settings.environment, stage =>
-                {
-                    if (alive && attempt == generation) SetStage(stage);
-                }), attempt);
+                if (!RequiresAccount)
+                    await Service(identity.SignInAsync(settings.environment, stage =>
+                    {
+                        if (alive && attempt == generation) SetStage(stage);
+                    }), attempt);
                 Guard(attempt);
+                if (!HasRequiredAccount) throw new InvalidOperationException("Sign in with your game account to host or join.");
                 ConfigureNetwork();
                 string protocol = Protocol.ToString().ToLowerInvariant();
                 if (host)
@@ -172,7 +202,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             network.NetworkConfig.EnableSceneManagement = false;
             network.NetworkConfig.ConnectionApproval = true;
             network.NetworkConfig.ProtocolVersion = checked((ushort)settings.testVersion);
-            network.NetworkConfig.ConnectionData = Encoding.UTF8.GetBytes("E4N-RelayTest-" + settings.testVersion);
+            network.NetworkConfig.ConnectionData = Encoding.UTF8.GetBytes(ConnectionSignature);
             transport.UseWebSockets = Protocol == RelayTestProtocol.WSS;
             transport.ConnectTimeoutMS = settings.connectAttemptTimeoutMilliseconds;
             transport.MaxConnectAttempts = settings.maximumConnectAttempts;
@@ -224,6 +254,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             return await task;
         }
 
+        // Ignore replies from an older connection attempt after leaving or switching rooms.
         private void Guard(int attempt)
         {
             if (!alive || attempt != generation) throw new OperationCanceledException();
@@ -236,9 +267,10 @@ namespace Escape4Now.Multiplayer.RelayTesting
             report.Add(stage);
         }
 
+        // Check the room type and protocol version before giving a guest a place in the room.
         private void Approve(NetworkManager.ConnectionApprovalRequest request, NetworkManager.ConnectionApprovalResponse response)
         {
-            bool versionMatches = Encoding.UTF8.GetString(request.Payload) == "E4N-RelayTest-" + settings.testVersion;
+            bool versionMatches = request.Payload != null && Encoding.UTF8.GetString(request.Payload) == ConnectionSignature;
             bool space = network.ConnectedClientsIds.Count < capacity;
             response.Approved = versionMatches && space && AcceptingConnections;
             response.CreatePlayerObject = false;
@@ -336,6 +368,8 @@ namespace Escape4Now.Multiplayer.RelayTesting
             Replies++;
             peer.lastReply = Time.realtimeSinceStartup;
             LastRoundTripMilliseconds = (float)((Time.realtimeSinceStartupAsDouble - sent) * 1000);
+            peer.smoothedRoundTrip = peer.smoothedRoundTrip <= 0 ? LastRoundTripMilliseconds
+                : Mathf.Lerp(peer.smoothedRoundTrip, LastRoundTripMilliseconds, .25f);
             if (peer.replies == 1 || peer.replies == settings.requiredRoundTrips)
                 report.Add("Peer " + sender + ": " + peer.replies + " round trips; latest " + LastRoundTripMilliseconds.ToString("F1") + " ms.");
         }

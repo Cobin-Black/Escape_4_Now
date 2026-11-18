@@ -147,11 +147,29 @@ namespace Escape4Now.Items
             }
         }
 
-        //Uses the first item currently stored in the inventory.
+        // Remove all held items when an arena player respawns.
+        public void ClearArenaInventory()
+        {
+            if (player == null || !player.UsesRealTimeMovement)
+                return;
+
+            items.Clear();
+            keyItems.Clear();
+        }
+
         public void UseFirstItem()
         {
-            if (player == null || player.IsBotControlled || !player.CanReadTurnInput
-                || Escape4Now.Multiplayer.LocalMultiplayerSession.MatchHasEnded) return;
+            if (player == null || player.IsBotControlled)
+                return;
+
+            bool isArena = player.UsesRealTimeMovement;
+
+            // Turn-based restrictions outside the arena.
+            if (!isArena &&
+                (!player.CanReadTurnInput ||
+                 Escape4Now.Multiplayer.LocalMultiplayerSession.MatchHasEnded))
+                return;
+
             if (items.Count == 0)
             {
                 Debug.Log("Inventory is empty.");
@@ -166,7 +184,13 @@ namespace Escape4Now.Items
                 return;
             }
 
-            if (!player.CanUseItem())
+            // Arena items use real-time controls instead of turn-based movement.
+            if (isArena)
+            {
+                if (item is not FreeForAllItem)
+                    return;
+            }
+            else if (!player.CanUseItem())
             {
                 Debug.Log("Finish your current movement before using an item.");
                 return;
@@ -174,8 +198,6 @@ namespace Escape4Now.Items
 
             Debug.Log($"Using {item.ItemName}.");
             item.Use(this);
-
         }
-
     }
 }

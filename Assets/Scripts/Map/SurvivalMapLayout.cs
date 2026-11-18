@@ -455,9 +455,18 @@ namespace Escape4Now.Map
                             if (GetArea(x + dx, y + dy) != OutdoorAreaKind.None || IsMainPath(x + dx, y + dy)) nearEdge = true;
                     return nearEdge;
                 }
-                int side = random.Next(4), offset = random.Next(rule.EdgeBandWidth);
-                if (side % 2 == 0) x = side == 0 ? bounds.X + margin + offset : bounds.X + bounds.Width - margin - w - offset;
-                else y = side == 1 ? bounds.Y + margin + offset : bounds.Y + bounds.Height - margin - h - offset;
+                // Flush with the chosen edge, long side running along it and the front facing into the area,
+                // so edge props line up instead of sitting at random depths and angles.
+                // Prop fronts point down the Y axis at 0 turns: 1 faces +X, 2 faces +Y, 3 faces -X.
+                int side = random.Next(4);
+                rotation = side == 0 ? 1 : side == 1 ? 2 : side == 2 ? 3 : 0;
+                w = rotation % 2 == 0 ? rule.FootprintWidth : rule.FootprintHeight;
+                h = rotation % 2 == 0 ? rule.FootprintHeight : rule.FootprintWidth;
+                if (bounds.Width < w || bounds.Height < h) return false;
+                x = Math.Clamp(x, bounds.X, bounds.X + bounds.Width - w);
+                y = Math.Clamp(y, bounds.Y, bounds.Y + bounds.Height - h);
+                if (side % 2 == 0) x = side == 0 ? bounds.X + margin : bounds.X + bounds.Width - margin - w;
+                else y = side == 1 ? bounds.Y + margin : bounds.Y + bounds.Height - margin - h;
             }
             return x >= bounds.X && y >= bounds.Y && x + w <= bounds.X + bounds.Width && y + h <= bounds.Y + bounds.Height;
         }

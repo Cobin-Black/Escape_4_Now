@@ -121,7 +121,7 @@ namespace Escape4Now.TurnSystem
         }
 
         //Copies the host's sequence and turn label without running local turn effects.
-        public bool ApplyNetworkTurn(int index, int round, int[] order)
+        public bool ApplyNetworkTurn(int index, int round, int[] order, TurnOwner owner = TurnOwner.Player)
         {
             if (!PlayerTurnOrder.IsValid(order, GetPlayerCount()) || index < 0 || index >= GetPlayerCount() || round < 1)
                 return false;
@@ -132,7 +132,7 @@ namespace Escape4Now.TurnSystem
             hasNetworkTurnOrder = true;
             currentPlayerIndex = index;
             turnNumber = round;
-            currentTurnOwner = TurnOwner.Player;
+            currentTurnOwner = owner;
             RefreshCurrentTurnName();
             return true;
         }

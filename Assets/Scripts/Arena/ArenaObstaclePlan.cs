@@ -37,18 +37,28 @@ namespace Escape4Now.Arena
                         spaced = false;
                 if (!spaced)
                     continue;
-                if (pattern.edgeOnly && pattern.zone == ArenaObstacleZone.MainFloor && center.x > pattern.edgeDepth + 1 && center.x < map.Width - pattern.edgeDepth - 2 && center.y > pattern.edgeDepth + 4 && center.y < map.Height - pattern.edgeDepth - 5)
-                    continue;
                 // Stage props belong in the wings, leaving the middle/front open for chasing.
                 if (pattern.edgeOnly && pattern.zone == ArenaObstacleZone.Stage && center.x > pattern.edgeDepth + 1 && center.x < map.Width - pattern.edgeDepth - 2)
                     continue;
-                int turns = ArenaPropPlacement.Facing(center, map, pattern.facing, pattern.fixedQuarterTurns);
+                int turns;
+                // Edge groups stand flush against a wall or the edge of their floor area (such as the court's sideline),
+                // with their backs to it and facing into the room, so they look arranged instead of dropped on open floor.
+                if (pattern.edgeOnly)
+                {
+                    if (!AgainstEdge(map, center, pattern, out turns))
+                        continue;
+                }
+                else
+                    turns = ArenaPropPlacement.Facing(center, map, pattern.facing, pattern.fixedQuarterTurns);
                 var cells = new List<Vector2Int>();
                 bool safe = true;
                 foreach (var piece in pattern.pieces)
                 {
                     var cell = center + Rotate(piece.offset, turns);
-                    if (piece.prefab == null || cells.Contains(cell) || !map.ClearSquare(cell, pattern.clearance) || !InZone(map, cell, pattern.zone) || Protected(map, cell, settings.centerRouteWidth))
+                    // Edge groups keep their clearance in front and to the sides, but sit right up against what is behind them.
+                    bool clear = pattern.edgeOnly ? ClearExceptBehind(map, cell, pattern.clearance, Rotate(new Vector2Int(0, -1), turns))
+                        : map.ClearSquare(cell, pattern.clearance);
+                    if (piece.prefab == null || cells.Contains(cell) || !clear || !InZone(map, cell, pattern.zone) || Protected(map, cell, settings.centerRouteWidth))
                     {
                         safe = false;
                         break;
@@ -99,6 +109,59 @@ namespace Escape4Now.Arena
                 if (pattern != null && (choice -= Mathf.Max(0, pattern.weight)) <= 0)
                     return pattern;
             return null;
+        }
+
+        // Finds a facing where every back-row piece has a wall (or the end of its zone) right behind it and open zone
+        // floor in front. The room-facing direction is tried first; a Fixed pattern only tries its own facing.
+        // Prefab fronts point down the logical Y axis, so turn 0 faces (0, -1) and each turn rotates a quarter.
+        private static bool AgainstEdge(ArenaLayout map, Vector2Int center, ArenaObstaclePattern pattern, out int turns)
+        {
+            bool fixedFacing = pattern.facing == ArenaPropFacing.Fixed;
+            int preferred = ArenaPropPlacement.Facing(center, map, fixedFacing ? ArenaPropFacing.Fixed : ArenaPropFacing.TowardRoom, pattern.fixedQuarterTurns);
+            for (int step = 0; step < (fixedFacing ? 1 : 4); step++)
+            {
+                turns = (preferred + step) % 4;
+                var front = Rotate(new Vector2Int(0, -1), turns);
+                var cells = new List<Vector2Int>();
+                foreach (var piece in pattern.pieces)
+                    cells.Add(center + Rotate(piece.offset, turns));
+                bool flush = true;
+                foreach (var cell in cells)
+                {
+                    // Pieces stacked one behind another only need the back one against the edge.
+                    // On the stage only a real wall or curtain counts, so nothing stands at the front lip facing backstage.
+                    bool backOpen = !cells.Contains(cell - front) && map.Walkable(cell - front)
+                        && (pattern.zone == ArenaObstacleZone.Stage || InZone(map, cell - front, pattern.zone));
+                    bool frontClosed = !cells.Contains(cell + front) && (!map.Walkable(cell + front) || !InZone(map, cell + front, pattern.zone));
+                    if (backOpen || frontClosed)
+                    {
+                        flush = false;
+                        break;
+                    }
+                }
+                if (flush)
+                    return true;
+            }
+            turns = 0;
+            return false;
+        }
+
+        // Like ArenaLayout.ClearSquare, but ignores the row behind the prop, where the wall or zone edge is.
+        private static bool ClearExceptBehind(ArenaLayout map, Vector2Int cell, int radius, Vector2Int front)
+        {
+            if (!map.Walkable(cell))
+                return false;
+            for (int x = -radius; x <= radius; x++)
+                for (int y = -radius; y <= radius; y++)
+                {
+                    var offset = new Vector2Int(x, y);
+                    // Skip anything on the back side of the prop.
+                    if (offset.x * front.x + offset.y * front.y < 0)
+                        continue;
+                    if (!map.Walkable(cell + offset))
+                        return false;
+                }
+            return true;
         }
 
         private static bool InZone(ArenaLayout map, Vector2Int cell, ArenaObstacleZone zone)

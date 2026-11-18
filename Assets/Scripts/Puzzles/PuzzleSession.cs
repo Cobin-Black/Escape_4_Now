@@ -9,6 +9,45 @@ namespace Escape4Now.Puzzles
     //Transient attempt state. Only the station's completed flag survives a closed attempt.
     public sealed class PuzzleSession
     {
+        public Action<string, int, int, string> OnlineAction { get; set; }
+
+        [Serializable]
+        public sealed class Progress
+        {
+            public bool solved, failed, timedOut;
+            public int sequence;
+            public float elapsed;
+            public bool[] matched, switches, power;
+            public int[] values, ports;
+        }
+
+        public Progress CaptureProgress() => new Progress
+        {
+            solved = Solved, failed = Failed, timedOut = TimedOut, sequence = SequenceProgress,
+            elapsed = Elapsed, matched = Matched, switches = Switches, power = PowerSwitchPositions,
+            values = Values, ports = Ports
+        };
+
+        public void ApplyProgress(Progress progress)
+        {
+            Solved = progress.solved;
+            Failed = progress.failed;
+            TimedOut = progress.timedOut;
+            SequenceProgress = progress.sequence;
+            Elapsed = progress.elapsed;
+            Copy(progress.matched, Matched);
+            Copy(progress.switches, Switches);
+            Copy(progress.power, PowerSwitchPositions);
+            Copy(progress.values, Values);
+            Copy(progress.ports, Ports);
+        }
+
+        private static void Copy<T>(T[] source, T[] destination)
+        {
+            if (source != null && destination != null && source.Length == destination.Length)
+                Array.Copy(source, destination, source.Length);
+        }
+
         public SurvivalPuzzleDefinition Definition { get; }
         public int[] Left { get; }
         public int[] Right { get; }
@@ -166,6 +205,7 @@ namespace Escape4Now.Puzzles
         // Match the selected pair by its saved key, not by its current screen position.
         public void Connect(int left, int right)
         {
+            if (OnlineAction != null) { OnlineAction("connect", left, right, null); return; }
             if (Solved || Failed || left < 0 || right < 0 || left >= Left.Length || right >= Right.Length || Matched[left])
                 return;
             if (Left[left] != Right[right])
@@ -181,6 +221,7 @@ namespace Escape4Now.Puzzles
         // Accept sequence input only after the preview has finished, and fail a wrong choice.
         public void PressSequence(int index)
         {
+            if (OnlineAction != null) { OnlineAction("sequence", index, 0, null); return; }
             if (Solved || Failed || !SequenceReady)
                 return;
             if (index != Sequence[SequenceProgress])
@@ -194,6 +235,7 @@ namespace Escape4Now.Puzzles
 
         public void SubmitCode(string value)
         {
+            if (OnlineAction != null) { OnlineAction("code", 0, 0, value); return; }
             if (!Solved && !Failed)
             {
                 Solved = value == Code;
@@ -204,6 +246,7 @@ namespace Escape4Now.Puzzles
         // Swap the chosen positions and check the full order after each move.
         public void SwapNumbers(int a, int b)
         {
+            if (OnlineAction != null) { OnlineAction("swap", a, b, null); return; }
             if (Solved || Failed || a < 0 || b < 0 || a >= Values.Length || b >= Values.Length)
                 return;
             SwapRaw(Values, a, b);
@@ -221,6 +264,7 @@ namespace Escape4Now.Puzzles
 
         public void FlipSwitch(int index)
         {
+            if (OnlineAction != null) { OnlineAction("switch", index, 0, null); return; }
             if (Solved || Failed || index < 0 || index >= Switches.Length)
                 return;
             if (Definition.type == SurvivalPuzzleType.PowerSwitches)
@@ -242,6 +286,7 @@ namespace Escape4Now.Puzzles
         // Rotate the selected piece's connection bits, then test whether power reaches the output.
         public void RotateCircuit(int cell)
         {
+            if (OnlineAction != null) { OnlineAction("rotate", cell, 0, null); return; }
             if (Solved || Failed || cell < 0 || cell >= Ports.Length)
                 return;
             Ports[cell] = Rotate(Ports[cell]);

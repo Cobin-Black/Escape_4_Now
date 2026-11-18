@@ -37,8 +37,9 @@ namespace Escape4Now.UI
             var state = lan != null ? lan.LatestState : null;
             bool valid = playing && !lan.Failed && state != null && lan.LocalPlayerIndex >= 0 && lan.LocalPlayerIndex < state.players.Length;
             bool battle = valid && !string.IsNullOrEmpty(state.battleMessage);
-            battlePanel.SetActive(battle && !LocalMultiplayerSession.GameplayPaused);
-            panel.SetActive(valid && !battle && !LocalMultiplayerSession.GameplayPaused);
+            bool legacyControls = lan == null || !lan.UsesRaceMatchUI;
+            battlePanel.SetActive(legacyControls && battle && !LocalMultiplayerSession.GameplayPaused);
+            panel.SetActive(legacyControls && valid && !battle && !LocalMultiplayerSession.GameplayPaused);
             if (battle)
             {
                 battleMessage.text = state.battleMessage;
@@ -47,6 +48,7 @@ namespace Escape4Now.UI
             if (!panel.activeSelf) return;
             var player = state.players[lan.LocalPlayerIndex];
             owner.text = string.Format(ownerFormat, lan.LocalPlayerIndex + 1);
+            item.gameObject.SetActive(!lan.HasOnlineRaceInventory || player.hasKey);
             item.text = string.Format(itemFormat, itemNames[Mathf.Clamp(player.item, 0, itemNames.Length - 1)]) + (player.hasKey ? keySuffix : "");
             controls.GetComponent<CanvasGroup>().interactable = lan.IsMyTurn && !player.moving;
             numberChoices.SetActive(lan.ChoosingNumber);

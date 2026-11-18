@@ -241,10 +241,7 @@ namespace Escape4Now.Arena
                 if (rule.kind == ArenaEventKind.BleachersMove)
                 {
                     CommitBlock(state);
-                    Vector2 d = state.blockCell - state.sourceCell;
-                    var model = state.equipment.Visual.GetComponent<SurvivalPropVisual>();
-                    model.Build(Map.Settings.tileSize, new Vector2(1 + Mathf.Abs(d.x), 1 + Mathf.Abs(d.y)) * .88f, Map.Settings.material, Map.Order(state.sourceCell), true, state.equipment.QuarterTurns);
-                    state.equipment.Visual.position = Map.World(((Vector2)state.blockCell + state.sourceCell) * .5f);
+                    ShowExtendedBleachers(state);
                     return true;
                 }
 
@@ -270,6 +267,15 @@ namespace Escape4Now.Arena
                 return false;
             CommitBlock(state);
             return true;
+        }
+
+        internal void ShowExtendedBleachers(ArenaEventState state)
+        {
+            Vector2 d = state.blockCell - state.sourceCell;
+            var model = state.equipment.Visual.GetComponent<SurvivalPropVisual>();
+            model.Build(Map.Settings.tileSize, new Vector2(1 + Mathf.Abs(d.x), 1 + Mathf.Abs(d.y)) * .88f,
+                Map.Settings.material, Map.Order(state.sourceCell), true, state.equipment.QuarterTurns);
+            state.equipment.Visual.position = Map.World(((Vector2)state.blockCell + state.sourceCell) * .5f);
         }
 
         private void CommitBlock(ArenaEventState state)

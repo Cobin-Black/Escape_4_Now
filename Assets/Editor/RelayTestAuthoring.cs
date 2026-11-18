@@ -120,13 +120,23 @@ public static class RelayTestAuthoring
     }
 
     [MenuItem("Tools/Escape 4 Now/Relay Test/Create Online Race Scene")]
-    public static void CreateOnlineRace()
+    public static void CreateOnlineRace() => CreateOnlineScene("Race_Gamemode", "OnlineRace");
+
+    public static void CreateOnlineModes()
+    {
+        CreateOnlineRace();
+        CreateOnlineScene("SurvivalMode", "OnlineSurvival");
+        CreateOnlineScene("FreeForAll", "OnlineFreeForAll");
+        CreateOnlineScene("HotPotato", "OnlineHotPotato");
+    }
+
+    private static void CreateOnlineScene(string source, string destination)
     {
         CreateScene();
         var testScene = UnityEngine.SceneManagement.SceneManager.GetActiveScene();
         var connection = Object.FindFirstObjectByType<RelayRoomConnection>();
         var manager = Object.FindFirstObjectByType<NetworkManager>();
-        var scene = EditorSceneManager.OpenScene("Assets/Scenes/Race_Gamemode.unity", OpenSceneMode.Additive);
+        var scene = EditorSceneManager.OpenScene("Assets/Scenes/" + source + ".unity", OpenSceneMode.Additive);
         UnityEngine.SceneManagement.SceneManager.SetActiveScene(scene);
         UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(connection.gameObject, scene);
         UnityEngine.SceneManagement.SceneManager.MoveGameObjectToScene(manager.gameObject, scene);
@@ -153,8 +163,31 @@ public static class RelayTestAuthoring
         }
         var session = connection.gameObject.AddComponent<OnlineRaceSession>();
         Assign(session, "local", local, "match", match, "relay", connection);
-        connection.gameObject.AddComponent<OnlineRaceSmokeCheck>();
-        EditorSceneManager.SaveScene(scene, "Assets/Scenes/OnlineRace.unity");
+        if (source == "Race_Gamemode") connection.gameObject.AddComponent<OnlineRaceSmokeCheck>();
+        else if (source == "SurvivalMode")
+        {
+            var adapter = connection.gameObject.AddComponent<OnlineSurvivalMatch>();
+            match = connection.gameObject.AddComponent<LanMultiplayerSession>();
+            Assign(adapter, "local", local, "mode", Object.FindFirstObjectByType<Escape4Now.GameModes.SurvivalModeController>(),
+                "transport", match);
+            Assign(local, "lan", match);
+            Assign(session, "match", match, "modeMatch", adapter);
+        }
+        else
+        {
+            var arena = Object.FindFirstObjectByType<Escape4Now.Arena.ArenaMatch>();
+            OnlineArenaMatch adapter = arena is Escape4Now.Arena.HotPotatoController
+                ? connection.gameObject.AddComponent<OnlineHotPotatoMatch>()
+                : connection.gameObject.AddComponent<OnlineKingOfTheHillMatch>();
+            match = connection.gameObject.AddComponent<LanMultiplayerSession>();
+            Assign(adapter, "arena", arena, "arenaUI", Object.FindFirstObjectByType<Escape4Now.Arena.ArenaUI>(),
+                "room", session, "transport", match, "presentation", connection.gameObject.AddComponent<OnlineArenaPresentation>());
+            Assign(session, "match", match, "modeMatch", adapter);
+        }
+        string path = "Assets/Scenes/" + destination + ".unity";
+        EditorSceneManager.SaveScene(scene, path);
+        if (!EditorBuildSettings.scenes.Any(entry => entry.path == path))
+            EditorBuildSettings.scenes = EditorBuildSettings.scenes.Append(new EditorBuildSettingsScene(path, true)).ToArray();
         OnlineLobbyAuthoring.ApplyToCurrentScene();
         AssetDatabase.SaveAssets();
         Debug.Log("ONLINE RACE SCENE AUTHORED: existing Race scene is unchanged.");
@@ -173,6 +206,13 @@ public static class RelayTestAuthoring
         });
         if (result.summary.result != BuildResult.Succeeded) throw new Exception("Online Race build failed: " + result.summary.result);
         Debug.Log("ONLINE RACE BUILD PASSED: " + output);
+    }
+
+    public static void AuthorAndBuildModes()
+    {
+        CreateOnlineModes();
+        RelayFoundationChecks.Run();
+        BuildOnlineRace();
     }
 
     public static void BuildAndCheckAll()

@@ -51,7 +51,7 @@ namespace Escape4Now.UI
             foreach (var pair in badges)
             {
                 bool show = context.Playing && !context.Finished && pair.Key != null
-                    && pair.Key.isActiveAndEnabled && pair.Key.HasKey && keyLook != null
+                    && pair.Key.isActiveAndEnabled && pair.Key.HasKey && keyLook != null && !RaceBattleDice.Rolling
                     && (activePlayerName == null || !activePlayerName.ShowsKeyFor(pair.Key));
                 UpdateMarker(pair.Value, show, pair.Key != null ? pair.Key.transform.position + keyOffset : Vector3.zero,
                     keyLook != null ? keyLook.sprite : null, keyLook != null ? keyLook.color : Color.white, "", keyColor);

@@ -25,7 +25,8 @@ namespace Escape4Now.Multiplayer
         [SerializeField] private bool showDisplayOptions = true;
         [Header("Player Colors")]
         [SerializeField]
-        private Color[] playerColors =
+        private PlayerColorPalette playerPalette;
+        [SerializeField, HideInInspector] private Color[] playerColors =
         {
             new Color(0.15f, 0.7f, 1f), new Color(1f, 0.35f, 0.3f),
             new Color(0.3f, 0.85f, 0.4f), new Color(1f, 0.8f, 0.2f)
@@ -73,6 +74,42 @@ namespace Escape4Now.Multiplayer
         public static bool GameplayPaused => instance != null && instance.pauseMenuOpen;
         public static bool ShowItemObstacles => instance != null && instance.showItemObstacles;
         public static bool ShowKeyLocation => instance != null && instance.showKeyLocation;
+
+        // The lobby slot (0-3) whose controller should drive the shared actions this turn, or -1 for any device.
+        // ControllerHandling uses this so only the current player's controller moves their piece.
+        public static int ActiveInputSlot
+        {
+            get
+            {
+                if (instance == null || !instance.MatchStarted || LanMultiplayerSession.Active
+                    || instance.turns == null || instance.participants == null) return -1;
+                if (instance.turns.CurrentTurnOwner == TurnOwner.Enemy)
+                    return instance.monsterPlayerIndex >= 0 && !instance.IsBotPlayer(instance.monsterPlayerIndex)
+                        ? instance.monsterPlayerIndex : -1;
+                for (int i = 0; i < instance.participants.Length; i++)
+                {
+                    PlayerCharacter player = instance.participants[i];
+                    if (player == null || !instance.turns.IsPlayersTurn(player)) continue;
+                    // Participants skip the Monster's lobby slot, the same way CreateParticipants does.
+                    int slot = instance.monsterPlayerIndex >= 0 && i >= instance.monsterPlayerIndex ? i + 1 : i;
+                    return instance.IsBotPlayer(slot) ? -1 : slot;
+                }
+                return -1;
+            }
+        }
+
+        // The shared action maps a turn-based match reads from (Player and Monster).
+        public static IEnumerable<InputActionMap> TurnInputMaps()
+        {
+            var maps = new List<InputActionMap>();
+            GameplayInputBindings bindings = InputBindings;
+            if (bindings != null)
+                foreach (InputAction action in bindings.Actions)
+                    if (action != null && action.actionMap != null && !maps.Contains(action.actionMap)) maps.Add(action.actionMap);
+            InputActionMap monsterMap = InputSystem.actions != null ? InputSystem.actions.FindActionMap("Monster") : null;
+            if (monsterMap != null && !maps.Contains(monsterMap)) maps.Add(monsterMap);
+            return maps;
+        }
         private int monsterPlayerIndex = -1;
         private bool statsReported;
 
@@ -88,6 +125,8 @@ namespace Escape4Now.Multiplayer
 
         public Color GetPlayerColor(int index)
         {
+            // Older scenes can keep their saved colors until a shared palette is assigned.
+            if (playerPalette != null) return playerPalette.GetColor(index);
             return playerColors != null && index >= 0 && index < playerColors.Length
                 ? playerColors[index] : Color.white;
         }
@@ -135,7 +174,14 @@ namespace Escape4Now.Multiplayer
             {
                 lan.Initialize(this);
             }
-            pauseAction = gameMode.InputBindings.Pause;
+            // A stand-alone copy of Pause that is not part of the Player map, so ControllerHandling's
+            // turn restriction never applies to it: every player can pause, even outside their turn.
+            InputAction sharedPause = gameMode.InputBindings.Pause;
+            if (sharedPause != null)
+            {
+                pauseAction = sharedPause.Clone();
+                pauseAction.Enable();
+            }
         }
 
         //The shared Pause action is supplied by the project's Input Actions asset.
@@ -190,12 +236,18 @@ namespace Escape4Now.Multiplayer
         }
 
         //The network session calls this after the lobby is ready.
+        internal bool StartOnlineSurvival(int count, int? hostSeed)
+        {
+            if (!(gameMode is SurvivalModeController)) return false;
+            return CreateParticipants(count, hostSeed);
+        }
+
         internal bool StartNetworkMatch(int count) => gameMode != null && gameMode.SupportsLan && CreateParticipants(count);
 
 
         // Creates the players and Monster for the selected game mode.
         // Check setup and prepare the chosen mode before cloning players or starting the timer.
-        private bool CreateParticipants(int count)
+        private bool CreateParticipants(int count, int? hostSeed = null)
         {
             if (MatchStarted) return false;
             if (gameMode == null || count < gameMode.MinimumPlayers || count > gameMode.MaximumPlayers)
@@ -266,7 +318,11 @@ namespace Escape4Now.Multiplayer
 
             try
             {
-                ActiveMap.PrepareLayout();
+                if (hostSeed.HasValue && ActiveMap is SurvivalMap replicated)
+                {
+                    if (!replicated.GenerateWithSeed(hostSeed.Value)) throw new System.InvalidOperationException(replicated.LastGenerationError);
+                }
+                else ActiveMap.PrepareLayout();
             }
             catch (System.InvalidOperationException error)
             {
@@ -346,7 +402,7 @@ namespace Escape4Now.Multiplayer
                     skinHandler.ApplyTo(player, lobbyIndex);
 
                 bool isBot = gameMode.SupportsBots
-                    && !LanMultiplayerSession.Active
+                    && (!LanMultiplayerSession.Active || LanMultiplayerSession.RunsOnlineBots)
                     && IsBotPlayer(lobbyIndex);
 
                 player.SetBotControlled(isBot);
@@ -564,6 +620,8 @@ namespace Escape4Now.Multiplayer
         //Clears only this session's static reference when the scene closes.
         private void OnDestroy()
         {
+            pauseAction?.Dispose();
+            pauseAction = null;
             if (instance == this) instance = null;
         }
     }

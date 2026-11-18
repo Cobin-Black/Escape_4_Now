@@ -13,11 +13,12 @@ namespace Escape4Now.Multiplayer
         private sealed class ControlMessage
         {
             public int version;
-            public string kind, code, action;
+            public string kind, code, action, modeState;
             public int player, count, sequence, turn, round, x, y, value;
 
             public ControlMessage(LanMessage message)
             {
+                modeState = message.modeState;
                 version = message.version; kind = message.kind; code = message.code; action = message.action;
                 player = message.player; count = message.count; sequence = message.sequence;
                 turn = message.turn; round = message.round; x = message.x; y = message.y; value = message.value;

@@ -71,7 +71,8 @@ namespace Escape4Now.UI
             identityAccent.color = target.IdentityColor;
             var race = context.Session != null ? context.Session.Mode as Race_Gamemode : null;
             var keyLook = race != null && race.KeyPrefab != null ? race.KeyPrefab.GetComponentInChildren<SpriteRenderer>(true) : null;
-            bool hasKey = target.HasKey && keyLook != null;
+            //Hidden while battle dice roll, so the key doesn't give away the winner early.
+            bool hasKey = target.HasKey && keyLook != null && !RaceBattleDice.Rolling;
             keyIcon.gameObject.SetActive(hasKey);
             if (hasKey)
             {

@@ -320,16 +320,10 @@ MonoBehaviour:
   - Match history and log out
   - Close the game
   onlineHeading: ONLINE MODE
-  onlineSubtitle: Play with teammates on different internet connections.
-  onlineRaceDescription: Create a private room or join with a code. Take turns, find
-    the key, and reach the exit first.
-  onlineOtherModes: SURVIVAL  /  FREE FOR ALL  /  HOT POTATO
-  onlineUnavailable: Not available online yet
-  onlineButtonText: PLAY ONLINE
   ModeNames:
   - RACE
   - SURVIVAL
-  - FREE FOR ALL
+  - KING OF THE HILL
   - HOT POTATO
   ModePlayers:
   - "2\u20134 PLAYERS"
@@ -340,12 +334,12 @@ MonoBehaviour:
   - One key is hidden in a locker. Find it, battle other players for it on the same
     tile, and carry it out.
   - Something is loose in the school. Stay alive together until the clock runs out.
-  - Free movement in the gym. Combat rules are still being developed.
+  - Fight for control of a moving hill in the gym.
   - Chase, tag and pass the potato before it explodes.
   ModeWin:
   - Carry the key through the EXIT first
   - Survive until time is up or complete the tasks to escape
-  - Be the last player standing
+  - Reach the hill score target first
   - Be the last player standing
 --- !u!4 &1200000003
 Transform:

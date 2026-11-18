@@ -1,12 +1,12 @@
-# Internet multiplayer — first playable foundation
+# Internet multiplayer
 
 ## Scope
 
-The first slice is a separate **OnlineRace** scene with private Relay rooms. It reuses the existing authoritative Race gameplay. Local Race, Survival, Free For All, Hot Potato, and the old LAN entry points remain separate.
+**Online Mode** offers private Relay rooms for Race, Survival, King of the Hill, and Hot Potato. Each online scene uses the same gameplay components and settings assets as its local mode. The host runs the match, and each guest controls their own slot.
 
 **RelayConnectionTest** is a smaller diagnostic scene. It sends real messages both ways through Relay and checks repeated round trips. Creating a code or starting a host is not a pass. Its pass result does not prove different-network or school-network compatibility.
 
-There is no Quick Play, Sessions lobby, account registration, friends system, host migration, reconnect, or online conversion of the other three modes in this slice. These remain later stages. Relay allocation codes used here are not interchangeable with future Sessions/Lobby codes.
+Private rooms use Relay join codes. A dropped player ends the online session. The host and guests can create a fresh room from the online menu.
 
 ## What was already in the project
 
@@ -27,39 +27,38 @@ The latest Netcode 3.x requires a newer editor and was not selected. No standalo
 ## Unity setup
 
 1. Open Project Settings > Services and confirm this is the intended team's cloud project.
-2. A project owner/admin should verify that Authentication anonymous sign-in and Relay are available for the selected environment. Both computers must use the same project and environment.
+2. The game's existing account sign-in and Relay use the same Unity project and environment. The standalone Relay diagnostic has its own temporary authentication profile.
 3. Online Race uses **development**, matching the account service on main. Set the same environment on the standalone Relay tester when testing the Online Race configuration.
 4. Review usage/billing in Unity Dashboard before enabling paid usage. No service account, private API key, or password is needed in the game.
 5. Let Package Manager resolve the manifest. The scene uses the Input System UI module for pointer/navigation input.
 
-Online Race uses the signed-in game account when available. Otherwise it signs in with a temporary Relay profile and restores the previous profile when the scene closes.
+Online Mode requires the player's existing game account for hosting and joining. The room shows the account name and allows skin selection.
 
 ## Open or build
 
-- Main menu: **Online Mode** (above **Game Mode**) > **Play Online** opens the private Online Race lobby. It keeps the existing arcade menu design; the other online modes are listed as not available yet.
+- In the main menu, choose **Online Mode** and select a mode from the same four cards shown under **Game Mode**.
 - Main-menu keyboard/gamepad navigation uses references to the project's existing `UI/Navigate`, `UI/Submit`, and `UI/Cancel` Input Actions. Sidebar spacing and online text are editable on the Main Menu component.
-- The online lobby now uses the same arcade palette and fonts, with separate Create/Join and connected-room views. Player portraits, Host/You labels, ready badges, and the room code replace the old diagnostic-heavy layout. It fits narrower windows too.
+- All four online rooms use the arcade locker-card layout with skin arrows on your card. Same-device King of the Hill and Hot Potato use the same locker style with per-player control selection. Online rooms keep their code, readiness, and sign-in controls.
 - Protocol selection and report export are under **Connection Settings**. The modal blocks controls behind it; the shared UI Cancel action closes it or returns from the lobby to the main menu. Actual errors remain available there and in exported reports.
 - Open `Assets/Scenes/RelayConnectionTest.unity` for diagnostics only.
-- Open `Assets/Scenes/OnlineRace.unity` for private online Race.
+- The online scenes are `OnlineRace`, `OnlineSurvival`, `OnlineFreeForAll`, and `OnlineHotPotato`.
 - Inspector configuration: `Assets/Settings/Networking/Relay Test Settings.asset` and `Online Race Connection.asset`.
 - Build the tester with **Tools > Escape 4 Now > Relay Test > Build Standalone Tester**.
 - Build the online prototype with **Tools > Escape 4 Now > Relay Test > Build Online Race Prototype**.
 - The build commands write under ignored `Logs/RelayTestPlayer` and `Logs/OnlineRacePlayer`. Share the **whole build folder**, not only the EXE.
-- The online prototype build now follows the normal Start Screen > Main Menu flow. OnlineRace is enabled in Build Settings without changing the order of the existing scenes.
+- The online build follows the normal Start Screen and Main Menu flow. All four online scenes are enabled in Build Settings.
 - Authoring commands recreate these new scenes. Do not run them over designer edits without saving/backing them up. Existing game scenes and the regular Build Settings list are not rewritten.
 
-## Private online Race flow
+## Private room flow
 
-1. All players launch the same OnlineRace build and choose the same protocol.
+1. All players launch the same build, select the same game mode, and choose the same connection protocol.
 2. Host picks 2, 3, or 4 players and selects **Host Room**.
 3. Guests enter the displayed Relay code and select **Join Room**. No IP entry or port forwarding is used.
-4. Each player marks **Ready**. The host can start only when every selected slot is connected and ready.
-5. The host runs Race's normal map generation, randomized repeating turn order, dice, movement, events, items, timer, and win rules. Clients send requests; the host sends results.
-6. Existing Input Actions control the locally owned slot. A guest cannot pick another player's slot in a command.
-7. Late joins are rejected after start. A lost peer stops the prototype; leave and create another room. Host migration/reconnect are not implemented.
+4. Players can choose an available skin. In Survival, the host can select a player as the monster or leave it AI-controlled.
+5. Each player marks **Ready**. The host can start when all slots are ready. In Race and Survival, the host can enable **Fill Bots** to let the existing local bots fill seats that friends leave open.
+6. The host runs the existing mode's gameplay. Input Actions on each computer control that computer's assigned slot.
 
-This first lobby uses the existing default numbered identities, colors, and skin assignments on both computers. Remote name/skin selection is a later lobby feature. The normal local setup menu is disabled only in the OnlineRace scene; the existing match HUD, Pause, inventory controls, and result UI are reused.
+Online Race uses the same turn HUD, locker menu, custom-dice selector, and key battle presentation as local Race. The host confirms match actions. Online matches skip the local account-stat write.
 
 ## Connection-test procedure with teammates
 
@@ -106,15 +105,39 @@ The host's seed plus serialized map/furniture configuration recreates the base m
 - `RelayTestIdentity`: initialization and anonymous authentication.
 - `RelayTestReport`: bounded, credential-filtered diagnostics/export.
 - `RelayTestView`: diagnostic UI bindings.
-- `OnlineRaceSession` / `OnlineRaceLobbyView`: Race online lobby, ready state, transport adapter wiring, presentation.
+- `OnlineRaceSession` / `OnlineRaceLobbyView`: shared online lobby, player settings, readiness, and transport setup.
+- `OnlineSurvivalMatch`: host-owned Survival turns, monster input, outcomes, puzzles, and outdoor effects.
+- `OnlineArenaMatch`: shared arena input, map and event updates, with host acknowledgements for movement.
+- `OnlineArenaPresentation`: guest movement prediction, replay of inputs still in flight, small visual corrections, and bounded movement between updates for other players. The host supplies health, items, passing and results.
+- `OnlineKingOfTheHillMatch`: hill position, scores, respawns, pickups and item effects.
+- `OnlineHotPotatoMatch`: round, holder, timer and explosion.
+- `RaceNetworkActions`: Race Input Actions and host checks for turns, storage, dice, items and key battles. LAN and Relay both use it.
 - `OnlineLobbyAuthoring`: saved Canvas layout and existing main-menu font/palette reuse. Layout, colors, fonts, references, and labels can be edited on the saved scene objects; the authoring command recreates the lobby UI, so save designer edits before running it.
 - `RelayMessageChannel`: reliable fragmented Netcode messages adapted to the existing match-message boundary.
 - `IMatchMessageConnection`: shared boundary used by both LAN sockets and Relay channels.
-- Existing `LanMultiplayerSession`, `LanMessageCodec`, and `LanWorldView`: reused Race authority, command validation, snapshots, and client display. Their historical LAN names remain to avoid a broad rename of working systems.
+- Existing `LanMultiplayerSession`, `LanMessageCodec`, and `LanWorldView`: shared match connection, message format, and Race board updates. Their historical LAN names remain to avoid a broad rename of working systems.
 - `RelayTestAuthoring` / `RelayFoundationChecks`: saved scene/build creation and structural checks.
 - Development-only command-line components automate local-process checks; they do not prove different-network access.
 
-Future Sessions/Quick Play should filter mode and content/build version, lock started rooms, clean up cancelled operations, and keep readiness/identity separate from game rules. Survival, arena movement, and Hot Potato timers/ownership must get their own authoritative synchronization adapters before being offered online.
+## Edit multiplayer in Unity
+
+- **Connection**. Open `Assets/Settings/Networking/Online Race Connection.asset` for shared Relay settings. Select the match session in an online scene for update intervals and timeouts.
+- **Controls**. Open `Assets/Settings/InputSystem_Actions.inputactions` for Race, Survival, menus, and the Player map used by controllers and the first keyboard player. King of the Hill uses Attack. Hot Potato uses Potato Pass. Edit `Assets/Settings/Arena/Arena Controls.inputactions` for additional local keyboard layouts. Online arena matches use the Player actions on each computer. Their adapters expose gamepad preference and movement update rate, and follow controller changes.
+- **Player colors**. Edit `Assets/Settings/Player Colors.asset` to change Player 1 through Player 4 across every local and online mode. Locker accents, player indicators and battle dice follow those colors.
+- **Battle dice**. The Race Battle UI component references the existing HUD Dice Display. Both battle dice copy that saved frame and its face sprites. Their size, spacing, hop and animation timings are editable under Battle Dice.
+- **Mode rules**. Select the mode controller in the scene to edit the same gameplay settings used by the local version. Each online adapter sends the state needed by that mode. Shared room controls are on the room and lobby components.
+
+## Guest responsiveness
+
+Online scenes publish match state every 0.05 seconds, after the current frame has run its gameplay updates. Direction changes and movement release are sent immediately. Held input keeps its normal configurable send rate.
+
+King of the Hill and Hot Potato guests move their own character using the shared arena motor while waiting for the host. Each update acknowledges the input the host has received. The guest restores the host movement state and replays its remaining input. Spawns, teleports, knockback, pauses and eliminations reset the relevant prediction. The host also sends current blocked cells so prediction respects moved equipment and temporary obstacles.
+
+Select the Online Arena Presentation component in either online arena scene to edit prediction, maximum pending movement, correction speed, snap distance and the limit for projecting other players forward. Very slow connections reach the configured prediction limit and wait for an update.
+
+Hot Potato guests animate the remaining time between updates and estimate transit time from measured ping. The host confirms the holder, explosions and eliminations. Network travel time still affects when confirmed events arrive.
+
+The shared Online Race Connection asset now uses connection version 21. All participants need the updated build, which includes movement acknowledgements. The existing version check rejects earlier builds before they enter the room.
 
 ## Free-tier / costs
 
@@ -122,11 +145,14 @@ Unity currently lists Authentication as free and Relay's first **50 average mont
 
 ## Test status
 
+- Guest response update on 2026-11-18 passed Unity checks for a simulated 200 ms gap between updates, partial input acknowledgements, repeated snapshots, prediction limits, pause/teleport resets, temporary blockers, immediate movement/release packets, and the guest potato clock. Both arena modes, the local arena controls, Race HUD, all online room scenes and saved connection references passed. Live Relay testing of this update with teammates is pending.
+- Presentation update on 2026-11-17 passed Unity Play Mode checks for all four online rooms, local and online Race battle dice, local arena controls, and Survival HUD/input. The shared palette is assigned in all eight mode scenes. Live Relay testing of this update with teammates is pending.
 - Native Windows builds and saved-reference/Input System checks: **passed**.
 - Existing LAN socket framing, queue limits, disconnect, and discovery regressions: **passed**.
 - Real Relay, two standalone processes on this one home-network computer: **DTLS passed; WSS passed; UDP passed**, on both host and client. Each protocol exchanged at least ten round trips during the observation window. Reports are captured before deliberate test-process teardown.
 - Online Race, two standalone processes through Relay: **passed**. Both observed the same map seed and at least three turn transitions; each observed its own authoritative roll and actual grid movement. This is a first-playable smoke check, not exhaustive gameplay validation.
+- Updated Windows build, two standalone processes through Relay on one computer: **passed** in all four modes. The runs covered Race rolls, Survival turns, arena movement, player-monster input, and Race/Survival rooms with an open slot filled by a bot.
 - Native test evidence is under ignored `Logs/RelayMatrix`, `Logs/online-race-final-*-result.txt`, and `Logs/relay-release-check.log`.
-- Different internet networks: **not tested** — no second computer available during implementation.
+- Different internet networks: Online Race was verified by two teammates on separate Wi-Fi networks before this update.
 - School Wi-Fi: **not tested** — current computer is on home internet.
-- Full online multiplayer across all four modes: **not implemented** in this first slice.
+- Cross-network coverage for the updated build and the three added online modes still needs a teammate test.

@@ -34,7 +34,14 @@ namespace Escape4Now.Arena
         {
             modeTitle.text = match.Title;
             remaining.text = string.Format(remainingFormat, match.Remaining);
-            objective.text = match.Objective;
+            if (match is KingOfTheHillController hill)
+            {
+                objective.text = "POINTS TO WIN: " + hill.ScoreToWin;
+            }
+            else
+            {
+                objective.text = match.Objective;
+            }
             notice.text = match.Notice;
             if (string.IsNullOrEmpty(notice.text) && match.Events != null && match.Events.EventLocationsVisible)
             {
@@ -58,12 +65,13 @@ namespace Escape4Now.Arena
                 timerBar.fillAmount = Mathf.Clamp01(potato.RemainingSeconds / potato.RoundSeconds);
                 timer.color = timerBar.fillAmount < style.urgentTimerFraction ? style.healthy : style.holder;
                 holder.text = string.Format(holderFormat, potato.Holder != null ? potato.Holder.name : "");
+                return;
             }
 
             for (int i = 0; i < healthRows.Length; i++)
             {
                 var player = i < match.Players.Count ? match.Players[i] : null;
-                healthRows[i].Show(player, potato != null && potato.Holder == player);
+                healthRows[i].Show(player, false);
             }
         }
     }

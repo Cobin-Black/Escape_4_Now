@@ -21,6 +21,13 @@ namespace Escape4Now.UI
         private Vector2 singlePosition;
         private Vector3 singleScale;
 
+        // Battle dice keep this saved frame and face layout, with their owner's color on the frame.
+        public void SetPlayerColor(Color color)
+        {
+            var frame = GetComponent<Image>();
+            if (frame != null) frame.color = color;
+        }
+
         public void Show(int value, bool rolling) => Show(value, 0, rolling);
 
         //Shows one die, or two dice side by side when second is above 0 (each die keeps its own face).

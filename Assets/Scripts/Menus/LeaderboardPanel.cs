@@ -5,7 +5,7 @@ using static Escape4Now.Menus.ArcadeMenuKit;
 
 namespace Escape4Now.Menus
 {
-    //The main menu's leaderboard: one tab per mode, showing wins, losses, win rate and fastest time.
+    //The main menu's leaderboard: one tab per mode, showing wins (and how many were online), losses, win rate and fastest time.
     public sealed class LeaderboardPanel
     {
         private const int Rows = 10;
@@ -13,7 +13,8 @@ namespace Escape4Now.Menus
         private static readonly string[] Boards = { AccountStats.Race, AccountStats.FreeForAll, AccountStats.HotPotato, AccountStats.MonsterRole, AccountStats.Survivor };
         private static readonly string[] Tabs = { "RACE", "FREE FOR ALL", "HOT POTATO", "AS MONSTER", "AS SURVIVOR" };
         //Column positions from the left of the panel.
-        private static readonly float[] Columns = { 0f, 44f, 290f, 360f, 430f, 530f };
+        private static readonly float[] Columns = { 0f, 40f, 250f, 315f, 400f, 480f, 575f };
+        private const int FastestColumn = 6;
 
         private int board;
         private bool requested;
@@ -53,10 +54,10 @@ namespace Escape4Now.Menus
         private void DrawTable(Rect inner, Color accent)
         {
             float y = inner.y + 100f;
-            string[] headers = { "#", "PLAYER", "WINS", "LOSSES", "WIN RATE", "FASTEST" };
+            string[] headers = { "#", "PLAYER", "WINS", "ONLINE", "LOSSES", "WIN RATE", "FASTEST" };
             GUIStyle headerStyle = Text(MonoBoldFont, 12);
             for (int i = 0; i < headers.Length; i++)
-                if (i < 5 || ShowsFastest) Label(new Rect(inner.x + Columns[i], y, 120f, 20f), headers[i], headerStyle, Muted);
+                if (i < FastestColumn || ShowsFastest) Label(new Rect(inner.x + Columns[i], y, 120f, 20f), headers[i], headerStyle, Muted);
 
             GUIStyle rowStyle = Text(MonoFont, 15);
             for (int i = 0; i < entries.Count; i++)
@@ -68,12 +69,16 @@ namespace Escape4Now.Menus
                 int played = entry.Wins + entry.Losses;
                 string[] cells =
                 {
-                    entry.Rank.ToString(), entry.Name, entry.Wins.ToString(), entry.Losses.ToString(),
+                    entry.Rank.ToString(), entry.Name, entry.Wins.ToString(), entry.OnlineWins.ToString(), entry.Losses.ToString(),
                     played > 0 ? Mathf.RoundToInt(entry.Wins * 100f / played) + "%" : "--",
                     entry.Fastest > 0f ? FormatTime(entry.Fastest) : "--"
                 };
                 for (int c = 0; c < cells.Length; c++)
-                    if (c < 5 || ShowsFastest) Label(new Rect(row.x + Columns[c] + 6f, row.y, 120f, row.height), cells[c], rowStyle, Color.white);
+                {
+                    //The ONLINE column is teal so online wins stand out from the total.
+                    Color ink = c == 3 && entry.OnlineWins > 0 ? accent : Color.white;
+                    if (c < FastestColumn || ShowsFastest) Label(new Rect(row.x + Columns[c] + 6f, row.y, 120f, row.height), cells[c], rowStyle, ink);
+                }
             }
         }
 

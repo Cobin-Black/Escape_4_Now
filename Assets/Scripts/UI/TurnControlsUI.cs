@@ -16,9 +16,13 @@ namespace Escape4Now.UI
         {
             var turns = context.Turns;
             var player = context.ActivePlayer;
+            var network = LanMultiplayerSession.Instance;
+            bool online = network?.UsesRaceMatchUI == true;
             bool visible = context.Playing && !context.Finished && turns != null && turns.ShowEndTurnButton
                 && (player == null || !player.IsInMenu())
-                && !LocalMultiplayerSession.GameplayPaused && LocalMultiplayerSession.AllowTurnButtons;
+                && !LocalMultiplayerSession.GameplayPaused && LocalMultiplayerSession.AllowTurnButtons
+                && (!online || network.IsMyTurn && !network.ShowingRaceStorage && !network.ChoosingNumber
+                    && network.RaceBattleTargets.Count == 0 && string.IsNullOrEmpty(network.LatestState?.battleMessage));
             endTurn.gameObject.SetActive(visible);
             endTurn.interactable = visible && player != null && player.CanReadTurnInput && player.HasRolled
                 && !player.IsMoving && !player.IsUsingItem() && !player.IsInMenu();

@@ -129,6 +129,19 @@ public static class ArenaChecks
         var match = Object.FindFirstObjectByType<ArenaMatch>();
         DisableRandomEvents(match);
         Directory.CreateDirectory("Logs/ArenaPreviews");
+        var setup = Object.FindFirstObjectByType<ArenaLobbyView>();
+        if (new SerializedObject(setup).FindProperty("showControllerPanel").boolValue)
+        {
+            var controllerButton = setup.transform.Find("Controller Settings").GetComponent<UnityEngine.UI.Button>();
+            controllerButton.onClick.Invoke();
+            yield return null;
+            var controllerOverlay = setup.transform.Find("Controller Overlay");
+            Require(controllerOverlay.gameObject.activeInHierarchy, "Controller options open over the arcade lobby");
+            ScreenCapture.CaptureScreenshot("Logs/ArenaPreviews/Controllers-overlay.png");
+            yield return null;
+            controllerOverlay.Find("Controller Panel/Close").GetComponent<UnityEngine.UI.Button>().onClick.Invoke();
+            Require(!controllerOverlay.gameObject.activeSelf, "Closing controller options returns to the lobby");
+        }
         ScreenCapture.CaptureScreenshot("Logs/ArenaPreviews/FreeForAll-lobby.png");
         yield return null;
         for (int count = 2; count <= 4; count++)
@@ -190,9 +203,18 @@ public static class ArenaChecks
                 yield return null;
             }
 
+            var hill = (KingOfTheHillController)match;
+            Set(hill, "respawnDuration", .15f);
             for (int i = 1; i < count; i++)
-                match.Players[i].Damage(match.Players[i].Character.Health);
-            Require(!match.Playing && match.Result.Contains(a.name), "FFA last player wins");
+                match.Players[i].Eliminate();
+            Require(match.Playing && hill.GetRespawnSeconds(b) > 0, "King of the Hill continues after knockouts");
+            yield return new WaitForSeconds(.25f);
+            Require(b.Alive && b.Character.Health == b.InitialHealth, "Knocked-out player respawns at full health");
+            Require(hill.HillCenter.HasValue, "The gym starts with a hill");
+            a.Place(hill.HillCenter.Value);
+            int startingScore = hill.GetScore(a);
+            yield return new WaitForSeconds(1.1f);
+            Require(hill.GetScore(a) > startingScore, "Controlling the hill awards points");
             match.ReturnToSetup();
             yield return null;
         }
@@ -255,7 +277,7 @@ public static class ArenaChecks
             Require(mode.Holder == holder, "Contact should not transfer potato");
             var keys = new[]
             {
-                Key.F,
+                Key.Enter, // Player 1 uses the Input System's Potato Pass keyboard binding.
                 Key.RightCtrl,
                 Key.O,
                 Key.Numpad0

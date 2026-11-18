@@ -94,12 +94,12 @@ namespace Escape4Now.GameModes
 
         public override bool CanUseExit(PlayerCharacter player)
         {
-            return !exitNeedsKey || (player != null && player.Inventory != null && player.Inventory.HasKey());
+            return !exitNeedsKey || (player != null && player.HasKey);
         }
 
         public override string GetObjective(PlayerCharacter player)
         {
-            return updateObjectiveAfterKey && player != null && player.Inventory != null && player.Inventory.HasKey()
+            return updateObjectiveAfterKey && player != null && player.HasKey
                 ? objectiveAfterKey : objectiveBeforeKey;
         }
 
