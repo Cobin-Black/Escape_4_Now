@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using Escape4Now.Accounts;
 using Escape4Now.GameModes;
+using Escape4Now.Multiplayer;
 using Escape4Now.Player;
 using UnityEngine;
 using UnityEngine.Events;
@@ -22,8 +23,10 @@ namespace Escape4Now.Arena
         [SerializeField]
         private ArenaEventDirector events;
         [Header("Input System")]
-        [SerializeField]
+        [SerializeField, Tooltip("Shared-keyboard layouts (Player1..Player4 maps) used by players without a controller.")]
         private InputActionAsset inputActions;
+        [SerializeField, Tooltip("Actions used by players with a controller (the Player map: Move, Attack, Potato Pass). Empty uses the project-wide Input System actions.")]
+        private InputActionAsset gamepadActions;
         [SerializeField]
         private InputActionReference pause;
         [Header("Player Identity")]
@@ -49,6 +52,9 @@ namespace Escape4Now.Arena
         private bool ownsPause;
         public ArenaMap Map => map;
         public InputActionAsset InputActions => inputActions;
+        public InputActionAsset GamepadActions => gamepadActions != null ? gamepadActions : InputSystem.actions;
+        // True when players were given controllers automatically, so plugging one in mid-match updates the inputs.
+        private bool autoAssignedInput;
         public ArenaEventDirector Events => events;
         public Skin_Handler Skins => skins;
         public string Title => modeTitle;
@@ -85,10 +91,12 @@ namespace Escape4Now.Arena
                 pause.action.Enable();
                 ownsPause = true;
             }
+            ControllerHandling.AssignmentsChanged += ControllersChanged;
         }
 
         protected virtual void OnDisable()
         {
+            ControllerHandling.AssignmentsChanged -= ControllersChanged;
             if (ownsPause && pause != null)
                 pause.action.Disable();
             ownsPause = false;
@@ -110,11 +118,83 @@ namespace Escape4Now.Arena
             Tick(Time.deltaTime);
         }
 
-        // Validate the saved references, create participants, then let the selected mode start its rules.
+
+        // Start a match using the controllers assigned in the lobby.
+        public bool StartMatch(int count, string[] names, int[] skinIndices, bool[] bots = null)
+        {
+            var pads = new Gamepad[Mathf.Max(0, count)];
+
+            for (int i = 0; i < pads.Length; i++)
+            {
+                if (!IsBotSlot(i, bots))
+                    pads[i] = ControllerHandling.GetGamepad(i);
+            }
+
+            bool started = StartMatch(count, names, pads, skinIndices, bots);
+            autoAssignedInput = started;
+            return started;
+        }
+
+        // Start a match using explicitly selected gamepads.
         public bool StartMatch(int count, string[] names, int[] gamepads, int[] skinIndices, bool[] bots = null)
         {
+            var pads = new Gamepad[Mathf.Max(0, count)];
+
+            for (int i = 0; i < pads.Length && gamepads != null && i < gamepads.Length; i++)
+            {
+                if (IsBotSlot(i, bots))
+                    continue;
+
+                if (gamepads[i] >= Gamepad.all.Count)
+                {
+                    Error = "Connect the selected gamepad or choose Keyboard.";
+                    return false;
+                }
+
+                pads[i] = gamepads[i] >= 0 ? Gamepad.all[gamepads[i]] : null;
+            }
+
+            autoAssignedInput = false;
+            return StartMatch(count, names, pads, skinIndices, bots);
+        }
+
+        // Check whether a player slot belongs to a bot.
+        private static bool IsBotSlot(int slot, bool[] bots)
+        {
+            return bots != null && slot < bots.Length && bots[slot];
+        }
+
+        // Calculate keyboard layouts without assigning controls to bots.
+        private static int[] KeyboardLayouts(Gamepad[] pads, int count, bool[] bots)
+        {
+            var availablePads = new Gamepad[count];
+
+            for (int i = 0; i < count; i++)
+            {
+                availablePads[i] = IsBotSlot(i, bots)
+                    ? null
+                    : pads[i];
+            }
+
+            int[] layouts = ControllerHandling.KeyboardLayoutsFor(availablePads, count);
+
+            // Bots do not use keyboard layouts.
+            for (int i = 0; i < count; i++)
+            {
+                if (IsBotSlot(i, bots))
+                    layouts[i] = -1;
+            }
+
+            return layouts;
+        }
+
+        // Validate the match and create human players and bots.
+        private bool StartMatch(int count, string[] names, Gamepad[] pads, int[] skinIndices, bool[] bots)
+        {
             Error = "";
-            if (map == null || map.Settings == null || map.Settings.material == null || playerPrefab == null || inputActions == null || pause == null)
+
+            if (map == null || map.Settings == null || map.Settings.material == null ||
+                playerPrefab == null || inputActions == null || pause == null)
             {
                 Error = "Assign the map settings, material, player prefab, input actions and Pause action.";
                 return false;
@@ -126,34 +206,40 @@ namespace Escape4Now.Arena
                 return false;
             }
 
-            var pads = new HashSet<int>();
+            var used = new HashSet<Gamepad>();
+            int[] layouts = KeyboardLayouts(pads, count, bots);
+
             for (int i = 0; i < count; i++)
             {
-                if (bots != null && i < bots.Length && bots[i])
+                // Bots do not require keyboard or controller input.
+                if (IsBotSlot(i, bots))
                     continue;
 
-                if (gamepads[i] >= Gamepad.all.Count)
-                {
-                    Error = "Connect the selected gamepad or choose Keyboard.";
-                    return false;
-                }
-
-                if (gamepads[i] >= 0 && !pads.Add(gamepads[i]))
+                if (pads[i] != null && !used.Add(pads[i]))
                 {
                     Error = "Give each gamepad to one player only.";
                     return false;
                 }
 
-                if (inputActions.FindActionMap("Player" + (i + 1)) == null)
+                bool primary = pads[i] != null || layouts[i] == 0;
+
+                if (primary && (GamepadActions == null ||
+                                GamepadActions.FindActionMap("Player") == null))
                 {
-                    Error = "The arena input asset needs an action map for each player.";
+                    Error = "Player 1 and controller players need the Input System's Player action map.";
+                    return false;
+                }
+
+                if (!primary && inputActions.FindActionMap("Player" + (layouts[i] + 1)) == null)
+                {
+                    Error = "The arena input asset needs an action map for each keyboard player.";
                     return false;
                 }
             }
 
-            // Remove old event reservations before generating a replacement room.
             events?.Stop();
             ClearPlayers();
+
             if (!map.Generate(count, out var spawns))
             {
                 Error = "No safe connected layout with separated spawns. Check Map Settings.";
@@ -162,33 +248,95 @@ namespace Escape4Now.Arena
 
             skins?.ResetToDefaults();
             skins?.ClearAll();
+
             for (int i = 0; i < count; i++)
             {
                 var player = Instantiate(playerPrefab, transform);
-                bool isBot = bots != null && i < bots.Length && bots[i];
+                bool isBot = IsBotSlot(i, bots);
 
-                player.Initialize(this, i, names[i], playerColors[i], spawns[i], gamepads[i], isBot);
+                player.Initialize(this, i, names[i], playerColors[i], spawns[i]);
 
                 if (isBot)
                     player.gameObject.AddComponent<ArenaBotController>();
 
                 player.Eliminated += ParticipantEliminated;
                 Players.Add(player);
+
                 if (skins != null && skinIndices[i] >= 0)
                     skins.TryAssign(i, skinIndices[i]);
             }
 
+            ApplyInputs(pads);
+
             skins?.FillMissing();
+
             for (int i = 0; i < Players.Count; i++)
                 skins?.ApplyTo(Players[i].Character, i);
+
             Playing = true;
             Paused = false;
             Result = "";
             Notice = "";
+
             events?.Begin(this);
             BeginRules();
             onMatchStarted?.Invoke();
+
             return true;
+        }
+
+        // Configure human inputs while keeping bots under AI control.
+        private void ApplyInputs(Gamepad[] pads)
+        {
+            var bots = new bool[Players.Count];
+
+            for (int i = 0; i < Players.Count; i++)
+                bots[i] = Players[i] != null &&
+                          Players[i].GetComponent<ArenaBotController>() != null;
+
+            int[] layouts = KeyboardLayouts(pads, Players.Count, bots);
+
+            var reserved = new HashSet<string>();
+
+            for (int i = 1; i < layouts.Length; i++)
+            {
+                if (layouts[i] >= 0)
+                    ArenaLocalInput.CollectLayoutKeys(inputActions, layouts[i], reserved);
+            }
+
+            for (int i = 0; i < Players.Count; i++)
+            {
+                if (Players[i] == null)
+                    continue;
+
+                if (bots[i])
+                {
+                    // Do not reset bot inputs when controllers change.
+                    if (!Players[i].Input.IsBot)
+                        Players[i].Input.ConfigureBot();
+
+                    continue;
+                }
+
+                Players[i].ConfigureInput(pads[i], layouts[i], reserved);
+            }
+        }
+
+        // Reassign human controllers when devices connect or disconnect.
+        private void ControllersChanged()
+        {
+            if (!autoAssignedInput || Players.Count == 0)
+                return;
+
+            var pads = new Gamepad[Players.Count];
+
+            for (int i = 0; i < pads.Length; i++)
+            {
+                if (Players[i].GetComponent<ArenaBotController>() == null)
+                    pads[i] = ControllerHandling.GetGamepad(Players[i].Slot);
+            }
+
+            ApplyInputs(pads);
         }
 
         // Use the same map and player footprints for normal movement and event knockback.

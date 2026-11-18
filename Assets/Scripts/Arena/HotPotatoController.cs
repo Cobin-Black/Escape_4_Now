@@ -113,7 +113,7 @@ namespace Escape4Now.Arena
                 return;
             }
 
-            if (cooldown <= 0 && (transferOnContact || Holder.Input.TagPressed))
+            if (cooldown <= 0 && (transferOnContact || Holder.Input.PassPressed))
                 TryPass();
         }
 

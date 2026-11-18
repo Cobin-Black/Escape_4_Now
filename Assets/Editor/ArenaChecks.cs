@@ -255,7 +255,7 @@ public static class ArenaChecks
             Require(mode.Holder == holder, "Contact should not transfer potato");
             var keys = new[]
             {
-                Key.F,
+                Key.Enter, // Player 1 uses the Input System's Potato Pass keyboard binding.
                 Key.RightCtrl,
                 Key.O,
                 Key.Numpad0
