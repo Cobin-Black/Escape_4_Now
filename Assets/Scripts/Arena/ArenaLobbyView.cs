@@ -96,9 +96,9 @@ namespace Escape4Now.Arena
                 skins[i].ClearOptions();
                 skins[i].AddOptions(skinOptions);
                 skins[i].onValueChanged.AddListener(value => RefreshPortrait(slot));
-                // Controls are no longer chosen here: ControllerHandling gives each slot its controller,
-                // so the old dropdown just shows what this player will use.
-                controls[i].interactable = false;
+                // Let players choose between human controls and a bot.
+                controls[i].interactable = true;
+                controls[i].onValueChanged.AddListener(value => Refresh());
                 identityStrips[i].color = match.GetPlayerColor(i);
                 RefreshPortrait(i);
             }
@@ -293,21 +293,27 @@ namespace Escape4Now.Arena
         private void OnDestroy() => ControllerHandling.AssignmentsChanged -= Refresh;
 
         // Show "Controller 1" or the keyboard layout this slot will get with the current controllers.
+        // Show the assigned controls and allow the player to select a bot.
         private void RefreshControls()
         {
             int[] layouts = ControllerHandling.GetKeyboardLayouts(playerCount);
+
             for (int i = 0; i < controls.Length; i++)
             {
+                bool isBot = controls[i].value == 1;
+
                 string label;
+
                 if (i >= layouts.Length)
                     label = "";
                 else if (layouts[i] < 0)
                     label = string.Format(gamepadFormat, i + 1);
                 else
                     label = string.Format(keyboardFormat, KeyboardKeys(layouts[i]));
+
                 controls[i].ClearOptions();
-                controls[i].AddOptions(new List<string> { label });
-                controls[i].SetValueWithoutNotify(0);
+                controls[i].AddOptions(new List<string> { label, "Bot" });
+                controls[i].SetValueWithoutNotify(isBot ? 1 : 0);
                 controls[i].RefreshShownValue();
             }
         }
@@ -361,17 +367,22 @@ namespace Escape4Now.Arena
             portraits[slot].enabled = portraits[slot].sprite != null;
         }
 
+        // Start the match using the selected human players and bots.
         public void StartMatch()
         {
             var labels = new string[playerCount];
             var looks = new int[playerCount];
+            var bots = new bool[playerCount];
+
             for (int i = 0; i < playerCount; i++)
             {
                 labels[i] = names[i].text;
                 looks[i] = skins[i].value - 1;
+                bots[i] = controls[i].value == 1;
             }
 
-            match.StartMatch(playerCount, labels, looks);
+            match.StartMatch(playerCount, labels, looks, bots);
+
             error.text = match.Error;
             error.gameObject.SetActive(!string.IsNullOrEmpty(match.Error));
         }

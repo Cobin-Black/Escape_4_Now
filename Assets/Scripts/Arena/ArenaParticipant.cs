@@ -74,6 +74,7 @@ namespace Escape4Now.Arena
         private Vector2 screenVelocity, eventVelocity;
         public event Action<ArenaParticipant> Eliminated;
         // Reuse the existing character identity, skin and health instead of creating a second player system.
+        // Initialize the player's identity and starting position.
         public void Initialize(ArenaMatch match, int slot, string displayName, Color color, Vector2 position)
         {
             Match = match;

@@ -310,27 +310,58 @@ namespace Escape4Now.Multiplayer
         private void Update()
         {
             ListenForAssignment();
+
+            // Only apply restrictions when a match is running.
+            if (!LocalMultiplayerSession.MatchIsRunning)
+            {
+                if (restrictedMaps.Count > 0)
+                    ClearRestriction();
+
+                return;
+            }
+
             int slot = LocalMultiplayerSession.ActiveInputSlot;
             Gamepad pad = slot >= 0 ? GetGamepad(slot) : null;
-            if (slot == restrictedSlot && pad == restrictedPad) return;
+
+            if (slot == restrictedSlot && pad == restrictedPad)
+                return;
+
             ApplyRestriction(slot, pad);
         }
 
         private static void ApplyRestriction(int slot, Gamepad pad)
         {
             ClearRestriction();
+
             restrictedSlot = slot;
             restrictedPad = pad;
-            if (slot < 0 || ConnectedCount == 0) return;
+
+            // No restrictions when there is no active human player.
+            if (slot < 0 || ConnectedCount == 0)
+                return;
 
             var devices = new List<InputDevice>();
-            foreach (InputDevice device in InputSystem.devices)
-                if (!(device is Gamepad)) devices.Add(device);
-            if (pad != null) devices.Add(pad);
+
+            if (pad != null)
+            {
+                // Controller player: only their controller can send gameplay input.
+                devices.Add(pad);
+            }
+            else
+            {
+                // Keyboard player: allow keyboard and other non-gamepad devices.
+                foreach (InputDevice device in InputSystem.devices)
+                {
+                    if (!(device is Gamepad))
+                        devices.Add(device);
+                }
+            }
 
             foreach (InputActionMap map in LocalMultiplayerSession.TurnInputMaps())
             {
-                if (map == null || restrictedMaps.Contains(map)) continue;
+                if (map == null || restrictedMaps.Contains(map))
+                    continue;
+
                 map.devices = devices.ToArray();
                 restrictedMaps.Add(map);
             }
