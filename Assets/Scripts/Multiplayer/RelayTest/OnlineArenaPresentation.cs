@@ -43,6 +43,9 @@ namespace Escape4Now.Multiplayer.RelayTesting
         private PlayerView[] views;
         private int localSlot;
         private float pendingSeconds;
+        // Direction of the newest input the host has confirmed. The host keeps moving the player this way
+        // until the next input arrives.
+        private Vector2 acknowledgedDirection;
         public int InputSequence { get; private set; }
         public int PendingFrames => pending.Count;
 
@@ -66,7 +69,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
         }
 
         public void AcceptSnapshot(int slot, ArenaParticipant.MovementState movement, Vector2 velocity,
-            int acknowledgedInput, int revision, bool reset, float transitSeconds)
+            int acknowledgedInput, float inputAge, int revision, bool reset, float transitSeconds)
         {
             var player = arena.Players[slot];
             var view = views[slot];
@@ -81,12 +84,28 @@ namespace Escape4Now.Multiplayer.RelayTesting
                 else
                 {
                     // Discard movement already seen by the host, then replay what is still in flight.
+                    int confirmed = pending.FindIndex(frame => frame.sequence == acknowledgedInput);
+                    if (confirmed >= 0) acknowledgedDirection = pending[confirmed].direction;
                     pending.RemoveAll(frame => frame.sequence <= acknowledgedInput);
                     pendingSeconds = 0;
+                    // The host kept moving this player after the input arrived, so the first inputAge seconds
+                    // are already in its position. Skip them in the replay without dropping the frames, since a
+                    // later update with the same input will report a larger age.
+                    // Only frames still going the confirmed direction are skipped: once the guest turned or stopped,
+                    // the host hasn't seen that yet.
+                    float skip = inputAge;
                     foreach (var frame in pending)
                     {
-                        player.SimulateMovement(frame.direction, frame.seconds);
                         pendingSeconds += frame.seconds;
+                        float seconds = frame.seconds;
+                        if (skip > 0 && (frame.direction - acknowledgedDirection).sqrMagnitude > .0001f) skip = 0;
+                        if (skip > 0)
+                        {
+                            float used = Mathf.Min(skip, seconds);
+                            skip -= used;
+                            seconds -= used;
+                        }
+                        if (seconds > 0) player.SimulateMovement(frame.direction, seconds);
                     }
                 }
             }
@@ -148,6 +167,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
         {
             pending.Clear();
             pendingSeconds = 0;
+            acknowledgedDirection = Vector2.zero;
         }
     }
 }

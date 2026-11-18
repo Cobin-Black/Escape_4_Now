@@ -35,6 +35,13 @@ namespace Escape4Now.Multiplayer.RelayTesting
         private float nextInput;
         private Vector2 lastSentMovement;
         private readonly int[] appliedInput = new int[4];
+        // Host only: seconds each player has moved since their latest input arrived. Guests skip this much
+        // of their replay, because the host has already moved them that far.
+        private readonly float[] inputAge = new float[4];
+        // When each slot's latest input arrived. Negative until the first one. Players stop using an input
+        // after half a second without a new one (ArenaParticipant), so the age stops counting then too.
+        private readonly float[] inputArrived = { -1, -1, -1, -1 };
+        private const float InputTimeout = .5f;
         protected float EstimatedTransitSeconds => room != null && room.Relay != null
             ? Mathf.Clamp((float)room.Relay.LastRoundTripMilliseconds / 2000f, 0, .25f) : 0;
         public override bool Started => started;
@@ -76,6 +83,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             public int health;
             public Vector2 motorVelocity, eventVelocity;
             public int inputSequence, movementRevision;
+            public float inputAge;
             public float speedMultiplier = 1;
             // King of the Hill also sends score, respawn, and held item details.
             public int score, respawn, itemType = -1, itemUses, itemMaxUses, shieldBlocks;
@@ -143,6 +151,8 @@ namespace Escape4Now.Multiplayer.RelayTesting
             if (!started) return false;
             disconnected = false;
             Array.Clear(appliedInput, 0, appliedInput.Length);
+            Array.Clear(inputAge, 0, inputAge.Length);
+            for (int i = 0; i < inputArrived.Length; i++) inputArrived[i] = -1;
             delayedHostInput.Clear();
             input = gameObject.AddComponent<ArenaLocalInput>();
             ConfigureLocalInput();
@@ -193,7 +203,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             {
                 position = player.Position, velocity = player.ScreenVelocity, health = player.Character.Health, alive = player.Alive,
                 motorVelocity = movement.motorVelocity, eventVelocity = movement.eventVelocity,
-                inputSequence = appliedInput[player.Slot], movementRevision = player.MovementRevision,
+                inputSequence = appliedInput[player.Slot], inputAge = inputAge[player.Slot], movementRevision = player.MovementRevision,
                 speedMultiplier = player.SpeedMultiplier
             };
             CapturePlayer(player, actor);
@@ -207,6 +217,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             if (state?.actors == null || state.actors.Length != count
                 || state.actors.Any(p => p == null || !Finite(p.position) || !Finite(p.velocity)
                     || !Finite(p.motorVelocity) || !Finite(p.eventVelocity) || p.inputSequence < 0
+                    || float.IsNaN(p.inputAge) || p.inputAge < 0
                     || float.IsNaN(p.speedMultiplier) || float.IsInfinity(p.speedMultiplier) || p.speedMultiplier < 0)) return false;
             if (!started)
             {
@@ -253,7 +264,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
                     presentation.AcceptSnapshot(i, new ArenaParticipant.MovementState
                     {
                         position = actor.position, motorVelocity = actor.motorVelocity, eventVelocity = actor.eventVelocity
-                    }, actor.velocity, actor.inputSequence, actor.movementRevision,
+                    }, actor.velocity, actor.inputSequence, actor.inputAge, actor.movementRevision,
                         resetView || state.paused, EstimatedTransitSeconds);
                 }
             return true;
@@ -290,6 +301,8 @@ namespace Escape4Now.Multiplayer.RelayTesting
             {
                 arena.Players[slot].SetOnlineInput(packet.move, packet.tag, packet.useItem);
                 appliedInput[slot] = packet.sequence;
+                inputAge[slot] = 0;
+                inputArrived[slot] = Time.unscaledTime;
             }
         }
 
@@ -298,6 +311,12 @@ namespace Escape4Now.Multiplayer.RelayTesting
             while (delayedHostInput.Count > 0 && delayedHostInput.Peek().time <= Time.unscaledTime)
                 ApplyInput(0, delayedHostInput.Dequeue().packet);
             if (!arena.Playing) delayedHostInput.Clear();
+            // Runs before the players move this frame (this script's order is earlier), so the age matches
+            // the movement the snapshot will contain.
+            if (!arena.Replica && started && arena.Playing && !arena.Paused)
+                for (int i = 0; i < arena.Players.Count && i < inputAge.Length; i++)
+                    if (arena.Players[i].Alive && inputArrived[i] >= 0 && Time.unscaledTime - inputArrived[i] < InputTimeout)
+                        inputAge[i] += Time.deltaTime;
             if (arena.Replica && started)
             {
                 presentation?.Advance(input != null ? input.Move : Vector2.zero, Time.deltaTime);

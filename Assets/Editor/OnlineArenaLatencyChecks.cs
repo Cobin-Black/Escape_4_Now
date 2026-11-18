@@ -65,12 +65,25 @@ public static class OnlineArenaLatencyChecks
         var acknowledgedMovement = player.CaptureMovement();
         player.RestoreMovement(predictedMovement);
         view.BeginSnapshot();
-        view.AcceptSnapshot(1, acknowledgedMovement, Vector2.zero, 6, revision, false, 0);
+        view.AcceptSnapshot(1, acknowledgedMovement, Vector2.zero, 6, 0, revision, false, 0);
         Require(view.PendingFrames == 6 && Vector2.Distance(predicted, player.Position) < .001f,
             "A partial acknowledgement replays only the remaining movement");
 
+        // The host kept moving the guest for a few frames after input 6 arrived. Those frames must not be replayed twice.
+        for (int moved = 3; moved <= 4; moved++)
+        {
+            player.RestoreMovement(initialMovement);
+            for (int i = 0; i < 6 + moved; i++) player.SimulateMovement(direction, 1f / 60f);
+            var hostMovement = player.CaptureMovement();
+            player.RestoreMovement(predictedMovement);
+            view.BeginSnapshot();
+            view.AcceptSnapshot(1, hostMovement, Vector2.zero, 6, moved / 60f, revision, false, 0);
+            Require(view.PendingFrames == 6 && Vector2.Distance(predicted, player.Position) < .001f,
+                "Movement the host already made after input arrived is not replayed again (" + moved + " frames)");
+        }
+
         view.BeginSnapshot();
-        view.AcceptSnapshot(1, player.CaptureMovement(), player.ScreenVelocity, view.InputSequence, revision, false, 0);
+        view.AcceptSnapshot(1, player.CaptureMovement(), player.ScreenVelocity, view.InputSequence, 0, revision, false, 0);
         Require(view.PendingFrames == 0, "The host's input acknowledgement clears old movement");
 
         for (int i = 0; i < 240; i++) view.Advance(direction, 1f / 60f);
@@ -80,7 +93,7 @@ public static class OnlineArenaLatencyChecks
         Require(arena.Map.Layout.Fits(player.Position, arena.Map.Settings.playerRadius), "Prediction respects the normal wall clearance");
 
         view.BeginSnapshot();
-        view.AcceptSnapshot(1, new ArenaParticipant.MovementState { position = start }, Vector2.zero, 0, revision + 1, false, 0);
+        view.AcceptSnapshot(1, new ArenaParticipant.MovementState { position = start }, Vector2.zero, 0, 0, revision + 1, false, 0);
         Require(view.PendingFrames == 0 && player.Position == start, "A teleport or new round clears the old movement history");
 
         string paused = snapshot.Replace("\"paused\":false", "\"paused\":true");
