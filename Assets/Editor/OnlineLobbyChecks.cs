@@ -56,6 +56,7 @@ public static class OnlineLobbyChecks
         yield return CheckRoomRecovery();
         yield return CheckProfileReplication();
         yield return CheckSeatOccupancy();
+        yield return CheckReconnectsAndProfileResults();
         foreach (string scene in new[] { "OnlineRace", "OnlineSurvival", "OnlineFreeForAll", "OnlineHotPotato" })
         {
             yield return SceneManager.LoadSceneAsync(scene);
@@ -372,6 +373,130 @@ public static class OnlineLobbyChecks
                 scene + " guest lobby matches the host's seats and names");
         }
         Debug.Log("ONLINE SEAT CHECKS PASSED: middle-seat departures, guest occupancy, replacements, stale names and retries in all four modes.");
+    }
+
+    // Fast reconnects must find the freed seat, and a refused name or skin must be explained to the
+    // requester only, while the host's accepted profile stays authoritative for everyone.
+    private static IEnumerator CheckReconnectsAndProfileResults()
+    {
+        var type = typeof(OnlineRaceSession).GetNestedType("LobbyMessage", BindingFlags.NonPublic);
+        object Profile(string name, int skin, int revision) => JsonUtility.FromJson(
+            "{\"name\":\"" + name + "\",\"skin\":" + skin + ",\"profileRevision\":" + revision + "}", type);
+        bool Flag(object message, string field) => message != null && (bool)type.GetField(field).GetValue(message);
+        var transportType = typeof(Escape4Now.Multiplayer.LanMultiplayerSession);
+        var peerType = transportType.GetNestedType("Peer", BindingFlags.NonPublic);
+        var hello = new Escape4Now.Multiplayer.LanMessage { kind = "hello", code = "FAST" };
+        foreach (string scene in new[] { "OnlineRace", "OnlineSurvival", "OnlineFreeForAll", "OnlineHotPotato" })
+        {
+            yield return SceneManager.LoadSceneAsync(scene);
+            var host = Object.FindFirstObjectByType<OnlineRaceSession>();
+            var transport = Object.FindFirstObjectByType<Escape4Now.Multiplayer.LanMultiplayerSession>();
+            Require(transport.StartRelayedHost(4, "FAST"), "Start reconnect test host");
+            var guests = new OnlineArenaLatencyChecks.Connection[3];
+            for (int i = 0; i < guests.Length; i++)
+            {
+                guests[i] = new OnlineArenaLatencyChecks.Connection();
+                Require(transport.AcceptRelayedGuest(guests[i]), scene + " seats guest P" + (i + 2));
+                guests[i].Receive(hello);
+            }
+            yield return null;
+            yield return null;
+            Call(host, "SyncSeats");
+            string[] names = { "ALPHA", "BRAVO", "CHARLIE" };
+            for (int slot = 1; slot < 4; slot++) Call(host, "AcceptProfile", slot, Profile(names[slot - 1], -1, 1));
+
+            // P2's connection closes and the replacement arrives in the same frame, before any cleanup.
+            guests[0].Dispose();
+            var back = new OnlineArenaLatencyChecks.Connection();
+            Require(transport.AcceptRelayedGuest(back), scene + " admits a replacement before the closed connection is cleaned up");
+            back.Receive(hello);
+            yield return null;
+            yield return null;
+            Require(!back.Closed && transport.GetRelayedSlot(back) == 1 && transport.GetRelayedSlot(guests[1]) == 2
+                && transport.GetRelayedSlot(guests[2]) == 3, scene + " the replacement takes P2 and P3/P4 keep their seats");
+            Call(host, "SyncSeats");
+            Require(host.PlayerCount == 4 && host.SlotName(1) == "Player 2" && host.SlotName(2) == "BRAVO" && host.SlotName(3) == "CHARLIE",
+                scene + " remaining players keep their names after a fast reconnect");
+
+            // A closed connection still listed in P4 must not block a newcomer's handshake.
+            guests[2].Dispose();
+            var late = new OnlineArenaLatencyChecks.Connection();
+            Require(transport.AcceptRelayedGuest(late), scene + " admits a player for the freed P4 seat");
+            object stale = Activator.CreateInstance(peerType);
+            peerType.GetField("wire").SetValue(stale, new OnlineArenaLatencyChecks.Connection());
+            ((Escape4Now.Multiplayer.IMatchMessageConnection)peerType.GetField("wire").GetValue(stale)).Dispose();
+            peerType.GetField("slot").SetValue(stale, 3);
+            ((IList)transportType.GetField("peers", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(transport)).Add(stale);
+            late.Receive(hello);
+            yield return null;
+            yield return null;
+            Require(!late.Closed && transport.GetRelayedSlot(late) == 3, scene + " the handshake ignores a closed connection's seat");
+            Call(host, "SyncSeats");
+
+            // Duplicate names and taken skins are refused privately; the host's profile stays in use.
+            var readySlots = Reference<System.Collections.Generic.HashSet<int>>(host, "ready");
+            Call(host, "AcceptProfile", 1, Profile("DELTA", -1, 1));
+            int bravoSkin = host.ProfileSkinIndex(2), deltaSkin = host.ProfileSkinIndex(1);
+            Require(bravoSkin >= 0 && deltaSkin >= 0, scene + " has player skins to choose from");
+            readySlots.Add(1);
+            object nameResult = Call(host, "AcceptProfile", 1, Profile("bravo", -1, 2));
+            Require(Flag(nameResult, "nameRejected") && !Flag(nameResult, "skinRejected") && host.SlotName(1) == "DELTA" && host.SlotName(2) == "BRAVO",
+                scene + " a duplicate name is refused and both players keep their names");
+            Require(readySlots.Contains(1), scene + " a refused change does not clear Ready");
+            object skinResult = Call(host, "AcceptProfile", 1, Profile("DELTA", bravoSkin, 3));
+            Require(Flag(skinResult, "skinRejected") && !Flag(skinResult, "nameRejected")
+                && host.ProfileSkinIndex(1) == deltaSkin && host.ProfileSkinIndex(2) == bravoSkin,
+                scene + " a taken skin is refused without replacing the connected player's skin");
+            Require(ReferenceEquals(Call(host, "AcceptProfile", 1, Profile("DELTA", bravoSkin, 3)), skinResult) && readySlots.Contains(1),
+                scene + " a retry gets the same result and keeps Ready");
+            Require(Call(host, "AcceptProfile", 1, Profile("bravo", -1, 2)) == null && host.SlotName(1) == "DELTA",
+                scene + " a stale request cannot replace a newer result");
+            object shared = JsonUtility.FromJson(JsonUtility.ToJson(Call(host, "CaptureLobby")), type);
+            Require(!Flag(shared, "profileResult") && !Flag(shared, "nameRejected") && !Flag(shared, "skinRejected"),
+                scene + " rejections are not broadcast to the room");
+            int freeSkin = -1;
+            for (int skin = 0; skin < host.ProfileSkinCount && freeSkin < 0; skin++)
+            {
+                bool held = false;
+                for (int slot = 0; slot < 4; slot++) held |= slot != 1 && host.IsSlotOccupied(slot) && host.ProfileSkinIndex(slot) == skin;
+                if (!held && skin != deltaSkin) freeSkin = skin;
+            }
+            object accepted = Call(host, "AcceptProfile", 1, Profile("ECHO", freeSkin, 4));
+            var revisions = (int[])type.GetField("profileRevisions").GetValue(Call(host, "CaptureLobby"));
+            Require(!Flag(accepted, "nameRejected") && !Flag(accepted, "skinRejected") && host.SlotName(1) == "ECHO"
+                && (freeSkin < 0 || host.ProfileSkinIndex(1) == freeSkin) && revisions[1] == 4 && !readySlots.Contains(1),
+                scene + " an accepted change is applied, acknowledged and needs Ready again");
+            shared = JsonUtility.FromJson(JsonUtility.ToJson(Call(host, "CaptureLobby")), type);
+
+            // The requester sees the explanation; the shared room update never shows it.
+            yield return SceneManager.LoadSceneAsync(scene);
+            var guest = Object.FindFirstObjectByType<OnlineRaceSession>();
+            var view = Object.FindFirstObjectByType<OnlineRaceLobbyView>();
+            transport = Object.FindFirstObjectByType<Escape4Now.Multiplayer.LanMultiplayerSession>();
+            var wire = new OnlineArenaLatencyChecks.Connection();
+            Require(transport.JoinRelayedHost(wire, "FAST"), "Start profile result guest");
+            wire.Receive(new Escape4Now.Multiplayer.LanMessage { kind = "lobby", player = 1, count = 4, value = 4 });
+            yield return null;
+            Call(guest, "TrackAccountName", "BRAVO");
+            Call(guest, "ApplyLobbyState", shared);
+            Require(!guest.NameRejected && !guest.SkinRejected && Call(view, "ProfileConflictText") == null,
+                scene + " the shared room update carries no private rejection");
+            object result = JsonUtility.FromJson("{\"profileResult\":true,\"nameRejected\":true,\"name\":\"BRAVO\",\"profileRevision\":0}", type);
+            Call(guest, "ApplyProfileResult", result);
+            Require(guest.ProfileUpdating && !guest.NameRejected, scene + " a result for an older request is ignored");
+            result = JsonUtility.FromJson("{\"profileResult\":true,\"nameRejected\":true,\"skinRejected\":true,\"name\":\"BRAVO\",\"profileRevision\":1}", type);
+            Call(guest, "ApplyProfileResult", result);
+            string text = (string)Call(view, "ProfileConflictText");
+            Require(!guest.ProfileUpdating && guest.NameRejected && guest.RejectedName == "BRAVO" && text != null
+                && text.Contains("BRAVO") && text.Contains(Reference<string>(view, "skinTakenMessage")),
+                scene + " the requester stops retrying and sees why the name and skin were refused");
+            Call(guest, "TrackAccountName", "FOXTROT");
+            Require(guest.ProfileUpdating && !guest.NameRejected && Call(view, "ProfileConflictText") == null,
+                scene + " choosing another value clears the old explanation");
+            Call(guest, "ApplyProfileResult", JsonUtility.FromJson("{\"profileResult\":true,\"name\":\"FOXTROT\",\"profileRevision\":2}", type));
+            Require(!guest.ProfileUpdating && !guest.NameRejected && !guest.SkinRejected, scene + " an accepted result syncs without a warning");
+        }
+        Debug.Log("ONLINE RECONNECT AND PROFILE RESULT CHECKS PASSED: same-frame replacements, closed-seat handshakes, private name/skin rejections, retries and stale results in all four modes.");
     }
 
     private static bool UniqueSkins(OnlineRaceSession session)

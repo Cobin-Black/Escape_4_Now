@@ -16,7 +16,7 @@ MonoBehaviour:
   region: 
   defaultProtocol: 0
   maximumPlayers: 4
-  testVersion: 23
+  testVersion: 24
   serviceTimeout: 30
   connectionTimeout: 30
   responseTimeout: 12

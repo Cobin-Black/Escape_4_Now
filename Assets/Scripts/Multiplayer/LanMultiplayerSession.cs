@@ -143,10 +143,17 @@ namespace Escape4Now.Multiplayer
 
         public bool AcceptRelayedGuest(IMatchMessageConnection connection)
         {
-            if (!active || !host || MatchStarted || peers.Count >= capacity - 1) return false;
+            if (!active || !host || MatchStarted) return false;
+            // A player who just left stays in the list until the next update. In the lobby that seat is
+            // already free, so drop closed connections now and let an immediate replacement in.
+            peers.RemoveAll(peer => peer.wire.Closed);
+            if (peers.Count >= capacity - 1) return false;
             peers.Add(new Peer { wire = connection, joined = Time.realtimeSinceStartup, lastSeen = Time.realtimeSinceStartup });
             return true;
         }
+
+        // Open connections only, including guests still finishing their hello.
+        private int OpenPeers => peers.FindAll(peer => !peer.wire.Closed).Count;
 
         public void ReportRelayFailure(string reason) { if (active && !failed) Fail(reason); }
 
@@ -317,7 +324,7 @@ namespace Escape4Now.Multiplayer
             if (listener != null && listener.Pending())
             {
                 Socket socket = listener.AcceptSocket();
-                if (MatchStarted || peers.Count >= 3 || !IsLocalAddress(((IPEndPoint)socket.RemoteEndPoint).Address)) socket.Dispose();
+                if (MatchStarted || OpenPeers >= 3 || !IsLocalAddress(((IPEndPoint)socket.RemoteEndPoint).Address)) socket.Dispose();
                 else peers.Add(new Peer { wire = new LanConnection(socket), joined = Time.realtimeSinceStartup,
                     lastSeen = Time.realtimeSinceStartup });
             }
@@ -378,8 +385,11 @@ namespace Escape4Now.Multiplayer
             {
                 if (message.kind != "hello" || message.code != roomCode || MatchStarted || ConnectedPlayers >= capacity)
                 { peer.wire.Dispose(); return; }
+                // A closed connection no longer holds its seat, so a replacement can take it straight away.
                 for (int slot = 1; slot < capacity; slot++)
-                    if (!peers.Exists(other => other.slot == slot)) { peer.slot = slot; break; }
+                    if (!peers.Exists(other => other != peer && other.slot == slot && !other.wire.Closed)) { peer.slot = slot; break; }
+                // Never send an invalid seat; a guest without one is turned away instead.
+                if (peer.slot < 1) { peer.wire.Dispose(); return; }
                 Send(peer.wire, new LanMessage { kind = "lobby", player = peer.slot, count = ConnectedPlayers, value = capacity });
                 return;
             }

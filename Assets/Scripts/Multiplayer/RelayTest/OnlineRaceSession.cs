@@ -122,6 +122,8 @@ namespace Escape4Now.Multiplayer.RelayTesting
             public int[] readySlots, skins;
             public int[] profileRevisions;
             public int[] occupiedSlots;
+            // Private reply to one player's profile request: which part the host refused, if any.
+            public bool profileResult, nameRejected, skinRejected;
             public string[] names;
         }
 
@@ -209,6 +211,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             ready.Remove(slot);
             acceptedProfiles[slot] = 0;
             profileConnections[slot] = null;
+            profileResults[slot] = null;
         }
 
         private void ReceiveMatch(ulong sender, FastBufferReader reader)
@@ -243,12 +246,19 @@ namespace Escape4Now.Multiplayer.RelayTesting
                     {
                         profileConnections[slot] = channel;
                         acceptedProfiles[slot] = 0;
+                        profileResults[slot] = null;
                     }
-                    AcceptProfile(slot, message);
+                    // The result goes only to the player who asked; everyone else just sees the accepted profile.
+                    var result = AcceptProfile(slot, message);
+                    if (result != null) SendLobby(sender, result);
                 }
                 else if (message.ready) ready.Add(slot);
                 else ready.Remove(slot);
                 nextLobby = 0;
+            }
+            else if (!IsHost && sender == NetworkManager.ServerClientId && !message.request && message.profileResult)
+            {
+                ApplyProfileResult(message);
             }
             else if (!IsHost && sender == NetworkManager.ServerClientId && !message.request && message.readySlots != null)
             {
@@ -278,8 +288,26 @@ namespace Escape4Now.Multiplayer.RelayTesting
             profileRevision++;
             profilePending = true;
             nextProfile = 0;
+            // A new attempt replaces the previous answer.
+            NameRejected = SkinRejected = false;
+            RejectedName = null;
             // An edited profile must be checked again before the match can start.
             Ready = false;
+        }
+
+        // This player's last profile request was refused in part. The host's name/skin stays in use.
+        public bool NameRejected { get; private set; }
+        public bool SkinRejected { get; private set; }
+        public string RejectedName { get; private set; }
+
+        // Only the answer to this player's newest request counts; an older answer cannot replace it.
+        private void ApplyProfileResult(LobbyMessage result)
+        {
+            if (result == null || result.profileRevision != profileRevision) return;
+            profilePending = false;
+            NameRejected = result.nameRejected;
+            SkinRejected = result.skinRejected;
+            RejectedName = result.nameRejected ? result.name : null;
         }
 
         private LobbyMessage ProfileRequest() => new LobbyMessage
@@ -287,16 +315,20 @@ namespace Escape4Now.Multiplayer.RelayTesting
             request = true, profile = true, name = pendingName, skin = pendingSkin, profileRevision = profileRevision
         };
 
-        private void AcceptProfile(int slot, LobbyMessage message)
+        // Applies a newer revision once and returns the private result for the requester. A retry of the
+        // same revision gets the stored result again without clearing Ready; an older request gets nothing.
+        private LobbyMessage AcceptProfile(int slot, LobbyMessage message)
         {
             if (message.profileRevision > acceptedProfiles[slot])
             {
-                SaveProfile(slot, message.name, message.skin);
+                profileResults[slot] = SaveProfile(slot, message.name, message.skin);
+                profileResults[slot].profileRevision = message.profileRevision;
                 acceptedProfiles[slot] = message.profileRevision;
             }
-            // A retry only asks for another acknowledgement; it must not clear Ready again.
             nextLobby = 0;
+            return message.profileRevision == acceptedProfiles[slot] ? profileResults[slot] : null;
         }
+        private readonly LobbyMessage[] profileResults = new LobbyMessage[4];
 
         private void ApplyLobbyState(LobbyMessage message)
         {
@@ -340,27 +372,37 @@ namespace Escape4Now.Multiplayer.RelayTesting
             else local.SetPlayerName(slot, name);
         }
 
-        private void SaveProfile(int slot, string name, int skin)
+        // The host keeps the previous name or skin when the request conflicts with a connected player,
+        // and reports which part was refused. Ready is only cleared when the profile actually changed.
+        private LobbyMessage SaveProfile(int slot, string name, int skin)
         {
             string previous = SlotName(slot);
+            int previousSkin = ProfileSkinIndex(slot);
             SetSlotName(slot, name);
             string requested = SlotName(slot);
             // Only connected players' names count. An open seat's leftover or default name never blocks a profile.
-            if (Enumerable.Range(0, Capacity).Any(i => i != slot && IsSlotOccupied(i) &&
-                string.Equals(SlotName(i), requested, StringComparison.OrdinalIgnoreCase)))
-                SetSlotName(slot, previous);
+            bool nameTaken = Enumerable.Range(0, Capacity).Any(i => i != slot && IsSlotOccupied(i) &&
+                string.Equals(SlotName(i), requested, StringComparison.OrdinalIgnoreCase));
+            if (nameTaken) SetSlotName(slot, previous);
+            bool skinTaken = false;
             if (Skins != null)
             {
                 // An open seat's placeholder skin moves aside for a connected player who chose it.
                 int owner = Skins.GetOwner(skin);
                 if (owner >= 0 && owner != slot && !IsSlotOccupied(owner)) Skins.Release(owner);
-                Skins.TryAssign(slot, skin);
+                // A request without a skin (NoSkin) keeps the current one and is not a conflict.
+                skinTaken = skin != Skin_Handler.NoSkin && !Skins.TryAssign(slot, skin);
                 // Every seat keeps a unique skin, even if the requested one could not be assigned.
                 Skins.FillMissing();
             }
-            ready.Remove(slot);
-            if (slot == 0) Ready = false;
+            if (SlotName(slot) != previous || ProfileSkinIndex(slot) != previousSkin)
+            {
+                ready.Remove(slot);
+                if (slot == 0) Ready = false;
+            }
             nextLobby = 0;
+            return new LobbyMessage { profileResult = true, name = requested, skin = ProfileSkinIndex(slot),
+                nameRejected = nameTaken, skinRejected = skinTaken };
         }
 
         public void ToggleReady()
@@ -442,7 +484,8 @@ namespace Escape4Now.Multiplayer.RelayTesting
                     nextProfile = Time.realtimeSinceStartup + profileRetryInterval;
                     if (IsHost)
                     {
-                        AcceptProfile(LocalSlot, ProfileRequest());
+                        // The host checks its own profile directly and shows the result the same way.
+                        ApplyProfileResult(AcceptProfile(LocalSlot, ProfileRequest()));
                         profilePending = false;
                     }
                     else SendLobby(NetworkManager.ServerClientId, ProfileRequest());
@@ -484,6 +527,9 @@ namespace Escape4Now.Multiplayer.RelayTesting
             Array.Clear(acceptedProfiles, 0, acceptedProfiles.Length);
             Array.Clear(profileConnections, 0, profileConnections.Length);
             Array.Clear(seatOwners, 0, seatOwners.Length);
+            Array.Clear(profileResults, 0, profileResults.Length);
+            NameRejected = SkinRejected = false;
+            RejectedName = null;
             Array.Clear(guestOccupied, 0, guestOccupied.Length);
             profileRevision = 0;
             lastAccountName = pendingName = null;

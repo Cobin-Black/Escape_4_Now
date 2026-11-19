@@ -89,6 +89,10 @@ namespace Escape4Now.Multiplayer.RelayTesting
         [SerializeField] private string guestMessage = "You are in the room. Select Ready when you are ready to play.";
         [SerializeField] private string waitingMessage = "You are ready. Waiting for the match to start.";
         [SerializeField] private string allReadyMessage = "Everyone is ready. Start the match!";
+        [Header("Profile Conflict Messages")]
+        [SerializeField, Tooltip("{0} is the requested name, {1} the name the room is showing instead.")]
+        private string nameTakenMessage = "Another player is already called {0}. You are shown as {1}.";
+        [SerializeField] private string skinTakenMessage = "That skin is already taken. Choose another skin.";
         private InputAction cancelAction;
         private bool previousRoom;
         private int selectedCapacity = 2;
@@ -156,6 +160,15 @@ namespace Escape4Now.Multiplayer.RelayTesting
         {
             try { reportPath.text = "Saved: " + session.Relay.Export(networkLabel.text); }
             catch (Exception error) { reportPath.text = "Could not save: " + RelayTestReport.Safe(error.Message); }
+        }
+
+        // Explains a refused name or skin to this player only, until they make another change.
+        private string ProfileConflictText()
+        {
+            if (session.LocalSlot < 0 || !session.NameRejected && !session.SkinRejected) return null;
+            string text = session.NameRejected ? string.Format(nameTakenMessage, session.RejectedName, session.SlotName(session.LocalSlot)) : "";
+            if (session.SkinRejected) text = (text + " " + skinTakenMessage).Trim();
+            return text;
         }
 
         // Refresh the controls and locker cards when the account or room state changes.
@@ -236,9 +249,11 @@ namespace Escape4Now.Multiplayer.RelayTesting
                 row.badge.color = isReady ? session.SlotColor(slot) : waitingColor;
             }
             bool failed = !string.IsNullOrEmpty(connection.Error);
-            status.color = failed ? errorColor : normalColor;
+            string conflict = inRoom ? ProfileConflictText() : null;
+            status.color = failed || conflict != null ? errorColor : normalColor;
             status.text = !canPlayOnline ? "Sign in with your game account to play online."
                 : failed ? string.IsNullOrEmpty(connection.Status) ? failureMessage : connection.Status
+                : conflict != null ? conflict
                 : connection.Busy || connection.Active && !inRoom ? connectingMessage
                 : !inRoom ? setupMessage : session.CanStart ? allReadyMessage : session.Ready ? waitingMessage
                 : session.IsHost ? hostMessage : guestMessage;
