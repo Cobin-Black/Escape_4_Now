@@ -87,6 +87,7 @@ namespace Escape4Now.Arena
         public bool IsInstant => kind == ArenaEventKind.PlayerSwap || kind == ArenaEventKind.PotatoShuffle || kind == ArenaEventKind.ExtraTime || kind == ArenaEventKind.TimeCut;
         public string DisabledReason => kind == ArenaEventKind.LockerRoomOpens || kind == ArenaEventKind.StageDoorOpens ? "Requires a functional shortcut door. This room has open passages, so this event is unavailable." : kind <= ArenaEventKind.Teleport ? "Legacy proximity pickup. Items are not part of the arena event pool." : "";
 
+        // Exclude unavailable events and keep each room's event choices in its own pool.
         public bool Supports(ArenaRoom room)
         {
             if (DisabledReason.Length > 0)

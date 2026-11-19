@@ -45,6 +45,7 @@ namespace Escape4Now.Puzzles
         public System.Action OnlineClose { get; set; }
         public bool OnlineHost { get; set; }
 
+        // Show the host's active puzzle attempt, owner and remaining time on this computer.
         public void ApplyOnlineAttempt(PlayerCharacter player, int revision, int seed, int station, PuzzleSession.Progress progress,
             System.Action<string, int, int, string> send)
         {
@@ -103,6 +104,7 @@ namespace Escape4Now.Puzzles
                     TryInteract(player);
         }
 
+        // Toggle task-name assistance without changing the stations or their progress.
         public void SetTaskNamesVisible(bool visible)
         {
             showTaskNames = visible;
@@ -130,6 +132,7 @@ namespace Escape4Now.Puzzles
             return StartAttempt(player);
         }
 
+        // Check the player and station before opening a timed puzzle attempt.
         public bool StartAttempt(PlayerCharacter player)
         {
             var task = NearbyTask(player);
@@ -146,12 +149,14 @@ namespace Escape4Now.Puzzles
             return true;
         }
 
+        // End the current interaction through the same local or online close path.
         public void ClosePuzzle()
         {
             if (OnlineClose != null) { OnlineClose(); return; }
             CloseOnlineAttempt();
         }
 
+        // Close the visible online puzzle without deciding its result locally.
         public void CloseOnlineAttempt()
         {
             if (Puzzle == null || Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused)
@@ -159,6 +164,7 @@ namespace Escape4Now.Puzzles
             FinishAttempt(Puzzle.Solved, true);
         }
 
+        // Apply completion through the existing task and shared-objective rules.
         public void FinishSolvedPuzzle()
         {
             if (Puzzle != null && Puzzle.Solved && Puzzle.OnlineAction == null && !OnlineHost)
@@ -198,6 +204,7 @@ namespace Escape4Now.Puzzles
                 FinishAttempt(false, false);
         }
 
+        // Refresh station markers from the current task availability and completion state.
         public void RefreshMarkers()
         {
             RefreshStationMarkers();

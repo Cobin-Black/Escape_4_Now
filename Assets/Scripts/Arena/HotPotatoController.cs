@@ -43,6 +43,7 @@ namespace Escape4Now.Arena
         public event System.Action<Vector3> PotatoExploded;
         private float cooldown, delay;
 
+        // Copy the host's holder, timer and round so guests do not run another elimination clock.
         public void ApplyOnlineRound(int round, float seconds, int holder, bool betweenRounds)
         {
             Round = round;
@@ -85,6 +86,7 @@ namespace Escape4Now.Arena
             ShuffleHolder();
         }
 
+        // Choose a new potato holder through the same rules used by normal rounds.
         public void ShuffleHolder(bool excludeCurrent = false)
         {
             var alive = Players.FindAll(p => p.Alive && (!excludeCurrent || p != Holder));
@@ -174,6 +176,7 @@ namespace Escape4Now.Arena
             return true;
         }
 
+        // Finish when one player remains, or prepare the next round if the holder was eliminated.
         protected override void ParticipantEliminated(ArenaParticipant player)
         {
             if (CheckLastPlayer())

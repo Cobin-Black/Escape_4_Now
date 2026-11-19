@@ -10,6 +10,7 @@ using UnityEngine.UI;
 
 public static class RaceSoloSetup
 {
+    // Configure the saved Race setup so solo play can use the existing match systems.
     public static void Apply()
     {
         try

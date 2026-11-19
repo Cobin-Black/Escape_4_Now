@@ -290,6 +290,7 @@ namespace Escape4Now.Arena
                 responsive.ReservedRightWidth = (controllerPanelWidth + controllerPanelGap) * 2;
         }
 
+        // Open or close controller setup without leaving the player-selection screen.
         private void ShowControllerPanel(bool visible)
         {
             controllerOverlay.gameObject.SetActive(visible);
@@ -298,6 +299,7 @@ namespace Escape4Now.Arena
             EventSystem.current?.SetSelectedGameObject(visible ? changeButtons[0].gameObject : controllerButton.gameObject);
         }
 
+        // Refresh controller feedback and let Cancel close assignment or the controller panel.
         private void Update()
         {
             if (padFooter == null)
@@ -500,6 +502,7 @@ namespace Escape4Now.Arena
             }
         }
 
+        // Use the player color to show which role is selected, and dim unavailable choices.
         private static void PaintRole(Button half, bool selected, Color color, bool enabled)
         {
             var face = half.targetGraphic as Image;

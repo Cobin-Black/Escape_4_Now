@@ -125,6 +125,7 @@ namespace Escape4Now.UI
         public void MoveWireDrag(Vector2 screen) => matching.MoveDrag(screen);
         public void EndWireDrag() => matching.EndDrag();
         public void HoverMatch(int side,int index,bool entered) => matching?.Hover(side,index,entered);
+        // Check whether the required matching pairs have all been connected.
         public bool IsMatchingComplete(int side,int index)
         {
             var puzzle = mode.Tasks.Puzzle;
@@ -407,6 +408,7 @@ namespace Escape4Now.UI
             selectedIndex = -1;
         }
 
+        // Animate newly completed pairs once instead of replaying the effect on every refresh.
         private void AnimateNewMatches(bool[] before,Escape4Now.Puzzles.PuzzleSession puzzle)
         {
             for (int i = 0; i < before.Length; i++)
@@ -417,6 +419,7 @@ namespace Escape4Now.UI
                         left[i].Motion.Insert(right[System.Array.IndexOf(puzzle.Right,puzzle.Left[i])].Motion.SlotCenter);
                 }
         }
+        // Submit the chosen tile swap and animate the changed number positions.
         private void SwapNumbers(Escape4Now.Puzzles.PuzzleSession puzzle,int a,int b)
         {
             if (a == b) return;

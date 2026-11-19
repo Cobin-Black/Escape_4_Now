@@ -160,6 +160,7 @@ public static class LanAuthorityChecks
         return new LanConnection(socket);
     }
 
+    // Stop this check with a clear message when a required behavior is missing.
     private static void Require(bool condition, string label)
     {
         if (!condition) throw new Exception("FAIL: " + label);

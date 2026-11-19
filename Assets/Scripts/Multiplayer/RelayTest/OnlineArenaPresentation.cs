@@ -49,6 +49,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
         public int InputSequence { get; private set; }
         public int PendingFrames => pending.Count;
 
+        // Choose the locally controlled participant and start a fresh movement-prediction history.
         public void Configure(ArenaMatch match, int slot)
         {
             arena = match;
@@ -59,6 +60,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             ClearPending();
         }
 
+        // Remember the current visible positions before applying a host correction.
         public void BeginSnapshot()
         {
             for (int i = 0; i < views.Length; i++)
@@ -120,6 +122,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             player.SetPresentationOffset(view.correction);
         }
 
+        // Move the local guest immediately and retain its input for correction when the host replies.
         public void Advance(Vector2 direction, float seconds)
         {
             if (arena == null || !arena.Replica || !arena.Playing || arena.Paused || seconds <= 0) return;
@@ -136,6 +139,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             }
         }
 
+        // Advance another player's presentation from the last host update within the configured limit.
         private void ProjectRemote(int slot, float seconds)
         {
             var view = views[slot];
@@ -145,6 +149,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             view.projectedSeconds += step;
         }
 
+        // Smooth the visible drawing after gameplay updates without changing the authoritative rules.
         private void LateUpdate()
         {
             if (arena == null || !arena.Replica || views == null) return;
@@ -156,6 +161,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             }
         }
 
+        // Remove prediction and visual offsets when the match can no longer advance.
         public void Stop()
         {
             ClearPending();
@@ -163,6 +169,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             foreach (var view in views) { view.correction = Vector3.zero; view.velocity = Vector2.zero; }
         }
 
+        // Drop unconfirmed movement history when it no longer applies.
         private void ClearPending()
         {
             pending.Clear();

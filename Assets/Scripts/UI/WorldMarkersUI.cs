@@ -36,6 +36,7 @@ namespace Escape4Now.UI
         private readonly List<Rect> placedStorageBounds = new List<Rect>();
         private float nextScan;
 
+        // Refresh map markers from the active match and remove ones that no longer apply.
         private void LateUpdate()
         {
             if (Time.unscaledTime >= nextScan)
@@ -104,6 +105,7 @@ namespace Escape4Now.UI
             }
         }
 
+        // Project the world marker into the overlay and show its current presentation.
         private void UpdateMarker(WorldMarkerUI marker, bool show, Vector3 world, Sprite sprite, Color tint, string label, Color color)
         {
             var camera = context.WorldCamera;

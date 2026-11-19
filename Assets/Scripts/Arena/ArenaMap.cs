@@ -162,6 +162,7 @@ namespace Escape4Now.Arena
                 ArenaRoomDecor.Build(this, drawing, settings.roomVisuals);
         }
 
+        // Draw basketball markings in floor coordinates so they follow the isometric map.
         private void Court()
         {
             float left = 4, right = Layout.Width - 5, bottom = settings.sideRoomDepth + 2, top = Layout.Height - settings.sideRoomDepth - 3;
@@ -196,6 +197,7 @@ namespace Escape4Now.Arena
             return renderer;
         }
 
+        // Convert floor points into a visible line using the map's material and marking settings.
         private void Line(string label, Vector2[] points, bool loop)
         {
             var line = new GameObject(label).AddComponent<LineRenderer>();
@@ -211,6 +213,7 @@ namespace Escape4Now.Arena
                 line.SetPosition(i, World(points[i]) + Vector3.back * .02f);
         }
 
+        // Create optional room labels only when the map settings ask for them.
         private void RoomNames()
         {
             if (!settings.showRoomNames || settings.labelFont == null)
@@ -253,6 +256,7 @@ namespace Escape4Now.Arena
             }
         }
 
+        // Remove the previous generated drawing and meshes before building another map.
         private void Clear()
         {
             EquipmentViews.Clear();

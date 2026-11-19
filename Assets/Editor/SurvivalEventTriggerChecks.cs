@@ -18,6 +18,7 @@ using Object = UnityEngine.Object;
 
 public static class SurvivalEventTriggerChecks
 {
+    // Verify environmental events affect gameplay through their intended surfaces, schedules and player interactions.
     public static IEnumerator Check(SurvivalModeController mode, LocalMultiplayerSession session)
     {
         var map = (SurvivalMap)mode.GridMap;
@@ -250,6 +251,7 @@ public static class SurvivalEventTriggerChecks
         System.IO.Directory.CreateDirectory("Logs/SurvivalEnvironmentPreviews");
         ScreenCapture.CaptureScreenshot("Logs/SurvivalEnvironmentPreviews/" + name + ".png");
     }
+    // Capture the tested environmental detail so its generated presentation can be inspected.
     private static IEnumerator CaptureDetail(Vector3 center, string name)
     {
         var camera = Camera.main;

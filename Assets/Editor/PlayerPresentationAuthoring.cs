@@ -12,6 +12,7 @@ using UnityEngine.UI;
 // Updates saved references without rebuilding a scene or replacing its existing layout.
 public static class PlayerPresentationAuthoring
 {
+    // Apply the shared player palette and matching dice presentation to the saved scenes.
     public static void Apply()
     {
         const string prefabPath = "Assets/Prefabs/Interface/MatchInterface.prefab";
@@ -55,6 +56,7 @@ public static class PlayerPresentationAuthoring
         Debug.Log("PLAYER PRESENTATION REFERENCES SAVED: shared colors, locker accents and HUD dice.");
     }
 
+    // Point the battle-dice presentation at the same authored die used by the match UI.
     private static void ConfigureDice(GameObject root)
     {
         foreach (var battle in root.GetComponentsInChildren<RaceBattleUI>(true))

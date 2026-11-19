@@ -21,6 +21,7 @@ namespace Escape4Now.UI
         private DiceDisplay diceTemplate;
         [SerializeField] private RaceBattleDice.Look diceLook = new RaceBattleDice.Look();
         private RaceKeyBattle battle;
+        // Connect the existing battle controls to the current local or online Race action.
         private void Start()
         {
             var mode = context.Session != null ? context.Session.Mode as Race_Gamemode : null;

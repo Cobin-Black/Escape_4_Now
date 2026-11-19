@@ -23,6 +23,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
         protected override void ListenToMode() => Potato.PotatoExploded += RecordExplosion;
         protected override void StopListeningToMode() => Potato.PotatoExploded -= RecordExplosion;
 
+        // Add the holder, remaining time, round and explosion cue to the common arena update.
         protected override Snapshot CaptureMode() => new PotatoSnapshot
         {
             round = Potato.Round,
@@ -33,6 +34,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             explosionPosition = explosionPosition
         };
 
+        // Read the Hot Potato fields together with the shared arena state.
         protected override Snapshot ReadSnapshot(string payload, int count)
         {
             var state = JsonUtility.FromJson<PotatoSnapshot>(payload);
@@ -51,6 +53,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
 
         protected override void AdvanceGuestView(float seconds) => Potato.AdvanceOnlineClock(seconds);
 
+        // Remember one confirmed explosion cue so guests show the same effect once.
         private void RecordExplosion(Vector3 position)
         {
             if (Arena.Replica) return;

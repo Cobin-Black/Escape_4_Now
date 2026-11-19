@@ -85,6 +85,7 @@ namespace Escape4Now.Menus
             previousNavigation = Vector2.zero;
         }
 
+        // Release menu callbacks and input actions when this screen stops being active.
         private void OnDisable()
         {
             navigateAction?.Dispose();
@@ -131,6 +132,7 @@ namespace Escape4Now.Menus
             section = next;
         }
 
+        // Move the selection through the available modes without starting a match.
         private void NavigateMode(ref int selection, float current, float previous)
         {
             int count = ModeNames.Length;
@@ -281,6 +283,7 @@ namespace Escape4Now.Menus
             }
         }
 
+        // Open the selected online scene, checking account access before leaving the menu.
         private void StartOnlineMode()
         {
             if (!AccountService.IsSignedIn)

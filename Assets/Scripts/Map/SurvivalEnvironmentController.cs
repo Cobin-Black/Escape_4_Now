@@ -161,12 +161,14 @@ namespace Escape4Now.Map
             }
         }
 
+        // Look up an event only when it is enabled and selected for this match.
         private SurvivalEventRule Rule(SurvivalEventType type)
         {
             foreach (var rule in settings.events)
                 if (rule != null && rule.type == type && rule.enabled && rule.Supported && rule.weight > 0 && plan.IsSelected(type)) return rule;
             return null;
         }
+        // Check whether this cell belongs to the generated environmental setup.
         public bool IsEnvironmentalCell(Vector2Int cell)
         {
             if (boostCells.Contains(cell) || wetPoolCells.Contains(cell) || pickups.TryGetValue(cell, out var item) && item != null && item.IsAtPosition(cell)) return true;
@@ -211,6 +213,7 @@ namespace Escape4Now.Map
             }
             return null;
         }
+        // Keep track boosts separated instead of placing overlapping sections.
         private bool NearBoostSection(Vector2Int cell)
         {
             foreach (var existing in boostCells)
@@ -361,6 +364,7 @@ namespace Escape4Now.Map
             return true;
         }
 
+        // Use a connected surface for ground effects and spaced heads for sprinkler spray.
         private void SpawnAreaVisuals(SurvivalEnvironmentalArea effect, SurvivalWorldMarker prefab)
         {
             if (effect.Type != SurvivalEventType.Mud && effect.Type != SurvivalEventType.Sprinklers)

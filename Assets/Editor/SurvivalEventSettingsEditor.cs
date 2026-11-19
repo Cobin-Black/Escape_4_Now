@@ -15,6 +15,7 @@ public sealed class SurvivalEventSettingsEditor : Editor
     private bool showAdditionalSettings;
     private bool showEnvironment;
 
+    // Prepare the serialized event fields used by the custom settings Inspector.
     private void OnEnable()
     {
         events = new ReorderableList(serializedObject, serializedObject.FindProperty("events"), true, true, true, true);
@@ -34,6 +35,7 @@ public sealed class SurvivalEventSettingsEditor : Editor
         };
     }
 
+    // Draw editable event rules and show which types the current system supports.
     public override void OnInspectorGUI()
     {
         serializedObject.Update();
@@ -100,6 +102,7 @@ public sealed class SurvivalEventSettingsEditor : Editor
         serializedObject.ApplyModifiedProperties();
     }
 
+    // Show the remaining scheduling, placement and feedback settings alongside the event list.
     private void DrawAdditionalSettings()
     {
         var property = serializedObject.GetIterator();

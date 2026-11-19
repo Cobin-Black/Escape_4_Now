@@ -99,6 +99,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
 
         public override bool StartHost(int count) => StartBoard(count, null);
 
+        // Translate the room slot into the survivor or monster turn before allowing input.
         public override bool CanUseTurn(int slot) =>
             slot >= 0 && Started && !Finished && !LocalMultiplayerSession.GameplayPaused
             && (slot == MonsterSlot ? mode.Turns.CurrentTurnOwner == TurnOwner.Enemy && mode.Monster != null
@@ -145,6 +146,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             });
         }
 
+        // Validate the host update, build the matching campus if needed, and copy confirmed Survival progress.
         public override bool Apply(int count, string payload)
         {
             var state = JsonUtility.FromJson<Snapshot>(payload);
@@ -278,12 +280,14 @@ namespace Escape4Now.Multiplayer.RelayTesting
 
         public override void SubmitTurnAction(LanMultiplayerSession session, string action) => Send(action);
 
+        // Send a Survival command through the shared room with the current turn information.
         private void Send(string action, int a = 0, int b = 0, string value = null) =>
             transport.SubmitModeInput(JsonUtility.ToJson(new Command
             {
                 action = action, a = a, b = b, value = value, round = mode.Turns.TurnNumber, revision = Tasks.Revision
             }));
 
+        // Keep the connection failure separate from normal Survival win and loss rules.
         public override void ConnectionLost(string reason)
         {
             connectionError = reason;

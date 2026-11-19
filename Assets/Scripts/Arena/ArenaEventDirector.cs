@@ -63,6 +63,7 @@ namespace Escape4Now.Arena
             public float[] ballTravel;
         }
 
+        // Copy active event timers, targets and moving objects so guests can show the host's events.
         public OnlineEvent[] CaptureOnlineEvents()
         {
             return active.ConvertAll(state => new OnlineEvent
@@ -179,6 +180,7 @@ namespace Escape4Now.Arena
             round = 0;
         }
 
+        // Use each event's weight when choosing, so rarer events are picked less often.
         private ArenaEventEntry Pick(List<ArenaEventEntry> entries)
         {
             float total = 0;
@@ -196,6 +198,7 @@ namespace Escape4Now.Arena
         }
 
         private float Range(Vector2 range) => Mathf.Max(.1f, Mathf.Lerp(range.x, Mathf.Max(range.x, range.y), (float)random.NextDouble()));
+        // Pause event audio with the match, then advance the event timers.
         private void Update()
         {
             bool pause = Match != null && Match.Paused;
@@ -329,6 +332,7 @@ namespace Escape4Now.Arena
             return true;
         }
 
+        // Keep another event from placing effects on cells already in use.
         internal bool Reserved(Vector2Int cell)
         {
             foreach (var state in active)
@@ -348,6 +352,7 @@ namespace Escape4Now.Arena
             return ArenaEventSafety.CanChange(Match, new List<Vector2Int>(unsafeCells), open);
         }
 
+        // Apply active slippery-floor steering, moving-light slowdown and the holder's Spotlight boost.
         public Vector2 FilterMovement(ArenaParticipant player, Vector2 desired, Vector2 previous, float dt)
         {
             if (effects == null || Match == null || !Match.Playing)
@@ -378,6 +383,7 @@ namespace Escape4Now.Arena
             return speed;
         }
 
+        // Play the assigned event sound at the volume set in the event pool.
         internal void Play(AudioClip clip)
         {
             if (clip == null || pool == null)
@@ -387,6 +393,7 @@ namespace Escape4Now.Arena
                 audio.PlayOneShot(clip, pool.volume);
         }
 
+        // Restore this event's temporary changes before removing its visuals.
         private void End(ArenaEventState state)
         {
             if (!active.Contains(state))
@@ -398,6 +405,7 @@ namespace Escape4Now.Arena
             active.Remove(state);
         }
 
+        // End every active effect so no temporary blocks or visuals remain.
         private void ClearActive()
         {
             while (active.Count > 0)

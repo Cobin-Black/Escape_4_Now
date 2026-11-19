@@ -27,6 +27,7 @@ namespace Escape4Now.Map
             home = branch.localPosition;
             branch.localPosition = home + Vector3.up*fallHeight;
         }
+        // Animate the branch toward the ground, then let its landing callback accept or cancel the block.
         private void Update()
         {
             if (finished || land == null || (isPaused != null ? isPaused() : Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused)) return;

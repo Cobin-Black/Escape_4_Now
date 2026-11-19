@@ -18,6 +18,7 @@ using Object = UnityEngine.Object;
 public static class ArenaAuthoring
 {
     private static Font font;
+    // Create the two arena scenes and connect their reusable map, player, input and UI assets.
     [MenuItem("Tools/Escape 4 Now/Author Arena Scenes")]
     public static void Build()
     {
@@ -174,6 +175,7 @@ public static class ArenaAuthoring
     }
 
     private static SurvivalPropVisual Prop(string name) => AssetDatabase.LoadAssetAtPath<SurvivalPropVisual>("Assets/Prefabs/Survival/" + name + ".prefab");
+    // Save the generated arena setup as project assets rather than leaving temporary scene objects.
     private static T Save<T>(T asset, string path)
         where T : ScriptableObject
     {
@@ -196,6 +198,7 @@ public static class ArenaAuthoring
         return Save(InputActionReference.Create(asset.FindAction(action, true)), "Assets/Settings/Arena/" + name + " Input.asset");
     }
 
+    // Build the separate keyboard action maps used by local arena players.
     private static InputActionAsset CreateControls()
     {
         var asset = ScriptableObject.CreateInstance<InputActionAsset>();
@@ -254,6 +257,7 @@ public static class ArenaAuthoring
     }
 
     private static ArenaEventPool CreatePool(string stem, ArenaRoom room) => ArenaEventAuthoring.ConfigurePool(stem, room);
+    // Create the reusable potato-holder visual and its countdown label.
     private static void Potato(HotPotatoController mode)
     {
         var view = new GameObject("Potato presentation").AddComponent<PotatoHolderView>();
@@ -279,6 +283,7 @@ public static class ArenaAuthoring
     }
 
     private static void UI(ArenaMatch mode, InputActionAsset project) => ArenaPresentationAuthoring.BuildSceneUI(mode, project);
+    // Create a world-space label with the configured font and draw order.
     private static TextMesh WorldText(Transform parent, string label, Vector3 position, float size)
     {
         var go = new GameObject(label, typeof(TextMesh));
@@ -304,6 +309,7 @@ public static class ArenaAuthoring
 
     private static void Set(SerializedObject data, string name, bool value) => data.FindProperty(name).boolValue = value;
     private static void Set(SerializedObject data, string name, Object value) => data.FindProperty(name).objectReferenceValue = value;
+    // Include the generated arena scenes in the build without dropping existing scene entries.
     private static void AddBuildScenes()
     {
         var scenes = new List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
@@ -318,6 +324,7 @@ public static class ArenaAuthoring
                 scenes.Add(new EditorBuildSettingsScene(path, true));
         EditorBuildSettings.scenes = scenes.ToArray();
     }
+    // Connect the generated arena modes to the existing main-menu choices.
     private static void UpdateMenu()
     {
         EditorSceneManager.OpenScene("Assets/Scenes/MainMenu.unity");

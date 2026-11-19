@@ -23,6 +23,7 @@ public static class RelayTestAuthoring
     private static readonly Color Panel = new Color(.025f, .07f, .1f);
     private static readonly Color Accent = new Color(.02f, .67f, .83f);
 
+    // Create the diagnostic scene with its own network manager, transport and test controls.
     [MenuItem("Tools/Escape 4 Now/Relay Test/Create Test Scene")]
     public static void CreateScene()
     {
@@ -102,6 +103,7 @@ public static class RelayTestAuthoring
         Debug.Log("Relay test scene authored. No existing game scenes or build settings were changed.");
     }
 
+    // Build the saved connection-test player used by standalone networking checks.
     [MenuItem("Tools/Escape 4 Now/Relay Test/Build Standalone Tester")]
     public static void Build()
     {
@@ -130,6 +132,7 @@ public static class RelayTestAuthoring
         CreateOnlineScene("HotPotato", "OnlineHotPotato");
     }
 
+    // Build the online scene around the existing local mode and its network adapter.
     private static void CreateOnlineScene(string source, string destination)
     {
         CreateScene();
@@ -193,6 +196,7 @@ public static class RelayTestAuthoring
         Debug.Log("ONLINE RACE SCENE AUTHORED: existing Race scene is unchanged.");
     }
 
+    // Build the online Race player from its saved scene and build settings.
     [MenuItem("Tools/Escape 4 Now/Relay Test/Build Online Race Prototype")]
     public static void BuildOnlineRace()
     {
@@ -240,6 +244,7 @@ public static class RelayTestAuthoring
         return rect;
     }
 
+    // Create a styled diagnostic label with a saved UI reference.
     private static Text Label(Transform parent, string name, string value, int size, Vector2 dimensions, Vector2 position)
     {
         var text = Rect(parent, name, dimensions, position).gameObject.AddComponent<Text>();
@@ -263,6 +268,7 @@ public static class RelayTestAuthoring
         return button;
     }
 
+    // Create a diagnostic text field for room codes or report labels.
     private static InputField Input(Transform parent, string placeholder, Vector2 size, Vector2 position)
     {
         var rect = Box(parent, placeholder, size, position, new Color(.09f, .15f, .19f));
@@ -275,6 +281,7 @@ public static class RelayTestAuthoring
         return input;
     }
 
+    // Build the protocol selector and its dropdown template for the connection-test UI.
     private static Dropdown Protocol(Transform parent, Vector2 position)
     {
         var rect = Box(parent, "Connection Protocol", new Vector2(280, 44), position, new Color(.09f, .15f, .19f));

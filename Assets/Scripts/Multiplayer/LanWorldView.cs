@@ -21,6 +21,7 @@ namespace Escape4Now.Multiplayer
         private readonly Dictionary<int, GameObject> copies = new Dictionary<int, GameObject>();
         private bool hasLayout;
 
+        // Keep the map, players and event sources that this view copies to and from host snapshots.
         public LanWorldView(LocalMultiplayerSession owner)
         {
             session = owner;

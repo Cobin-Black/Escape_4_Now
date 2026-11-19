@@ -712,6 +712,7 @@ public static class OnlineLobbyAuthoring
         card.localRotation = Quaternion.Euler(0, 0, slot % 2 == 0 ? .8f : -.8f);
     }
 
+    // Build the dashed empty-seat frame used by the shared player-selection cards.
     private static void DashedBorder(Transform parent, float x, float y, float width, float height, float stroke, Color color)
     {
         const float step = 12f, dash = 7f;

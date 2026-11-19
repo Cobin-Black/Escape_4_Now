@@ -21,6 +21,7 @@ namespace Escape4Now.Map
         public void ConfigureContext(System.Func<bool> isPaused, System.Func<bool> hasEnded)
         { pauseContext = isPaused; endedContext = hasEnded; }
         public void Follow(Transform player) { target = player; }
+        // Age and clean up this short visual cue, respecting its pause and lifetime rules.
         private void Update()
         {
             if (endedContext != null ? endedContext() : Escape4Now.Multiplayer.LocalMultiplayerSession.MatchHasEnded) { Destroy(gameObject); return; }

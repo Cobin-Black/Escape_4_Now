@@ -21,6 +21,7 @@ namespace Escape4Now.Puzzles
             public int[] values, ports;
         }
 
+        // Copy puzzle progress into a network-friendly state without exposing the live arrays.
         public Progress CaptureProgress() => new Progress
         {
             solved = Solved, failed = Failed, timedOut = TimedOut, sequence = SequenceProgress,
@@ -28,6 +29,7 @@ namespace Escape4Now.Puzzles
             values = Values, ports = Ports
         };
 
+        // Restore the host's puzzle progress into this session's existing pieces.
         public void ApplyProgress(Progress progress)
         {
             Solved = progress.solved;
@@ -171,6 +173,7 @@ namespace Escape4Now.Puzzles
                 Ports[StartCell] = Rotate(Ports[StartCell]);
         }
 
+        // Create the ordered number list used to build and reset puzzle arrangements.
         private static int[] Range(int count)
         {
             var values = new int[count];
@@ -179,6 +182,7 @@ namespace Escape4Now.Puzzles
             return values;
         }
 
+        // Check whether every number is in the required order.
         private static bool Sorted(int[] values)
         {
             for (int i = 0; i < values.Length; i++)
@@ -187,6 +191,7 @@ namespace Escape4Now.Puzzles
             return true;
         }
 
+        // Swap the two stored values without running extra puzzle input behavior.
         private static void SwapRaw(int[] values, int a, int b)
         {
             int saved = values[a];
@@ -233,6 +238,7 @@ namespace Escape4Now.Puzzles
             Solved = ++SequenceProgress == Sequence.Length;
         }
 
+        // Compare the entered digits with the puzzle's code and update success or failure.
         public void SubmitCode(string value)
         {
             if (OnlineAction != null) { OnlineAction("code", 0, 0, value); return; }
@@ -262,6 +268,7 @@ namespace Escape4Now.Puzzles
             Switches[next] = !Switches[next];
         }
 
+        // Apply this puzzle's individual switch rule and check the resulting configuration.
         public void FlipSwitch(int index)
         {
             if (OnlineAction != null) { OnlineAction("switch", index, 0, null); return; }

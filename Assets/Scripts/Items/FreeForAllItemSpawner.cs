@@ -36,6 +36,7 @@ namespace Escape4Now.Items
             item != null && item.GetComponent<FreeForAllItemPickup>()?.Collected != true)
             .Select(item => new OnlinePickup { id = item.GetInstanceID(), type = item.ItemType, position = item.transform.position }).ToArray();
 
+        // Match the visible floor pickups to the host's list without spawning independent guest items.
         public void ApplyOnlinePickups(OnlinePickup[] pickups)
         {
             if (pickups == null || itemPrefabs == null) return;

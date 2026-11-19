@@ -12,6 +12,7 @@ namespace Escape4Now.UI
         [SerializeField] private MatchUIContext context;
         [SerializeField] private Button endTurn;
 
+        // Show only the turn actions the current player is allowed to use.
         private void LateUpdate()
         {
             var turns = context.Turns;
@@ -28,6 +29,7 @@ namespace Escape4Now.UI
                 && !player.IsMoving && !player.IsUsingItem() && !player.IsInMenu();
         }
 
+        // End the turn through the shared local or network action path.
         public void EndTurn()
         {
             if (!endTurn.gameObject.activeInHierarchy || !endTurn.interactable) return;

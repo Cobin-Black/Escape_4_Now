@@ -12,6 +12,7 @@ namespace Escape4Now.UI
         [SerializeField] private float reservedRightWidth;
         // Extra width to keep free beside the content (e.g. a panel attached to its side).
         public float ReservedRightWidth { get => reservedRightWidth; set => reservedRightWidth = Mathf.Max(0f, value); }
+        // Fit the content inside the current viewport without placing it under reserved UI space.
         private void LateUpdate()
         {
             if (viewport == null || content == null) return;

@@ -109,6 +109,7 @@ public static class SurvivalMapChecks
         if (Application.isBatchMode) EditorApplication.Exit(result);
     }
 
+    // Verify a configured map material is used by the generated visuals.
     private static void CheckMaterialOverride(SurvivalPropVisual prefab, SurvivalMap map)
     {
         var mapSettings = new SerializedObject(map);
@@ -142,6 +143,7 @@ public static class SurvivalMapChecks
         }
     }
 
+    // Capture the generated campus view used to inspect layout and presentation.
     private static void Capture(SurvivalMap map, Camera camera, int width, int height, int seed = 42, string suffix = "")
     {
         Directory.CreateDirectory("Logs/SurvivalPreviews");

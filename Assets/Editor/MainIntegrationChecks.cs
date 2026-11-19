@@ -41,6 +41,7 @@ public static class MainIntegrationChecks
         SessionState.SetBool(Running, true);
         EditorApplication.isPlaying = true;
     }
+    // Collect the actual validation error produced by the combined scene configuration.
     public static void ValidationError()
     {
         try
@@ -60,6 +61,7 @@ public static class MainIntegrationChecks
         }
         catch (Exception error) { Debug.LogException(error); EditorApplication.Exit(1); }
     }
+    // Run the integration checks after the editor has entered the required play state.
     private static IEnumerator Execute()
     {
         var checks = Check();
@@ -72,6 +74,7 @@ public static class MainIntegrationChecks
             yield return checks.Current;
         }
     }
+    // Verify the combined scene still connects its gameplay components and player setup correctly.
     private static IEnumerator Check()
     {
         yield return null; yield return null;

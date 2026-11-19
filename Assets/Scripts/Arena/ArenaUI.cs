@@ -40,6 +40,7 @@ namespace Escape4Now.Arena
         public System.Action OnlineLeave { get; set; }
         // Online "Play Again" goes back to the same room; leaving mid-match still uses OnlineLeave.
         public System.Action OnlineReturnToRoom { get; set; }
+        // Connect the saved menu buttons to the mode, including online leave and rematch actions.
         private void Start()
         {
             setup.Initialize(match, () => SceneManager.LoadScene(mainMenuScene));
@@ -75,6 +76,7 @@ namespace Escape4Now.Arena
 
         public void StartMatch() => setup.StartMatch();
 
+        // Use the online room's leave action when present; otherwise return to local setup.
         private void ReturnToSetup()
         {
             if (OnlineLeave != null) OnlineLeave();

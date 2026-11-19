@@ -21,6 +21,7 @@ namespace Escape4Now.Input
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.SubsystemRegistration)]
         private static void ResetContext() { current = null; }
 
+        // Enable the configured gameplay actions and remember which ones this component owns.
         private void OnEnable()
         {
             current = this;
@@ -33,6 +34,7 @@ namespace Escape4Now.Input
             }
         }
 
+        // Disable only the actions enabled here so shared input users are not interrupted.
         private void OnDisable()
         {
             foreach (var action in enabledActions) action.Disable();

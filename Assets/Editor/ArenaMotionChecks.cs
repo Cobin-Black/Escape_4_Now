@@ -18,6 +18,7 @@ public static class ArenaMotionChecks
     private const string RunKey = "ArenaMotionChecks.Running";
     private static double deadline;
     private static Keyboard keyboard;
+    // Resume the registered checks after Unity enters Play Mode.
     static ArenaMotionChecks()
     {
         EditorApplication.playModeStateChanged += state =>
@@ -35,6 +36,7 @@ public static class ArenaMotionChecks
         };
     }
 
+    // Start the saved-scene checks for arena movement, collision and explosion animation.
     public static void Run()
     {
         EditorSceneManager.OpenScene("Assets/Scenes/FreeForAll.unity");
@@ -44,6 +46,7 @@ public static class ArenaMotionChecks
         EditorApplication.isPlaying = true;
     }
 
+    // Advance the check steps and report failures through the normal validation cleanup.
     private static IEnumerator Guard(IEnumerator steps)
     {
         while (true)
@@ -69,6 +72,7 @@ public static class ArenaMotionChecks
         Finish(0);
     }
 
+    // Exercise arena movement, collision and explosion animation using the saved scene objects.
     private static IEnumerator Check()
     {
         Directory.CreateDirectory("Logs/ArenaMotionPreviews");
@@ -208,6 +212,7 @@ public static class ArenaMotionChecks
         }
     }
 
+    // Assign serialized test or authoring values through Unity's saved-property interface.
     private static void Set(Object target, string field, Object value)
     {
         var data = new SerializedObject(target);
@@ -215,12 +220,14 @@ public static class ArenaMotionChecks
         data.ApplyModifiedPropertiesWithoutUndo();
     }
 
+    // Stop this check with a clear message when a required behavior is missing.
     private static void Require(bool value, string message)
     {
         if (!value)
             throw new Exception(message);
     }
 
+    // Fail a stuck check after its deadline so batch validation cannot wait forever.
     private static void Watchdog()
     {
         if (EditorApplication.timeSinceStartup > deadline)
@@ -230,6 +237,7 @@ public static class ArenaMotionChecks
         }
     }
 
+    // Clean up the check and return its result code to the batch runner.
     private static void Finish(int code)
     {
         SessionState.SetBool(RunKey, false);

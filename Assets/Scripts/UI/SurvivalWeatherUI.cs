@@ -10,6 +10,7 @@ namespace Escape4Now.UI
         [SerializeField] private Image rainShade;
         [SerializeField] private Color rainColor = new Color(.04f,.12f,.2f,.14f);
         [SerializeField, Min(.1f)] private float fadeSpeed = 2f;
+        // Fade the rain tint with the weather state while respecting the match pause.
         private void Update()
         {
             bool raining = view.Playing && view.EventSource != null && view.EventSource.RainActive;

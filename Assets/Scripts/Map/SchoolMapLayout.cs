@@ -79,6 +79,7 @@ namespace Escape4Now.Map
         public int HallwayLengthWeight => hallwayLengthWeight;
         public int HallwayBendWeight => hallwayBendWeight;
 
+        // Copy the layout arrays and room data so later changes do not alter the original.
         public SchoolMapGenerationSettings Copy()
         {
             return new SchoolMapGenerationSettings
@@ -261,6 +262,7 @@ namespace Escape4Now.Map
             foreach (int cell in additions) floor[cell % Size, cell / Size] = true;
         }
 
+        // Remove isolated hallway wall pieces that would break up otherwise usable floor.
         private void ClearHallwayWallIslands()
         {
             if (settings.MaximumHallwayWallIsland == 0) return;

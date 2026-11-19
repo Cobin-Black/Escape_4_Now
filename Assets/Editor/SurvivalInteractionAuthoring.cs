@@ -11,6 +11,7 @@ using UnityEngine.UI;
 public static class SurvivalInteractionAuthoring
 {
     public const string AudioFolder = "Assets/Audio/SurvivalInteraction";
+    // Build the saved puzzle controls and feedback references used by physical task interactions.
     public static void Apply()
     {
         try
@@ -175,6 +176,7 @@ public static class SurvivalInteractionAuthoring
         foreach (var graphic in artwork.GetComponentsInChildren<Graphic>(true)) graphic.raycastTarget = false;
     }
 
+    // Create the reusable audio asset used for puzzle interaction feedback.
     public static AudioClip Sound(string name,float seconds,int kind)
     {
         string path = AudioFolder+"/"+name+".wav";

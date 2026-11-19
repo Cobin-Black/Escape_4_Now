@@ -10,6 +10,7 @@ public sealed class SurvivalEventControllerEditor : Editor
     private Editor settingsEditor;
     private bool showMatchPlan;
 
+    // Show the event controller's configured sources and presentation settings in the Inspector.
     public override void OnInspectorGUI()
     {
         DrawDefaultInspector();

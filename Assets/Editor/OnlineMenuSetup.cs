@@ -10,6 +10,7 @@ using UnityEngine.InputSystem;
 // Saves the new menu references without recreating the menu or any game scene.
 public static class OnlineMenuSetup
 {
+    // Connect the online mode choices to the existing main-menu layout and scene entries.
     [MenuItem("Tools/Escape 4 Now/Relay Test/Connect Main Menu")]
     public static void Configure()
     {

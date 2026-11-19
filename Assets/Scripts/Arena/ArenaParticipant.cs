@@ -76,6 +76,7 @@ namespace Escape4Now.Arena
             if (invincibilityTimer <= 0) StopInvincibilityFlash();
         }
 
+        // Keep the sprite and attack direction facing the same way when movement changes.
         private void Face(Vector2 velocity)
         {
             if (velocity.sqrMagnitude <= .0001f) return;
@@ -102,6 +103,7 @@ namespace Escape4Now.Arena
             position = Position, motorVelocity = screenVelocity, eventVelocity = eventVelocity
         };
 
+        // Restore the motor state before replaying unconfirmed guest movement.
         public void RestoreMovement(MovementState state)
         {
             SetPosition(state.position);
@@ -134,6 +136,7 @@ namespace Escape4Now.Arena
             }
         }
 
+        // Keep the latest remote movement and button presses until the host consumes them.
         public void SetOnlineInput(Vector2 move, bool tag, bool useItem = false)
         {
             remoteMove = Vector2.ClampMagnitude(move, 1);
@@ -142,6 +145,7 @@ namespace Escape4Now.Arena
             lastInput = Time.unscaledTime;
         }
 
+        // Show the host's position, facing, health and alive state on this copy.
         public void ApplyOnlineState(Vector2 position, Vector2 velocity, int health, bool alive)
         {
             Place(position);
@@ -158,6 +162,7 @@ namespace Escape4Now.Arena
         public int OnlineSwingCount { get; private set; }
         public Vector3 OnlineSwingPosition { get; private set; }
         public Vector2 OnlineSwingDirection { get; private set; }
+        // Record one attack cue so guests can show its effect without repeating damage.
         public void RecordOnlineSwing()
         {
             OnlineSwingCount++;
@@ -328,6 +333,7 @@ namespace Escape4Now.Arena
             SetPosition(point);
         }
 
+        // Update the logical floor position and its matching world position together.
         private void SetPosition(Vector2 point)
         {
             ScreenVelocity = Vector2.zero;
@@ -375,6 +381,7 @@ namespace Escape4Now.Arena
                 Eliminate();
         }
 
+        // Move the player from the impact and mark the correction for online guests.
         public void Knockback(Vector2 impulse)
         {
             if (Alive)
@@ -425,6 +432,7 @@ namespace Escape4Now.Arena
                 nameShadow.text = scoreText;
         }
 
+        // Remove temporary movement, shield and flashing effects before the next round or respawn.
         public void ClearRoundEffects()
         {
             SpeedMultiplier = 1;

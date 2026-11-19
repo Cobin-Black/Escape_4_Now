@@ -175,18 +175,21 @@ namespace Escape4Now.UI
             return true;
         }
 
+        // Hide the temporary battle dice when the contest no longer needs them.
         private void Hide()
         {
             challengerDie?.SetVisible(false);
             opponentDie?.SetVisible(false);
         }
 
+        // Stop and hide battle-dice feedback when the view is disabled.
         private void OnDisable()
         {
             Rolling = false;
             Hide();
         }
 
+        // Release the generated battle-dice presentation resources.
         private void OnDestroy()
         {
             Rolling = false;
@@ -208,6 +211,7 @@ namespace Escape4Now.UI
             private readonly CanvasGroup group;
             private readonly Vector2 size;
 
+            // Create a battle die using the same UI drawing and player-color styling as the match.
             public Die(string name, RectTransform parent, DiceDisplay template)
             {
                 display = Instantiate(template, parent, false);

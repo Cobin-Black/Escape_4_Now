@@ -13,6 +13,7 @@ namespace Escape4Now.Arena
     // Prefab fronts point down the logical Y axis. Choose a sensible facing before placing a group.
     public static class ArenaPropPlacement
     {
+        // Choose a prop rotation from its saved facing rule and position in the room.
         public static int Facing(Vector2Int cell, ArenaLayout map, ArenaPropFacing rule, int fixedTurns = 0)
         {
             if (rule == ArenaPropFacing.Fixed)

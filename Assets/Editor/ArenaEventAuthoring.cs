@@ -12,6 +12,7 @@ using Object = UnityEngine.Object;
 public static class ArenaEventAuthoring
 {
     private const string Folder = "Assets/Prefabs/Arena/Events/";
+    // Create or update the arena event assets and connect them to the saved scenes.
     [MenuItem("Tools/Escape 4 Now/Configure Arena Events")]
     public static void Apply()
     {
@@ -76,6 +77,7 @@ public static class ArenaEventAuthoring
         }
     }
 
+    // Set the room-specific event choices, weights, timing and referenced visuals.
     public static ArenaEventPool ConfigurePool(string stem, ArenaRoom room)
     {
         EnsureFolders();
@@ -213,6 +215,7 @@ public static class ArenaEventAuthoring
     }
 
     private static AudioClip Clip(string name) => AssetDatabase.LoadAssetAtPath<AudioClip>("Assets/Audio/SurvivalInteraction/" + name + ".wav");
+    // Reuse the existing settings asset when present so its saved project reference stays stable.
     private static T LoadOrCreate<T>(string path)
         where T : ScriptableObject
     {
@@ -225,6 +228,7 @@ public static class ArenaEventAuthoring
         return asset;
     }
 
+    // Create the shared visual settings used by both arena event pools.
     private static ArenaEventVisualSettings Visuals()
     {
         var settings = LoadOrCreate<ArenaEventVisualSettings>("Assets/Settings/Arena/Event Visuals.asset");
@@ -268,6 +272,7 @@ public static class ArenaEventAuthoring
         return saved;
     }
 
+    // Build a falling-event prefab that can wait for its landing safety check.
     private static GameObject Falling(string name, GameObject source)
     {
         var root = new GameObject(name);
@@ -285,6 +290,7 @@ public static class ArenaEventAuthoring
         return saved;
     }
 
+    // Build a reusable event obstacle from its configured visual parts.
     private static GameObject Prop(string name, Color color, bool tall)
     {
         var root = new GameObject(name);
@@ -310,6 +316,7 @@ public static class ArenaEventAuthoring
         return saved;
     }
 
+    // Create the basketball presentation used by the barrage event.
     private static GameObject Ball(Material material)
     {
         var root = new GameObject("Basketball");
@@ -341,6 +348,7 @@ public static class ArenaEventAuthoring
         return saved;
     }
 
+    // Assign serialized test or authoring values through Unity's saved-property interface.
     private static void Set(Object target, params object[] fields)
     {
         var data = new SerializedObject(target);

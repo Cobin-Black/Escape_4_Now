@@ -224,6 +224,7 @@ namespace Escape4Now.Map
         public int RoomLayoutAttempts => roomLayoutAttempts;
         public int CandidateChecksPerObject => candidateChecksPerObject;
 
+        // Copy the furniture settings and nested room patterns, then bound counts to supported ranges.
         public SchoolFurnitureSettings Copy()
         {
             var copy = (SchoolFurnitureSettings)MemberwiseClone();
@@ -268,6 +269,7 @@ namespace Escape4Now.Map
             && countVariation >= 0f && countVariation <= 1f && optionalFurnitureChance >= 0f && optionalFurnitureChance <= 1f
             && roomLayoutAttempts >= 1 && roomLayoutAttempts <= 32 && candidateChecksPerObject >= 1 && candidateChecksPerObject <= 625;
 
+        // Check that room patterns are valid and that each room type appears only once.
         private bool ValidPatterns()
         {
             var rooms = new HashSet<SchoolRoomType>();
@@ -443,6 +445,7 @@ namespace Escape4Now.Map
             throw new InvalidOperationException("Cannot fit the required " + room.Type + " furniture safely. Reduce counts or spacing, or enable another layout pattern.");
         }
 
+        // Use pattern weights when choosing which furniture group to try.
         private SchoolFurniturePattern ChoosePattern(SchoolRoomPatternSettings profile, SchoolRoom room)
         {
             var choices = new List<SchoolFurniturePattern>();
@@ -461,6 +464,7 @@ namespace Escape4Now.Map
             return choices[choices.Count - 1];
         }
 
+        // Convert the configured density into a bounded number of placements.
         private int DensityCount(int area, int minimum, int maximum)
         {
             if (minimum == maximum) return minimum;
@@ -469,6 +473,7 @@ namespace Escape4Now.Map
             return minimum + (int)Math.Round((maximum - minimum) * Math.Max(0, Math.Min(1, density)));
         }
 
+        // Rank candidate locations so furniture follows the room layout rather than filling routes.
         private float PlacementScore(SchoolRoom room, SchoolRoomPatternSettings profile, SchoolFurniturePattern pattern,
             ObstacleFacing front, int phase, int cell, SchoolFurnitureKind kind)
         {
@@ -680,6 +685,7 @@ namespace Escape4Now.Map
             return placed;
         }
 
+        // Count nearby walls when choosing a suitable placement and facing.
         private int AdjacentWalls(int cell)
         {
             int count = 0;

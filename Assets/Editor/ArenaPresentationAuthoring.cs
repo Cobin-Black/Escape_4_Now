@@ -76,6 +76,7 @@ public static class ArenaPresentationAuthoring
         }
     }
 
+    // Update the saved arena presentation using the shared UI style.
     [MenuItem("Tools/Escape 4 Now/Polish Arena Interface")]
     public static void Apply()
     {
@@ -114,6 +115,7 @@ public static class ArenaPresentationAuthoring
         }
     }
 
+    // Replace the old setup panel with the shared arcade lobby while keeping the mode's gameplay UI.
     private static void ApplyArcadeUI(ArenaMatch match)
     {
         LoadStyle();
@@ -159,6 +161,7 @@ public static class ArenaPresentationAuthoring
         }
     }
 
+    // Apply matching presentation to the local and online arena scenes.
     public static void ApplySameDeviceAndOnline()
     {
         foreach (string scene in new[] { "FreeForAll", "HotPotato", "OnlineFreeForAll", "OnlineHotPotato" })
@@ -323,6 +326,7 @@ public static class ArenaPresentationAuthoring
         ApplyMatchStyle(ui);
     }
 
+    // Build one participant's health and item row with saved references for runtime updates.
     private static ArenaHealthRow HealthRow(Transform parent, Vector2 size, int index)
     {
         var root = Panel(parent, "Health " + (index + 1), size.x, style.card);
@@ -348,6 +352,7 @@ public static class ArenaPresentationAuthoring
         return row;
     }
 
+    // Load the shared fonts and interface style used by the generated arena UI.
     private static void LoadStyle()
     {
         const string path = "Assets/Settings/Arena/Interface Style.asset";
@@ -372,6 +377,7 @@ public static class ArenaPresentationAuthoring
         return r;
     }
 
+    // Build a reusable UI panel using the configured shared style.
     private static RectTransform Panel(Transform parent, string name, float width, Color color, bool border = false)
     {
         var r = Group(parent, name);
@@ -407,6 +413,7 @@ public static class ArenaPresentationAuthoring
         return text;
     }
 
+    // Create a text element with a fixed layout size for consistent alignment.
     private static Text FixedText(Transform parent, string name, string content, Vector2 size, Vector2 position, int fontSize, bool bold)
     {
         var r = Group(parent, name);
@@ -423,6 +430,7 @@ public static class ArenaPresentationAuthoring
         return text;
     }
 
+    // Create a non-interactive image so decoration does not block UI input.
     private static Image Picture(Transform parent, string name, Vector2 size, Vector2 position, Color color)
     {
         var r = Group(parent, name);
@@ -434,6 +442,7 @@ public static class ArenaPresentationAuthoring
         return image;
     }
 
+    // Build a styled button and keep its label connected to its saved UI object.
     private static Button Button(Transform parent, string caption, float height, Color color)
     {
         var r = Panel(parent, caption, 0, color);
@@ -462,6 +471,7 @@ public static class ArenaPresentationAuthoring
         rect.offsetMax = -Vector2.one * padding;
     }
 
+    // Assign serialized test or authoring values through Unity's saved-property interface.
     private static void Set(Object target, params object[] pairs)
     {
         var data = new SerializedObject(target);
@@ -481,6 +491,7 @@ public static class ArenaPresentationAuthoring
         data.ApplyModifiedPropertiesWithoutUndo();
     }
 
+    // Use the Input System UI module for the generated Canvas controls.
     private static void EnsureInputSystem(InputActionAsset asset)
     {
         if (Object.FindFirstObjectByType<EventSystem>() != null)
@@ -495,6 +506,7 @@ public static class ArenaPresentationAuthoring
         module.scrollWheel = Input(asset, "ScrollWheel");
     }
 
+    // Build the editable text control used by the player-setup UI.
     private static InputActionReference Input(InputActionAsset asset, string name)
     {
         string path = "Assets/Settings/Arena/UI " + name + " Input.asset";

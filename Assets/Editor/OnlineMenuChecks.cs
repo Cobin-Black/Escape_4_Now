@@ -19,6 +19,7 @@ public static class OnlineMenuChecks
     private static Keyboard keyboard;
     private static Gamepad gamepad;
     private static double deadline;
+    // Resume online menu checks after Play Mode starts and set their validation deadline.
     static OnlineMenuChecks()
     {
         EditorApplication.playModeStateChanged += state =>
@@ -45,6 +46,7 @@ public static class OnlineMenuChecks
         EditorApplication.isPlaying = true;
     }
 
+    // Verify online mode selection and navigation use the saved menu controls.
     private static IEnumerator Check()
     {
         yield return null;
@@ -85,6 +87,7 @@ public static class OnlineMenuChecks
     private static string Section(MainMenuScreen menu) => typeof(MainMenuScreen)
         .GetField("section", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(menu).ToString();
 
+    // Advance the check steps and report failures through the normal validation cleanup.
     private static IEnumerator Guard(IEnumerator check)
     {
         while (true)
@@ -103,6 +106,7 @@ public static class OnlineMenuChecks
     }
 
     private static void Watchdog() { if (EditorApplication.timeSinceStartup > deadline) Finish(2); }
+    // Clean up the check and return its result code to the batch runner.
     private static void Finish(int code)
     {
         SessionState.SetBool(Running, false);

@@ -67,6 +67,7 @@ namespace Escape4Now.Multiplayer
         private RelayTesting.OnlineModeMatch onlineMode;
         private bool MatchStarted => onlineMode != null ? onlineMode.Started : local != null && local.MatchStarted;
 
+        // Attach the selected mode adapter so all modes use the same room transport.
         public void InitializeOnlineMode(RelayTesting.OnlineModeMatch mode, LocalMultiplayerSession owner)
         {
             onlineMode = mode;
@@ -75,6 +76,7 @@ namespace Escape4Now.Multiplayer
             previousBackground = Application.runInBackground;
         }
 
+        // Send mode-specific input through the existing checked command channel.
         public void SubmitModeInput(string input)
         {
             if (!active || failed || !MatchStarted) return;
@@ -128,6 +130,7 @@ namespace Escape4Now.Multiplayer
             return true;
         }
 
+        // Attach the host connection, reset the local seat, and begin the room handshake.
         public bool JoinRelayedHost(IMatchMessageConnection connection, string code)
         {
             if (active || Connecting || MatchStarted || connection == null || connection.Closed) return false;
@@ -173,6 +176,7 @@ namespace Escape4Now.Multiplayer
 
         public void ReportRelayFailure(string reason) { if (active && !failed) Fail(reason); }
 
+        // Look up the seat owned by this exact connection, rather than trusting a supplied player index.
         public int GetRelayedSlot(IMatchMessageConnection connection)
         {
             Peer peer = peers.Find(value => ReferenceEquals(value.wire, connection));
@@ -386,6 +390,7 @@ namespace Escape4Now.Multiplayer
             }
         }
 
+        // Send lobby information before play and authoritative mode or Race state during play.
         private void PublishState()
         {
             if (Time.realtimeSinceStartup < nextPublish) return;
@@ -582,6 +587,7 @@ namespace Escape4Now.Multiplayer
             Application.runInBackground = previousBackground;
         }
 
+        // Close owned connections and release the shared session reference.
         private void OnDestroy()
         {
             Disconnect();

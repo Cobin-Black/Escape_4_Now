@@ -18,6 +18,7 @@ namespace Escape4Now.UI
         [SerializeField, Range(.1f,.3f)] private float columnCenter = .2f;
         [SerializeField] private string[] sourceHeadings = { "WIRE ENDS", "SUPPLIES", "BATTERIES" };
         [SerializeField] private string[] targetHeadings = { "SOCKETS", "CONTAINERS", "DEVICE SLOTS" };
+        // Choose the physical board appearance that belongs to the current puzzle type.
         public void Present(SurvivalPuzzleType type,int count,PuzzleTokenUI[] left,PuzzleTokenUI[] right)
         {
             int theme = type == SurvivalPuzzleType.MatchWires ? 0 : type == SurvivalPuzzleType.SortSupplies ? 1 : 2;

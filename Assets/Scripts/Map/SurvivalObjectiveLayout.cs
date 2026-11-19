@@ -52,6 +52,7 @@ namespace Escape4Now.Map
         public bool IsSpawn(Vector2Int cell) => (HasMonsterSpawn && cell.x >= MonsterSpawn.x && cell.y >= MonsterSpawn.y
             && cell.x < MonsterSpawn.x + settings.monsterFootprint.x && cell.y < MonsterSpawn.y + settings.monsterFootprint.y)
             || ContainsIndex(map.PlayerSpawns, cell);
+        // Check whether a saved objective index belongs to the supplied list.
         private bool ContainsIndex(IReadOnlyList<int> indices, Vector2Int cell)
         {
             foreach (int index in indices)
@@ -213,6 +214,7 @@ namespace Escape4Now.Map
             return true;
         }
 
+        // Check that a task has at least one compatible generated area.
         private bool CompatibleExists(SurvivalPuzzleDefinition definition)
         {
             foreach (var area in map.Areas)
@@ -221,6 +223,7 @@ namespace Escape4Now.Map
             return definition.Allows(OutdoorAreaKind.None);
         }
 
+        // Test whether a candidate cell is on the intended side for this exit.
         private bool OnExitSide(Vector2Int cell, int side)
         {
             if (side < 2)
@@ -238,6 +241,7 @@ namespace Escape4Now.Map
             throw new ArgumentException("Exit approaches must adjoin the campus perimeter.");
         }
 
+        // Collect map cells for objective selection without changing the layout.
         private List<Vector2Int> AllCells()
         {
             var result = new List<Vector2Int>();
@@ -353,6 +357,7 @@ namespace Escape4Now.Map
             return !checkMonsterSpawn || !HasMonsterSpawn || visited.Contains(MonsterSpawn);
         }
 
+        // Randomize candidate order with the match's seeded generator.
         public static void Shuffle<T>(IList<T> list, System.Random random)
         {
             for (int i = list.Count - 1; i > 0; i--)

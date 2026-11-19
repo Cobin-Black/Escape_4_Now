@@ -10,6 +10,7 @@ namespace Escape4Now.UI
         [SerializeField, Tooltip("Card borders, header strips and role labels that use the player's color.")]
         private Graphic[] accents;
 
+        // Apply the same player identity color to the configured UI graphics.
         public void SetColor(Color color)
         {
             if (accents == null) return;

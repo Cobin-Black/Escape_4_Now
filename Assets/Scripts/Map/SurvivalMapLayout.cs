@@ -105,6 +105,7 @@ namespace Escape4Now.Map
         public bool IsMainPath(int x, int y) => InBounds(x, y) && mainPath[y * Width + x];
         public bool IsProtectedRoute(int x, int y) => InBounds(x, y) && protectedPath[y * Width + x];
 
+        // Return neighboring cells within the generated layout.
         public IEnumerable<int> GetNeighbours(int cell)
         {
             if (cell < 0 || cell >= Width * Height || !IsWalkable(cell % Width, cell / Width)) yield break;
@@ -327,6 +328,7 @@ namespace Escape4Now.Map
             }
         }
 
+        // Choose the garden surface while keeping its intended paths and planted areas.
         private void CarveGardenTile(OutdoorArea area, int x, int y)
         {
             for (int dy = 0; dy < settings.GardenPathWidth; dy++) for (int dx = 0; dx < settings.GardenPathWidth; dx++)
@@ -371,6 +373,7 @@ namespace Escape4Now.Map
                 }
         }
 
+        // Try prop placements that fit the selected area and preserve required routes.
         private bool PlaceProps(OutdoorPropRule rule, OutdoorArea area)
         {
             if (random.NextDouble() >= rule.Chance) return true;
@@ -545,6 +548,7 @@ namespace Escape4Now.Map
 
 
         private int Distance(int a, int b) => Math.Abs(a % Width - b % Width) + Math.Abs(a / Width - b / Width);
+        // Count walkable neighbors when checking how open a cell is.
         private int Degree(int cell)
         {
             int count = 0;
@@ -573,6 +577,7 @@ namespace Escape4Now.Map
             return longest;
         }
 
+        // Search the walkable floor to check whether required routes remain joined.
         private bool IsConnected()
         {
             int start = Array.FindIndex(blocked, value => !value);
@@ -594,6 +599,7 @@ namespace Escape4Now.Map
             return true;
         }
 
+        // Reject layouts whose areas, routes or blocked cells do not meet the generation rules.
         public bool Validate(out string reason)
         {
             reason = null;

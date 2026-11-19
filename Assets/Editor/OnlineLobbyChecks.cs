@@ -18,6 +18,7 @@ public static class OnlineLobbyChecks
     private const string Running = "OnlineLobbyChecks.Running";
     private const string CheckAllModes = "OnlineLobbyChecks.ModeScreens";
     private static double deadline;
+    // Resume the registered checks after Unity enters Play Mode.
     static OnlineLobbyChecks()
     {
         EditorApplication.playModeStateChanged += state =>
@@ -31,6 +32,7 @@ public static class OnlineLobbyChecks
         };
     }
 
+    // Start the saved-scene checks for online lobbies, profiles and host/guest presentation.
     public static void Run()
     {
         EditorSceneManager.OpenScene("Assets/Scenes/Race_Gamemode.unity");
@@ -216,6 +218,7 @@ public static class OnlineLobbyChecks
         Debug.Log("ONLINE ROOM RECOVERY CHECKS PASSED: wrong-mode rejection, waiting rooms, forced timeouts, client failures and repeated local transport starts in all four modes.");
     }
 
+    // Check login names, profile revisions, private acknowledgements and Ready behavior across the online modes.
     private static IEnumerator CheckProfileReplication()
     {
         foreach (string scene in new[] { "OnlineRace", "OnlineSurvival", "OnlineFreeForAll", "OnlineHotPotato" })
@@ -762,6 +765,7 @@ public static class OnlineLobbyChecks
         Debug.Log("ONLINE RACE HUD PASSED: native locker, item take and custom dice with the legacy panel hidden.");
     }
 
+    // Exercise online lobbies, profiles and host/guest presentation using the saved scene objects.
     private static IEnumerator Check()
     {
         yield return null;
@@ -843,6 +847,7 @@ public static class OnlineLobbyChecks
     private static T Reference<T>(object target, string field) => (T)target.GetType()
         .GetField(field, BindingFlags.Instance | BindingFlags.NonPublic).GetValue(target);
     private static void Require(bool condition, string message) { if (!condition) throw new Exception("Online lobby check failed: " + message); }
+    // Advance the check steps and report failures through the normal validation cleanup.
     private static IEnumerator Guard(IEnumerator check)
     {
         while (true)
@@ -855,6 +860,7 @@ public static class OnlineLobbyChecks
         Finish(0);
     }
     private static void Watchdog() { if (EditorApplication.timeSinceStartup > deadline) Finish(2); }
+    // Clean up the check and return its result code to the batch runner.
     private static void Finish(int code)
     {
         SessionState.SetBool(Running, false);

@@ -55,6 +55,7 @@ namespace Escape4Now.Arena
         public bool Replica { get; private set; }
         public event System.Action<bool> OnlinePauseRequested;
 
+        // Choose whether this match runs the rules or only displays the host's state.
         public void ConfigureOnline(bool replica)
         {
             Online = true;
@@ -98,6 +99,7 @@ namespace Escape4Now.Arena
         public virtual string MatchInfo => "";
         public abstract string Objective { get; }
 
+        // Enable Pause if needed and listen for changes to assigned controllers.
         protected virtual void OnEnable()
         {
             if (pause != null && !pause.action.enabled)
@@ -108,6 +110,7 @@ namespace Escape4Now.Arena
             ControllerHandling.AssignmentsChanged += ControllersChanged;
         }
 
+        // Remove controller callbacks and release Pause only if this component enabled it.
         protected virtual void OnDisable()
         {
             ControllerHandling.AssignmentsChanged -= ControllersChanged;
@@ -116,6 +119,7 @@ namespace Escape4Now.Arena
             ownsPause = false;
         }
 
+        // Handle Pause and notices, then run mode rules only on the authoritative match.
         protected virtual void Update()
         {
             if (Playing && pause != null && pause.action.WasPressedThisFrame())
@@ -302,6 +306,7 @@ namespace Escape4Now.Arena
             CheckLastPlayer();
         }
 
+        // Finish the match when only one player, or no players, remain.
         protected bool CheckLastPlayer()
         {
             if (Remaining > 1)
@@ -351,6 +356,7 @@ namespace Escape4Now.Arena
             noticeRemaining = duration;
         }
 
+        // Route an online pause request through the room; local matches can change pause directly.
         public void SetPaused(bool value)
         {
             if (Playing)
@@ -360,6 +366,7 @@ namespace Escape4Now.Arena
             }
         }
 
+        // Display the host's play, pause, result and notice values without deciding rules again.
         public void ApplyOnlineState(bool playing, bool paused, string result, string notice)
         {
             Playing = playing;
@@ -382,6 +389,7 @@ namespace Escape4Now.Arena
             ClearPlayers();
         }
 
+        // Remove old participants and their elimination callbacks before another match.
         private void ClearPlayers()
         {
             foreach (var p in Players)

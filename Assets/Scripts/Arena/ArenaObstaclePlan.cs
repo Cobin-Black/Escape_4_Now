@@ -96,6 +96,7 @@ namespace Escape4Now.Arena
             }
         }
 
+        // Choose an obstacle pattern using its configured weight.
         private static ArenaObstaclePattern Choose(ArenaObstaclePattern[] patterns, System.Random random)
         {
             float total = 0;
@@ -164,6 +165,7 @@ namespace Escape4Now.Arena
             return true;
         }
 
+        // Check the floor type so equipment stays in the intended part of the room.
         private static bool InZone(ArenaLayout map, Vector2Int cell, ArenaObstacleZone zone)
         {
             var surface = map.surfaces[cell.x, cell.y];
@@ -174,6 +176,7 @@ namespace Escape4Now.Arena
             return surface == ArenaSurface.Court || surface == ArenaSurface.Wood || surface == ArenaSurface.Carpet;
         }
 
+        // Keep obstacle placement away from the map's reserved movement routes.
         private static bool Protected(ArenaLayout map, Vector2Int cell, int width)
         {
             if (width <= 0)
@@ -182,6 +185,7 @@ namespace Escape4Now.Arena
             return cell.x >= firstX && cell.x < firstX + width || cell.y >= firstY && cell.y < firstY + width;
         }
 
+        // Count open neighboring cells when checking whether a route has enough space.
         private static int Degree(ArenaLayout map, Vector2Int cell)
         {
             int count = 0;
@@ -191,6 +195,7 @@ namespace Escape4Now.Arena
             return count;
         }
 
+        // Rotate an obstacle's cell offset by a whole number of quarter turns.
         private static Vector2Int Rotate(Vector2Int point, int turns)
         {
             for (int i = 0; i < turns; i++)

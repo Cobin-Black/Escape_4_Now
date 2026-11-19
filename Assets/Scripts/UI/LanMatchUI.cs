@@ -28,6 +28,7 @@ namespace Escape4Now.UI
         [SerializeField] private string[] itemNames = { "None", "Double Dice", "Custom Dice", "Key Stealer" };
         private LanMultiplayerSession Session => LanMultiplayerSession.Instance;
 
+        // Show network match actions and status only when that UI is needed for the active mode.
         private void LateUpdate()
         {
             var lan = Session;

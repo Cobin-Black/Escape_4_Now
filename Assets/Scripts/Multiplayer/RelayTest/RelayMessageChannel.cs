@@ -18,12 +18,14 @@ namespace Escape4Now.Multiplayer.RelayTesting
         private int queuedBytes;
         public bool Closed { get; private set; }
 
+        // Bind this message queue to one remote client on the scene's network manager.
         public RelayMessageChannel(NetworkManager network, ulong remote)
         {
             this.network = network;
             this.remote = remote;
         }
 
+        // Encode a bounded match message and use reliable delivery that can split large updates.
         public void Send(string message)
         {
             if (Closed) return;
@@ -35,6 +37,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             network.CustomMessagingManager.SendNamedMessage(MessageName, remote, writer, NetworkDelivery.ReliableFragmentedSequenced);
         }
 
+        // Check the packet size and queue limit before decoding and accepting a match message.
         public void Receive(FastBufferReader reader)
         {
             if (Closed) return;
@@ -72,6 +75,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             queuedBytes = 0;
         }
 
+        // Close this channel once and release queued messages and its owned connection.
         public void Dispose()
         {
             if (Closed) return;

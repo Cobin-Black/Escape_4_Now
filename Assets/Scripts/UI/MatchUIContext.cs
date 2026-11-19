@@ -45,12 +45,14 @@ namespace Escape4Now.UI
             }
         }
 
+        // Format the remaining seconds as a readable minutes-and-seconds label.
         public static string FormatTime(float seconds)
         {
             int total = Mathf.Max(0, Mathf.CeilToInt(seconds));
             return (total / 60).ToString("00") + ":" + (total % 60).ToString("00");
         }
 
+        // Convert a UI rectangle to screen coordinates for shared layout checks and placement.
         public static Rect ScreenRect(RectTransform rect)
         {
             var corners = new Vector3[4];

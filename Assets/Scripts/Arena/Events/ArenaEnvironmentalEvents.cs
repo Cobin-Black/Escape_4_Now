@@ -121,6 +121,7 @@ namespace Escape4Now.Arena
             return false;
         }
 
+        // Keep each effect on suitable surfaces, such as stage lights on the stage and slips on the court.
         private bool Compatible(ArenaEventEntry rule, Vector2Int cell)
         {
             var surface = Map.Layout.surfaces[cell.x, cell.y];
@@ -151,6 +152,7 @@ namespace Escape4Now.Arena
             return true;
         }
 
+        // Find an equipment move that avoids players, other events and blocked routes.
         private bool PrepareEquipment(ArenaEventEntry rule, ArenaEventState state)
         {
             var props = new List<ArenaMap.EquipmentView>(Map.EquipmentViews);
@@ -261,6 +263,7 @@ namespace Escape4Now.Arena
             return true;
         }
 
+        // Check the route again when an obstacle lands, since players may have moved during its warning.
         private bool TryLand(ArenaEventState state)
         {
             if (!owner.CanChange(new[] { state.blockCell }))
@@ -269,6 +272,7 @@ namespace Escape4Now.Arena
             return true;
         }
 
+        // Rebuild the bleachers across their original and extended cells.
         internal void ShowExtendedBleachers(ArenaEventState state)
         {
             Vector2 d = state.blockCell - state.sourceCell;
@@ -278,6 +282,7 @@ namespace Escape4Now.Arena
             state.equipment.Visual.position = Map.World(((Vector2)state.blockCell + state.sourceCell) * .5f);
         }
 
+        // Mark the accepted cell as blocked only after the landing safety check succeeds.
         private void CommitBlock(ArenaEventState state)
         {
             Map.Layout.blocked[state.blockCell.x, state.blockCell.y] = true;
@@ -285,6 +290,7 @@ namespace Escape4Now.Arena
             state.landed = true;
         }
 
+        // Describe the actual event result, including the changed time or selected players.
         internal string ActivationMessage(ArenaEventState state)
         {
             if (state.Rule.kind == ArenaEventKind.TimeCut)
@@ -300,6 +306,7 @@ namespace Escape4Now.Arena
             return state.Rule.label + " active";
         }
 
+        // Test the moving light's current circle or the event's fixed affected cells.
         internal bool Contains(ArenaEventState state, Vector2 point)
         {
             if (state.Rule.kind == ArenaEventKind.MovingStageLights)
@@ -307,6 +314,7 @@ namespace Escape4Now.Arena
             return state.Cells.Contains(Vector2Int.RoundToInt(point));
         }
 
+        // Move the light back and forth along its prepared path.
         internal Vector2 LightCenter(ArenaEventState state)
         {
             if (state.Cells.Count < 2)
@@ -359,6 +367,7 @@ namespace Escape4Now.Arena
             player.Knockback((direction.sqrMagnitude > .001f ? direction.normalized : Vector2.up) * Mathf.Max(0, distance));
         }
 
+        // Spawn the barrage over time, check swept hits, and remove balls when their route ends.
         private void Balls(ArenaEventState state, float dt)
         {
             if (state.ballsSpawned < state.Rule.ballCount && state.Elapsed >= state.nextBall)

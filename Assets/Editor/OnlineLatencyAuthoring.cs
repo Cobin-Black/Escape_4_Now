@@ -6,6 +6,7 @@ using UnityEngine;
 // Adds saved Inspector settings to the existing scenes without rebuilding their maps or UI.
 public static class OnlineLatencyAuthoring
 {
+    // Save the guest movement-presentation component and its settings into the online arena scenes.
     public static void Apply()
     {
         foreach (string scene in new[] { "OnlineFreeForAll", "OnlineHotPotato" })

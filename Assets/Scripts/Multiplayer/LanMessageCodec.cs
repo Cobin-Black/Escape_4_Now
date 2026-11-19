@@ -16,6 +16,7 @@ namespace Escape4Now.Multiplayer
             public string kind, code, action, modeState;
             public int player, count, sequence, turn, round, x, y, value;
 
+            // Copy only the control-message fields needed on the wire instead of serializing unused match state.
             public ControlMessage(LanMessage message)
             {
                 modeState = message.modeState;

@@ -14,6 +14,7 @@ namespace Escape4Now.UI
         [SerializeField] private DiceDisplay dice;
         private CustomDiceItem selected;
         private LanMultiplayerSession Online => LanMultiplayerSession.Instance?.UsesRaceMatchUI == true ? LanMultiplayerSession.Instance : null;
+        // Show the custom-dice choice for the current local or online selection.
         private void LateUpdate()
         {
             var network = Online;

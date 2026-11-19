@@ -22,6 +22,7 @@ namespace Escape4Now.Arena
         private ArenaParticipant player;
         private SpriteRenderer source, drawing;
         private float phase, blend;
+        // Keep the source sprite for facing and use a separate renderer for the walking animation.
         private void Awake()
         {
             player = GetComponent<ArenaParticipant>();
@@ -30,6 +31,7 @@ namespace Escape4Now.Arena
             drawing.transform.SetParent(transform, false);
         }
 
+        // Copy the player's appearance, then animate the drawing without moving the gameplay position.
         private void LateUpdate()
         {
             if (player.Match == null)
@@ -56,6 +58,7 @@ namespace Escape4Now.Arena
             drawing.transform.localScale = new Vector3(1 - step * stretchAmount, 1 + step * stretchAmount, 1);
         }
 
+        // Restore the original drawing when this visual component is disabled.
         private void OnDisable()
         {
             if (drawing != null)

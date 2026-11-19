@@ -24,6 +24,7 @@ namespace Escape4Now.Multiplayer
 
         public RaceNetworkActions(LanMultiplayerSession session) => this.session = session;
 
+        // Clear temporary opponent and dice choices when the player can no longer use them.
         public void ResetSelection()
         {
             choosingNumber = false;
@@ -199,6 +200,7 @@ namespace Escape4Now.Multiplayer
         public void CancelDiceNumber() => choosingNumber = false;
         public void StepDiceNumber(int direction) => SelectedDiceNumber = (SelectedDiceNumber + direction + 5) % 6 + 1;
 
+        // Send the selected key-battle opponent only when the local player is allowed to act.
         public void ChooseRaceOpponent(int index)
         {
             if (!session.IsMyTurn || index < 0 || index >= raceBattleTargets.Count) return;
@@ -206,6 +208,7 @@ namespace Escape4Now.Multiplayer
             raceBattleTargets.Clear();
         }
 
+        // Send a valid custom-dice choice only during this player's active selection.
         public void ChooseNumber(int value)
         {
             if (!choosingNumber || !session.IsMyTurn || session.MatchPaused || value < 1 || value > 6) return;

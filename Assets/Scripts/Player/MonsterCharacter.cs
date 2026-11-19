@@ -229,6 +229,7 @@ namespace Escape4Now.Player
     + ", World: " + transform.position);
         }
 
+        // Copy the host's monster pose and movement state for guest presentation.
         public void ApplyOnlinePose(Vector2Int cell, Vector3 position, int roll, int moves, bool rolled, bool rolling,
             int chargeCooldown, int roarCooldown, int stompCooldown)
         {
@@ -257,6 +258,7 @@ namespace Escape4Now.Player
             if (Pressed(stompAction)) send("stomp", default);
         }
 
+        // Accept the remote monster's current movement and actions through its existing input handling.
         public void ReceiveOnlineInput(string action, Vector2Int direction)
         {
             if (!OnlinePlayerControlled || !turnStarted || isMoving || turnSystem.CurrentTurnOwner != TurnOwner.Enemy) return;

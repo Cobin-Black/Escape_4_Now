@@ -14,6 +14,7 @@ using Object = UnityEngine.Object;
 // Checks saved references and protocol configuration without pretending to test another network.
 public static class RelayFoundationChecks
 {
+    // Check saved Relay references, protocol settings and UI wiring without claiming a live network test.
     public static void Run()
     {
         foreach (string scene in new[] { RelayTestAuthoring.ScenePath, "Assets/Scenes/OnlineRace.unity",

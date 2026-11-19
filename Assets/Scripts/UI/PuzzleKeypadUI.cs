@@ -10,6 +10,7 @@ namespace Escape4Now.UI
         [Header("Unity UI References")]
         [SerializeField] private InputField input;
 
+        // Append a keypad digit only while the current code attempt can accept input.
         public void AppendDigit(string digit)
         {
             if (input == null || string.IsNullOrEmpty(digit)) return;

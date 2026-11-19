@@ -19,6 +19,7 @@ namespace Escape4Now.UI
         [SerializeField] private Color shadeColor = new Color(0.01f, 0.02f, 0.05f, 0.65f);
         [SerializeField] private Color highlightColor = new Color(0.5f, 0.77f, 1f, 1f);
 
+        // Outline the current lesson target using its world bounds and the configured highlight style.
         public void Show(Rect? target, float elapsed, bool finished)
         {
             outline.gameObject.SetActive(target.HasValue);
@@ -53,6 +54,7 @@ namespace Escape4Now.UI
             }
         }
 
+        // Place the tutorial highlight around the target's projected screen rectangle.
         private void Place(RectTransform rect, Rect screen)
         {
             RectTransformUtility.ScreenPointToLocalPointInRectangle(canvas, new Vector2(screen.xMin, Screen.height - screen.yMin), null, out var topLeft);

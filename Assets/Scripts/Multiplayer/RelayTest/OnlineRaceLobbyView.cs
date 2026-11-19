@@ -97,6 +97,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
         private bool previousRoom;
         private int selectedCapacity = 2;
 
+        // Enable the configured lobby cancellation input when this view becomes active.
         private void OnEnable()
         {
             cancelAction = cancel != null && cancel.action != null ? cancel.action.Clone() : null;
@@ -156,6 +157,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
 
         private async void Host() { await session.HostAsync(selectedCapacity); }
         private async void Join() { await session.JoinAsync(joinCode.text); }
+        // Save the connection report and show its location or the actual export error.
         private void Export()
         {
             try { reportPath.text = "Saved: " + session.Relay.Export(networkLabel.text); }

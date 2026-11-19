@@ -23,6 +23,7 @@ namespace Escape4Now.UI
         [SerializeField, TextArea] private string fullText = "You can only carry one item.";
         private ItemSpawner networkItems;
 
+        // Refresh the open storage display and route its controls through the current match authority.
         private void LateUpdate()
         {
             var storage = ObstacleStorage.OpenStorage;
@@ -48,6 +49,7 @@ namespace Escape4Now.UI
             Present(storage.name, item, canTake);
         }
 
+        // Display the selected storage contents using the existing item widgets.
         private void Present(string storageName, Item item, bool canTake)
         {
             title.text = storageName;
@@ -56,6 +58,7 @@ namespace Escape4Now.UI
             take.interactable = item != null && canTake;
         }
 
+        // Take the displayed item through the host command online or the local storage action.
         public void Take()
         {
             var network = LanMultiplayerSession.Instance;
@@ -63,6 +66,7 @@ namespace Escape4Now.UI
             else ObstacleStorage.OpenStorage?.ConfirmMenu();
         }
 
+        // Close the open storage through the appropriate local or online menu path.
         public void Close()
         {
             var network = LanMultiplayerSession.Instance;

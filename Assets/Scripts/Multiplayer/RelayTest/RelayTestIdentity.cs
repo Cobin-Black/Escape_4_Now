@@ -16,6 +16,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
         private string previousProfile;
         private bool destroyed;
 
+        // Start the required Unity service environment and sign in with the diagnostic guest profile.
         public Task SignInAsync(string environment, Action<string> stage)
         {
             if (signIn != null && !signIn.IsCompleted) return signIn;
@@ -57,12 +58,14 @@ namespace Escape4Now.Multiplayer.RelayTesting
             }
         }
 
+        // Release the diagnostic identity when this scene is removed.
         private void OnDestroy()
         {
             destroyed = true;
             if (signIn == null || signIn.IsCompleted) ReleaseGuestProfile();
         }
 
+        // Return from the temporary Relay-test profile without keeping it as the game account.
         private void ReleaseGuestProfile()
         {
             if (guestProfile == null || UnityServices.State != ServicesInitializationState.Initialized) return;

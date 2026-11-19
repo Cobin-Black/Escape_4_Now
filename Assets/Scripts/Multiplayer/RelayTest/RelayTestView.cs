@@ -25,6 +25,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
         [SerializeField] private Text history;
         [SerializeField] private Text exportedPath;
 
+        // Connect the diagnostic scene's controls to hosting, joining and report export.
         private void Start()
         {
             protocol.SetValueWithoutNotify((int)connection.Protocol);
@@ -40,12 +41,14 @@ namespace Escape4Now.Multiplayer.RelayTesting
         private async void Join() { await connection.JoinAsync(joinCode.text); }
         private void CopyCode() { GUIUtility.systemCopyBuffer = connection.RoomCode; }
 
+        // Save the test report and show the result in the diagnostic screen.
         private void Export()
         {
             try { exportedPath.text = "Report saved: " + connection.Export(networkLabel.text); }
             catch (Exception error) { exportedPath.text = "Could not save report: " + RelayTestReport.Safe(error.Message); }
         }
 
+        // Refresh the test controls and status from the current connection state.
         private void Update()
         {
             bool setup = connection.CanStart;

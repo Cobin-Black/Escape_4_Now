@@ -10,6 +10,7 @@ using UnityEngine.UI;
 public static class SurvivalWorldFeedbackAuthoring
 {
     private const string Folder = "Assets/Prefabs/Survival/Gameplay/";
+    // Create and assign the short world effects that accompany Survival events.
     public static void Apply()
     {
         try
@@ -71,6 +72,7 @@ public static class SurvivalWorldFeedbackAuthoring
         }
         catch (Exception error) { Debug.LogException(error); EditorApplication.Exit(1); }
     }
+    // Build a reusable particle-and-audio cue with its configured lifetime and appearance.
     private static SurvivalWorldBurst Burst(string name,string sound,Color color,bool follow,bool pickup)
     {
         var root = new GameObject(name);

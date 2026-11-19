@@ -7,6 +7,7 @@ using UnityEngine;
 [CustomEditor(typeof(SurvivalMap))]
 public sealed class SurvivalMapEditor : Editor
 {
+    // Show the campus generation settings and the controls used to inspect its editor preview.
     public override void OnInspectorGUI()
     {
         DrawDefaultInspector();

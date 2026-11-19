@@ -273,6 +273,7 @@ namespace Escape4Now.Player
             return true;
         }
 
+        // Check for at least one legal neighboring move within the player's remaining movement.
         private bool HasAffordableStep()
         {
             foreach (var step in new[] { Vector2Int.right, Vector2Int.up, Vector2Int.left, Vector2Int.down })
@@ -455,6 +456,7 @@ namespace Escape4Now.Player
             return true;
         }
 
+        // Refresh occupied player cells so movement and spawn checks use their current positions.
         private static void RebuildMapOccupants(IPlayerGridMap map)
         {
             var occupied = new List<Vector2Int>();
@@ -525,6 +527,7 @@ namespace Escape4Now.Player
             return true;
         }
 
+        // Attach the player marker to this character's current identity and map position.
         private void SetupMarker()
         {
             spriteRenderer = GetComponent<SpriteRenderer>();

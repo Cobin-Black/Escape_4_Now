@@ -52,6 +52,7 @@ namespace Escape4Now.Map
             DrawMarker();
         }
 
+        // Show or hide the marker without removing the underlying gameplay event.
         public void SetVisible(bool visible)
         {
             isVisible = visible;

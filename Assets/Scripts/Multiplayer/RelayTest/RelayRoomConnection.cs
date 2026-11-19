@@ -108,6 +108,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             }
         }
 
+        // Prepare connection diagnostics and subscribe to this scene's network callbacks.
         private void Awake()
         {
             alive = true;
@@ -203,6 +204,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
         }
 
         public Task HostAsync() => HostAsync(settings.maximumPlayers);
+        // Check the selected capacity before starting a new host allocation.
         public Task HostAsync(int players)
         {
             if (!CanStart) return Task.CompletedTask;
@@ -308,6 +310,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             transport.DisconnectTimeoutMS = settings.disconnectTimeoutMilliseconds;
         }
 
+        // Start the chosen host or client transport and register its health-check messages.
         private void StartTransport(bool host)
         {
             SetStage("Transport startup");
@@ -360,6 +363,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             if (!alive || attempt != generation) throw new OperationCanceledException();
         }
 
+        // Keep the visible connection status and diagnostic report on the same step.
         private void SetStage(string stage)
         {
             Stage = stage;
@@ -384,18 +388,21 @@ namespace Escape4Now.Multiplayer.RelayTesting
                 : !space ? "Room is full." : "";
         }
 
+        // Turn scene identifiers into the game-mode names shown in connection errors.
         private static string ModeLabel(string mode) => mode switch
         {
             "OnlineRace" => "Race", "OnlineSurvival" => "Survival",
             "OnlineFreeForAll" => "King of the Hill", "OnlineHotPotato" => "Hot Potato", _ => mode
         };
 
+        // Track a remote connection without treating the local host as another player.
         private void Connected(ulong client)
         {
             if (!Active || client == network.LocalClientId) return;
             AddPeer(client);
         }
 
+        // Create the remote peer's health-check state and notify the gameplay room.
         private void AddPeer(ulong client)
         {
             if (peers.ContainsKey(client)) return;
@@ -458,6 +465,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             else if (!Passed) Status = "Connected. Checking repeated messages in both directions...";
         }
 
+        // Validate the probe and echo its sequence and timestamp back to the sender.
         private void ReceivePing(ulong sender, FastBufferReader reader)
         {
             if (Active && !Hosting && network.IsConnectedClient && sender == NetworkManager.ServerClientId) AddPeer(sender);
@@ -471,6 +479,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             network.CustomMessagingManager.SendNamedMessage(Pong, sender, writer, NetworkDelivery.ReliableSequenced);
         }
 
+        // Accept only the outstanding probe reply and update the measured round-trip delay.
         private void ReceivePong(ulong sender, FastBufferReader reader)
         {
             if (!Active || !peers.TryGetValue(sender, out Peer peer) || reader.Length - reader.Position != sizeof(int) + sizeof(double)) return;
@@ -519,6 +528,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             report.Add("Unity " + type + ": " + message);
         }
 
+        // Keep the actual failure in the report and release the failed connection for a later attempt.
         private void Fail(Exception error)
         {
             string detail = error.GetType().Name + ": " + error.Message;
@@ -530,6 +540,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             Status = error.Message + " You can host or join again after cleanup.";
         }
 
+        // Cancel the current attempt and stop networking without deleting its diagnostic report.
         public void Leave()
         {
             ++generation;
@@ -541,6 +552,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             Status = "Stopped. Create a fresh room when changing protocol.";
         }
 
+        // Invalidate late service replies and queue transport cleanup after the current callbacks finish.
         private void StopNetwork()
         {
             ++generation;
@@ -557,6 +569,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             if (shutdownQueued) ShutdownTransport();
         }
 
+        // Remove diagnostic handlers and shut down the transport only if it still needs cleanup.
         private void ShutdownTransport()
         {
             shutdownQueued = false;

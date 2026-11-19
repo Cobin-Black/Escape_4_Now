@@ -7,6 +7,7 @@ using UnityEngine;
 public sealed class ArenaEventInspector : Editor
 {
     private bool details, additional;
+    // Show event scheduling and per-event settings, including why an event is unavailable.
     public override void OnInspectorGUI()
     {
         DrawDefaultInspector();

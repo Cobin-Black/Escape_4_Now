@@ -28,6 +28,7 @@ public static class SurvivalGameplayChecks
     private static InputSettings.BackgroundBehavior previousBackground;
     private static InputSettings.EditorInputBehaviorInPlayMode previousEditorInput;
 
+    // Resume the gameplay checks after entering Play Mode and install the validation timeout.
     static SurvivalGameplayChecks()
     {
         EditorApplication.playModeStateChanged += state =>
@@ -43,6 +44,7 @@ public static class SurvivalGameplayChecks
         };
     }
 
+    // Open the saved Survival scene and schedule its gameplay checks.
     [MenuItem("Tools/Survival/Validate Playable Match")]
     public static void Run()
     {
@@ -65,6 +67,7 @@ public static class SurvivalGameplayChecks
         EditorApplication.isPlaying = true;
     }
 
+    // Fail a stuck check after its deadline so batch validation cannot wait forever.
     private static void Watchdog()
     {
         if (EditorApplication.timeSinceStartup <= deadline) return;
@@ -72,6 +75,7 @@ public static class SurvivalGameplayChecks
         Finish(1);
     }
 
+    // Advance the Survival gameplay test and report its completion or failure.
     private static IEnumerator RunChecks()
     {
         IEnumerator checks = CheckMatch();
@@ -289,6 +293,7 @@ public static class SurvivalGameplayChecks
     private static void Require(bool value, string message)
     { if (!value) throw new InvalidOperationException(message); }
 
+    // Clean up the check and return its result code to the batch runner.
     private static void Finish(int code)
     {
         SessionState.SetBool(Running, false);

@@ -49,6 +49,7 @@ namespace Escape4Now.Player
 
         private void OnDisable() => SetVisible(false);
 
+        // Change the character drawing's visibility without removing the gameplay actor.
         private void SetVisible(bool visible)
         {
             if (body != null) body.enabled = visible;
@@ -123,6 +124,7 @@ namespace Escape4Now.Player
             ApplyRing(turnGlow, active, glow, pulse);
         }
 
+        // Apply the player's color to the existing identity-ring presentation.
         private void ApplyRing(SpriteRenderer renderer, bool active, Color color, float pulse)
         {
             if (renderer == null) return;

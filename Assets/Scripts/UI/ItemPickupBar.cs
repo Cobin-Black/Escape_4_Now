@@ -39,6 +39,7 @@ namespace Escape4Now.UI
         public Rect NoticeRect => popup != null && popup.gameObject.activeInHierarchy
             ? MatchUIContext.ScreenRect(popup.rectTransform) : default;
 
+        // Refresh the inventory display from the local player or the host's replicated inventory.
         private void LateUpdate()
         {
             var lan = LanMultiplayerSession.Instance;
@@ -62,6 +63,7 @@ namespace Escape4Now.UI
             DrawItem(item, player);
         }
 
+        // Build the same item slots from host data when this computer is a guest.
         private void DrawOnlineInventory(LanMultiplayerSession lan)
         {
             var players = lan.LatestState?.players;
@@ -93,6 +95,7 @@ namespace Escape4Now.UI
             if (panel.gameObject.activeSelf) DrawItem(item, context.Session.Participants[lan.LocalPlayerIndex]);
         }
 
+        // Show one item's icon, name and available interaction in its inventory slot.
         private void DrawItem(Item item, PlayerCharacter player)
         {
             itemName.text = item != null ? item.ItemName : emptyText;

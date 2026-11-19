@@ -33,6 +33,7 @@ public static class NativeUiChecks
     private static TutorialSection expectedSection;
     private static int tutorialSceneHandle;
 
+    // Resume saved UI checks on entering Play Mode and prepare their simulated input devices.
     static NativeUiChecks()
     {
         EditorApplication.playModeStateChanged += state =>
@@ -50,6 +51,7 @@ public static class NativeUiChecks
         };
     }
 
+    // Open the requested saved scene and schedule checks against its real UI.
     public static void Run()
     {
         string scene = Argument("-uiScene", "Race_Gamemode");
@@ -96,6 +98,7 @@ public static class NativeUiChecks
         EditorApplication.isPlaying = true;
     }
 
+    // Build the standalone player used for saved-scene UI validation.
     public static void Build()
     {
         var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
@@ -110,6 +113,7 @@ public static class NativeUiChecks
         EditorApplication.Exit(success ? 0 : 1);
     }
 
+    // Verify the visible HUD fits its intended area without overlapping controls.
     private static void CheckHudLayout(MatchUIContext context)
     {
         var reference = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Interface/MatchInterface.prefab")
@@ -157,6 +161,7 @@ public static class NativeUiChecks
             ? "abilitiesHeight" : "healthHeight").floatValue;
     }
 
+    // Run the UI checks and restore test state when they finish or fail.
     private static IEnumerator Execute()
     {
         var stack = new System.Collections.Generic.Stack<IEnumerator>();
@@ -557,6 +562,7 @@ public static class NativeUiChecks
         Debug.Log("NATIVE UI CHECKS PASSED: " + prefix + ", pointer lobby/start/pause/resume, shared actions, randomized HUD, native result sizing.");
     }
 
+    // Verify Survival's task and event visibility controls change assistance without changing gameplay.
     private static IEnumerator CheckSurvivalVisibility(MatchUIContext context, SurvivalModeController mode)
     {
         var view = new SerializedObject(context.GetComponentInChildren<PauseMenuUI>(true));
@@ -609,6 +615,7 @@ public static class NativeUiChecks
         Debug.Log("SURVIVAL VISIBILITY CHECKS PASSED: native event/task toggles, named stations, preserved gameplay and shared Pause.");
     }
 
+    // Verify storage interaction hints remain readable and follow the configured controls.
     private static IEnumerator CheckStorageHints(MatchUIContext context)
     {
         Require(!LocalMultiplayerSession.ShowItemObstacles && !LocalMultiplayerSession.ShowKeyLocation,
@@ -671,6 +678,7 @@ public static class NativeUiChecks
             if (marker.name.StartsWith("StorageAssist")) Require(!marker.gameObject.activeSelf, "Switching reveal options off clears every storage hint");
     }
 
+    // Check that neighboring hint elements have enough room to remain readable.
     private static void CheckHintSpacing(MatchUIContext context)
     {
         var bounds = new System.Collections.Generic.List<Rect>();
@@ -683,6 +691,7 @@ public static class NativeUiChecks
         }
     }
 
+    // Drive the actual UI input path so the check includes the control's event handling.
     private static IEnumerator Click(Selectable selectable)
     {
         Canvas.ForceUpdateCanvases();
@@ -706,6 +715,7 @@ public static class NativeUiChecks
         for (int i = 0; i < 4; i++) yield return null;
     }
 
+    // Verify the item bar displays the intended inventory without overlapping its controls.
     internal static void CheckInventoryLayout(MatchUIContext context)
     {
         var source = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Interface/MatchInterface.prefab")
@@ -818,6 +828,7 @@ public static class NativeUiChecks
         yield return null; yield return null;
     }
 
+    // Verify the visible active-player name agrees with the current turn and identity.
     private static void CheckActivePlayerName(MatchUIContext context, bool visible)
     {
         var names = context.GetComponentsInChildren<ActivePlayerNameUI>(true);
@@ -870,6 +881,7 @@ public static class NativeUiChecks
             "Name width respects its Inspector limit");
     }
 
+    // Verify visible character bodies remain correctly sized for the map.
     internal static void CheckPlayerBodies(LocalMultiplayerSession session)
     {
         foreach (var participant in session.Participants)
@@ -918,6 +930,7 @@ public static class NativeUiChecks
         finally { Object.DestroyImmediate(frame); }
     }
 
+    // Select the requested Game View resolution so layout checks use a repeatable viewport.
     internal static void SetSize(int width, int height)
     {
         var assembly = typeof(Editor).Assembly;
@@ -939,6 +952,7 @@ public static class NativeUiChecks
         window.Repaint();
     }
 
+    // Verify battle dice use the intended appearance and player-color presentation.
     public static void CheckBattleDice(MatchUIContext context)
     {
         var hud = context.GetComponentInChildren<MatchHudUI>(true);
@@ -973,12 +987,14 @@ public static class NativeUiChecks
         return index >= 0 && index + 1 < args.Length ? args[index + 1] : fallback;
     }
 
+    // Stop this check with a clear message when a required behavior is missing.
     private static void Require(bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException("FAIL: " + message);
         Debug.Log("PASS: " + message);
     }
 
+    // Fail a stuck check after its deadline so batch validation cannot wait forever.
     private static void Watchdog()
     {
         if (waitingForTutorial && UnityEngine.SceneManagement.SceneManager.GetActiveScene().handle != tutorialSceneHandle)
@@ -995,6 +1011,7 @@ public static class NativeUiChecks
         Debug.LogError("Native UI checks timed out."); Finish(1);
     }
 
+    // Clean up the check and return its result code to the batch runner.
     private static void Finish(int code)
     {
         SessionState.SetBool(Running, false);

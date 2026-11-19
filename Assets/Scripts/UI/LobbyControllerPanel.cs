@@ -63,6 +63,7 @@ namespace Escape4Now.UI
 
         private bool wired;
 
+        // Connect each saved controller button to assignment, clearing and vibration actions.
         private void Wire()
         {
             if (wired || rows == null) return;
@@ -143,6 +144,7 @@ namespace Escape4Now.UI
         //The button's resting x position, saved the first time so the shake always returns to it.
         private readonly System.Collections.Generic.Dictionary<RectTransform, float> restX = new System.Collections.Generic.Dictionary<RectTransform, float>();
 
+        // Place each controller column consistently across the panel.
         private float LeftX(RectTransform rect)
         {
             if (!restX.TryGetValue(rect, out float x))

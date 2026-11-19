@@ -42,6 +42,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
         // Seats the next match will use: with Fill Bots on, bots join until the configured total (4 by default).
         public int MatchSeats => FillWithBots && CanFillWithBots ? Mathf.Max(Capacity, match.BotFillSeats) : Capacity;
         public bool FillWithBots { get; private set; }
+        // Let the host change bot filling before play and publish the updated choice.
         public void ToggleFillWithBots()
         {
             if (!IsHost || Playing || !CanFillWithBots) return;
@@ -49,6 +50,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             nextLobby = 0;
         }
         public int MonsterSlot => modeMatch is OnlineSurvivalMatch survival ? survival.MonsterSlot : -1;
+        // Let the host cycle between an AI monster and the available player slots.
         public void CycleMonsterRole()
         {
             if (!IsHost || Playing || !(modeMatch is OnlineSurvivalMatch survival)) return;
@@ -59,6 +61,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
         public bool CanEditProfile => LocalSlot >= 0 && (IsHost || LocalSlot > 0) && Skins != null;
         public int ProfileSkinCount => CanEditProfile ? Skins.Count : 0;
         public string ProfileSkinName(int skin) => Skins.GetSkin(skin)?.skinName ?? "Skin " + (skin + 1);
+        // Find the next valid skin not held by another connected player, keeping pending name edits.
         public void CycleProfileSkin(int direction)
         {
             if (!CanEditProfile) return;
@@ -233,6 +236,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             Status = "Back in the same room. Everyone selects Ready for the next match.";
         }
 
+        // Clear the old room state, create the Relay room, then start the shared gameplay lobby.
         public async Task HostAsync(int players)
         {
             if (!relay.CanStart || Playing) return;
@@ -244,6 +248,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             Status = "Share the room code. All players must mark Ready before the host starts.";
         }
 
+        // Clear the previous attempt and register room messages after Relay starts joining.
         public async Task JoinAsync(string code)
         {
             if (!relay.CanStart || Playing) return;
@@ -252,12 +257,14 @@ namespace Escape4Now.Multiplayer.RelayTesting
             if (this != null && relay.Active) Listen();
         }
 
+        // Open the existing account screen instead of creating another login system.
         public void OpenSignIn()
         {
             AccountService.LoginRequested = true;
             UnityEngine.SceneManagement.SceneManager.LoadScene(startScreenScene);
         }
 
+        // Register the gameplay and lobby message handlers for this connection.
         private void Listen()
         {
             relay.Network.CustomMessagingManager.RegisterNamedMessageHandler(RelayMessageChannel.MessageName, ReceiveMatch);
@@ -265,6 +272,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             listening = true;
         }
 
+        // Wrap an accepted Relay peer in the common match-message connection.
         private void AddPeer(ulong peer)
         {
             if (!listening || channels.ContainsKey(peer)) return;
@@ -311,6 +319,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             profileResults[slot] = null;
         }
 
+        // Find or create the sender's connection before passing its match message to the shared session.
         private void ReceiveMatch(ulong sender, FastBufferReader reader)
         {
             if (!channels.ContainsKey(sender)) AddPeer(sender);
@@ -363,6 +372,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             }
         }
 
+        // Queue the local player's latest name and skin while preserving their preferred appearance.
         public void EditProfile(string name, int skin)
         {
             if (!CanEditProfile || !relay.Active || Playing) return;
@@ -427,6 +437,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
         }
         private readonly LobbyMessage[] profileResults = new LobbyMessage[4];
 
+        // Copy accepted seats, names, skins and Ready states, then acknowledge the local profile revision.
         private void ApplyLobbyState(LobbyMessage message)
         {
             ready.Clear();
@@ -454,6 +465,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             if (profilePending) Ready = false;
         }
 
+        // Build one host-approved lobby update for all connected guests.
         private LobbyMessage CaptureLobby() => new LobbyMessage
         {
             readySlots = ready.ToArray(), monsterSlot = MonsterSlot, fillWithBots = FillWithBots,
@@ -463,6 +475,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             occupiedSlots = Enumerable.Range(0, Capacity).Where(IsSlotOccupied).ToArray()
         };
 
+        // Store the room name in the active mode's existing player-name source.
         private void SetSlotName(int slot, string name)
         {
             if (modeMatch != null) modeMatch.SetSlotName(slot, name);
@@ -502,6 +515,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
                 nameRejected = nameTaken, skinRejected = skinTaken };
         }
 
+        // Send the Ready choice only after the local profile has finished updating.
         public void ToggleReady()
         {
             if (!relay.Active || Playing || match.LocalPlayerIndex < 0 || ProfileUpdating) return;
@@ -510,6 +524,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             else SendLobby(NetworkManager.ServerClientId, new LobbyMessage { request = true, ready = Ready });
         }
 
+        // Send lobby data reliably through the existing Relay messaging manager.
         private void SendLobby(ulong peer, LobbyMessage message)
         {
             using var writer = new FastBufferWriter(1024, Allocator.Temp);
@@ -529,6 +544,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
         // It is marked online so the match history can show how it was played.
         private bool resultSaved;
 
+        // Save this computer's confirmed result once, using the same account statistics as local play.
         private void SaveOnlineResult()
         {
             if (!Playing)
@@ -606,6 +622,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
                     SendLobby(entry.Key, lobby);
         }
 
+        // Queue a new profile only when the completed account name has actually changed.
         private void TrackAccountName(string name)
         {
             if (string.Equals(lastAccountName, name, StringComparison.Ordinal)) return;
@@ -643,6 +660,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             Skins?.ResetToDefaults();
         }
 
+        // Close the room connection and return this mode to its setup screen.
         public void Leave()
         {
             relay.Leave();
@@ -651,6 +669,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             else UnityEngine.SceneManagement.SceneManager.LoadScene(gameObject.scene.name);
         }
 
+        // Close networking and restore normal time before loading the main menu.
         public void MainMenu()
         {
             relay.Leave();
@@ -659,6 +678,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             UnityEngine.SceneManagement.SceneManager.LoadScene(mainMenuScene);
         }
 
+        // Remove Relay callbacks and message handlers, then dispose the scene's peer channels.
         private void OnDestroy()
         {
             relay.PeerConnected -= AddPeer;

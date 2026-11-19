@@ -18,6 +18,7 @@ public static class ArenaChecks
     private const string Running = "ArenaChecks.Running";
     private static double deadline;
     private static Keyboard keyboard;
+    // Resume the registered checks after Unity enters Play Mode.
     static ArenaChecks()
     {
         EditorApplication.playModeStateChanged += state =>
@@ -35,6 +36,7 @@ public static class ArenaChecks
         };
     }
 
+    // Start the saved-scene checks for local arena controls, generation and match rules.
     public static void Run()
     {
         EditorSceneManager.OpenScene("Assets/Scenes/FreeForAll.unity");
@@ -44,6 +46,7 @@ public static class ArenaChecks
         EditorApplication.isPlaying = true;
     }
 
+    // Verify generated layouts meet the required space, route and spawn rules.
     public static void Generation()
     {
         try
@@ -97,6 +100,7 @@ public static class ArenaChecks
         }
     }
 
+    // Advance the check steps and report failures through the normal validation cleanup.
     private static IEnumerator Guard(IEnumerator routine)
     {
         while (true)
@@ -359,6 +363,7 @@ public static class ArenaChecks
         }
     }
 
+    // Start a fresh local arena fixture with the requested number of participants.
     private static void Start(ArenaMatch match, int count)
     {
         var names = new string[count];
@@ -384,6 +389,7 @@ public static class ArenaChecks
             }
     }
 
+    // Assign serialized test or authoring values through Unity's saved-property interface.
     private static void Set(Object target, string field, float value)
     {
         var so = new SerializedObject(target);
@@ -400,12 +406,14 @@ public static class ArenaChecks
         data.ApplyModifiedPropertiesWithoutUndo();
     }
 
+    // Stop this check with a clear message when a required behavior is missing.
     private static void Require(bool value, string message)
     {
         if (!value)
             throw new Exception(message);
     }
 
+    // Fail a stuck check after its deadline so batch validation cannot wait forever.
     private static void Watchdog()
     {
         if (EditorApplication.timeSinceStartup > deadline)
@@ -415,6 +423,7 @@ public static class ArenaChecks
         }
     }
 
+    // Clean up the check and return its result code to the batch runner.
     private static void Finish(int code)
     {
         SessionState.SetBool(Running, false);

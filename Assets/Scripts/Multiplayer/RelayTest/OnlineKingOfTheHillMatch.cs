@@ -30,6 +30,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             public Vector3 position;
         }
 
+        // Send the active hill, floor pickups and projectile positions alongside the arena state.
         protected override Snapshot CaptureMode()
         {
             Vector2? center = Hill.HillCenter;
@@ -49,6 +50,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
 
         protected override Snapshot ReadSnapshot(string payload, int count) => JsonUtility.FromJson<HillSnapshot>(payload);
 
+        // Send this player's score, respawn, shield, item charges and latest ruler swing.
         protected override void CapturePlayer(ArenaParticipant player, Actor actor)
         {
             actor.score = Hill.GetScore(player);
@@ -65,6 +67,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             }
         }
 
+        // Update the guest HUD and play new attack cues without repeating host damage checks.
         protected override void ApplyPlayer(ArenaParticipant player, Actor actor)
         {
             player.OnlineItemType = actor.itemType;
@@ -79,6 +82,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             }
         }
 
+        // Apply the host's hill, item pickups and projectile visuals to the shared local components.
         protected override void ApplyMode(Snapshot snapshot)
         {
             var state = (HillSnapshot)snapshot;

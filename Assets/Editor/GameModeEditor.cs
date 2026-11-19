@@ -7,6 +7,7 @@ using UnityEngine;
 [CustomEditor(typeof(GameModeController), true)]
 public sealed class GameModeEditor : Editor
 {
+    // Show the selected mode's serialized settings through the shared game-mode Inspector.
     public override void OnInspectorGUI()
     {
         DrawDefaultInspector();

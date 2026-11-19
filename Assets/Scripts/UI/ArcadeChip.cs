@@ -13,6 +13,7 @@ namespace Escape4Now.UI
             Paint(chip, selected, ArcadeMenuKit.Teal);
         }
 
+        // Paint the selected chip using the same player color as the rest of the lobby.
         public static void Paint(Transform chip, bool selected, Color accent)
         {
             if (chip == null) return;

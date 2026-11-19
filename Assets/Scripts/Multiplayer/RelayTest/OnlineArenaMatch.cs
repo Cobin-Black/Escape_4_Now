@@ -57,6 +57,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
         public override bool SupportsBots => true;
         public override void SetBotSlots(bool[] bots) => botSlots = bots != null ? (bool[])bots.Clone() : null;
         public override string SlotName(int slot) => string.IsNullOrEmpty(names[slot]) ? base.SlotName(slot) : names[slot];
+        // Keep room names short and remove markup before using them in gameplay labels.
         public override void SetSlotName(int slot, string name)
         {
             name = name?.Replace("<", "").Replace(">", "").Trim();
@@ -122,6 +123,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
         protected virtual void StopListeningToMode() { }
         protected virtual void AdvanceGuestView(float seconds) { }
 
+        // Connect the shared arena to room input, pause requests and mode-specific network hooks.
         protected virtual void Awake()
         {
             arena.ConfigureOnline(false);
@@ -132,6 +134,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             ListenToMode();
         }
 
+        // Remove the room and controller callbacks so another scene does not receive old input.
         protected virtual void OnDestroy()
         {
             arena.OnlinePauseRequested -= RequestPause;
@@ -183,6 +186,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
 
         public override bool StartHost(int count) => StartBoard(count, null);
 
+        // Package the host's map, players and events into one authoritative arena update.
         public override string Capture()
         {
             var state = CaptureMode();
@@ -204,6 +208,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             return JsonUtility.ToJson(state);
         }
 
+        // Include movement acknowledgements and protection state so guests can correct and animate this player.
         private Actor CaptureActor(ArenaParticipant player)
         {
             var movement = player.CaptureMovement();
@@ -306,6 +311,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             ApplyInput(slot, packet);
         }
 
+        // Apply one checked player input and remember how much movement the host has already simulated.
         private void ApplyInput(int slot, InputPacket packet)
         {
             if (arena.Playing && !arena.Paused && slot < arena.Players.Count && arena.Players[slot].Alive)
@@ -355,6 +361,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
         private void RequestPause(bool pause) =>
             transport.SubmitModeInput(JsonUtility.ToJson(new InputPacket { pause = pause ? 1 : -1 }));
 
+        // Stop the online arena and show the connection error without declaring a gameplay winner.
         public override void ConnectionLost(string reason)
         {
             if (!started || Finished) return;
@@ -367,6 +374,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
         // A match that ended because the connection dropped has no winner to save.
         private bool disconnected;
 
+        // Convert the host's confirmed match outcome into this player's saved account result.
         public override bool TryGetSlotResult(int slot, out Escape4Now.Accounts.MatchStat stat)
         {
             stat = default;

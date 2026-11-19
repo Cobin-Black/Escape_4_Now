@@ -191,6 +191,7 @@ namespace Escape4Now.Map
         }
         private void Quad(Transform parent, string label, float x, float y, float width, float depth, Color color)
             => Shape(parent, label, new[] { new Vector2(x, y), new Vector2(x + width, y), new Vector2(x + width, y + depth), new Vector2(x, y + depth) }, new[] { 0, 1, 2, 0, 2, 3 }, color);
+        // Create a generated campus mesh with the assigned colors and material.
         private void Shape(Transform parent, string label, Vector2[] points, int[] triangles, Color color, int order = -9500)
         {
             var item = new GameObject(label) { hideFlags = HideFlags.HideAndDontSave }; item.transform.SetParent(parent, false);
@@ -201,6 +202,7 @@ namespace Escape4Now.Map
             item.AddComponent<MeshFilter>().sharedMesh = mesh;
             var renderer = item.AddComponent<MeshRenderer>(); renderer.sharedMaterial = map.MapMaterial; renderer.sortingOrder = order;
         }
+        // Show the wet-ground layer only while a campus rain effect is present.
         private void Update()
         {
             if (wetRoot == null) return;
@@ -209,6 +211,7 @@ namespace Escape4Now.Map
                 if (effect.IsCampusWeather) { raining = true; break; }
             if (raining != wet) { wet = raining; wetRoot.SetActive(wet); }
         }
+        // Remove generated campus visuals before drawing a replacement layout.
         public void Clear()
         {
             if (root != null) Release(root);

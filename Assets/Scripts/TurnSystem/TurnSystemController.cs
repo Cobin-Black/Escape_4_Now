@@ -114,6 +114,7 @@ namespace Escape4Now.TurnSystem
                 RestartTurnCycle();
         }
 
+        // Return a copy so network messages cannot change the live turn-order array.
         public int[] CopyTurnOrder()
         {
             EnsureTurnOrder();
@@ -146,6 +147,7 @@ namespace Escape4Now.TurnSystem
             return System.Guid.NewGuid().GetHashCode();
         }
 
+        // Create a seeded turn order when the participant count has changed.
         private void EnsureTurnOrder()
         {
             if (GetPlayerCount() == 0) { turnOrder = new int[0]; return; }
@@ -161,6 +163,7 @@ namespace Escape4Now.TurnSystem
             RefreshCurrentTurnName();
         }
 
+        // End the losing player's turn only when that player still owns the active turn.
         public void EndTurnAfterBattleLoss(PlayerCharacter player)
         {
             if (Time.timeScale <= 0f || Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused)
@@ -248,6 +251,7 @@ namespace Escape4Now.TurnSystem
             ContinueCycle(nextOrderPosition);
         }
 
+        // Move to the next valid turn while keeping the current cycle state consistent.
         private void ContinueCycle(int next)
         {
             if (next >= GetPlayerCount())

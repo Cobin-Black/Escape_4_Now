@@ -5,6 +5,7 @@ namespace Escape4Now.UI
     // Shared filled/dimmed hearts. Health continues to belong to PlayerCharacter.
     public static class HealthHeartText
     {
+        // Build filled and empty heart symbols from the player's current and starting health.
         public static string Format(int remaining, int maximum, string lostColor)
         {
             maximum = Mathf.Max(1, maximum);

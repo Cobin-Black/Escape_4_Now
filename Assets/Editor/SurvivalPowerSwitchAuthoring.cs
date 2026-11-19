@@ -8,6 +8,7 @@ using UnityEngine.UI;
 
 public static class SurvivalPowerSwitchAuthoring
 {
+    // Build and assign the sliding switch-board presentation used by the power-switch puzzle.
     public static void Apply()
     {
         try

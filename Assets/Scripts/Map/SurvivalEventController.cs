@@ -26,6 +26,7 @@ namespace Escape4Now.Map
         public bool RainActive => replicaRain || temporary.Exists(effect => effect.type == SurvivalEventType.RainStorm);
         private bool replicaRain;
         private GameObject replicaRainVisual;
+        // Create or remove rain presentation when the host changes the weather.
         public void ApplyOnlineRain(bool raining)
         {
             if (replicaRain == raining) return;
@@ -84,6 +85,7 @@ namespace Escape4Now.Map
                 mode.Turns.PlayerTurnEnded -= CountTurn;
         }
 
+        // Update tile assistance without turning off environmental effects.
         public void SetEventLocationsVisible(bool visible)
         {
             EventLocationsVisible = visible;
@@ -92,6 +94,7 @@ namespace Escape4Now.Map
                     marker.SetVisible(visible);
         }
 
+        // Copy the host's event message and blackout countdown for display.
         public void ApplyNetworkDisplay(string message, int blackout)
         {
             CurrentMessage = message;
@@ -103,6 +106,7 @@ namespace Escape4Now.Map
             Notify(player.name + ": " + message);
         }
 
+        // Advance event notifications while respecting the gameplay pause state.
         private void Update()
         {
             if (!initialized || Escape4Now.Multiplayer.LanMultiplayerSession.IsClient
@@ -291,6 +295,7 @@ namespace Escape4Now.Map
         }
 
         private void ShowSkipped(PlayerCharacter player, SurvivalEventRule rule) => ShowMessage(player, string.Format(settings.skippedEventFormat, rule.title));
+        // Choose among enabled compatible effects, using the smaller-effect pool for random events.
         private SurvivalEventRule PickRule(Vector2Int cell, bool smaller)
         {
             var pool = new List<SurvivalEventRule>();
@@ -336,6 +341,7 @@ namespace Escape4Now.Map
             return cells;
         }
 
+        // Find a safe destination, optionally in another campus area, before moving the survivor.
         private bool Teleport(PlayerCharacter player, bool anotherArea)
         {
             var cells = Destinations();
@@ -348,6 +354,7 @@ namespace Escape4Now.Map
             return cells.Count > 0 && player.SetGridPosition(cells[random.Next(cells.Count)]);
         }
 
+        // Find the generated campus area that contains this grid cell.
         private OutdoorArea AreaAt(Vector2Int cell)
         {
             foreach (var area in map.Layout.Areas)
@@ -371,6 +378,7 @@ namespace Escape4Now.Map
             return Mathf.Max(settings.minimumRollMovement, movement);
         }
 
+        // Track rain as global weather and pass other temporary effects to their environment handler.
         private bool AddTemporary(SurvivalEventRule rule, Vector2Int center)
         {
             if (rule.type != SurvivalEventType.RainStorm) return environment.TryActivate(rule);
@@ -408,6 +416,7 @@ namespace Escape4Now.Map
             scheduler.CountTurn();
         }
 
+        // Check the saved event settings before they are used to start a match.
         public void ValidateConfiguration()
         {
             if (settings == null || environment == null || scheduler == null)

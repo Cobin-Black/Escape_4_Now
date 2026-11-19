@@ -207,6 +207,7 @@ public static class ArenaExplosionAuthoring
         return system;
     }
 
+    // Assign serialized test or authoring values through Unity's saved-property interface.
     private static void Set(Object target, params object[] values)
     {
         var data = new SerializedObject(target);

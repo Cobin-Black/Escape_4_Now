@@ -20,6 +20,7 @@ namespace Escape4Now.UI
         [SerializeField] private Color loseColor = new Color(1f, 0.43f, 0.4f);
         [SerializeField] private string timeFormat = "TIME LEFT {0}";
 
+        // Show the current mode's confirmed result when the match has ended.
         private void LateUpdate()
         {
             bool finished = context.Session != null && context.Session.TryGetResult(out _);

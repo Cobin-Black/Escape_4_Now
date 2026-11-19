@@ -88,6 +88,7 @@ namespace Escape4Now.Arena
             }
         }
 
+        // Attach the decorative scoreboard text to its board using the configured layout and font.
         private static void ScoreText(ArenaMap map, Transform board, Vector2Int cell, ArenaRoomVisualSettings style, string value, float column, float height, float size, Color color)
         {
             var label = new GameObject("Scoreboard display").AddComponent<TextMesh>();
@@ -121,6 +122,7 @@ namespace Escape4Now.Arena
             return prop;
         }
 
+        // Build a room prop at its grid location and apply the chosen facing.
         private static Transform Place(ArenaMap map, Transform parent, SurvivalPropVisual prefab, Vector2Int cell, int turns = 0)
         {
             if (prefab == null || map.Layout.Walkable(cell))

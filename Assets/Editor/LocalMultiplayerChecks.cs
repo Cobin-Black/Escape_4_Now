@@ -399,6 +399,7 @@ public static class LocalMultiplayerChecks
         Debug.Log("SAME-DEVICE AND SCHOOL MAP CHECKS PASSED");
     }
 
+    // Verify the saved event catalog still contains the configured event choices.
     private static void CheckEventCatalog(MapEventController controller)
     {
         int typeCount = Enum.GetValues(typeof(MapEventType)).Length;
@@ -516,6 +517,7 @@ public static class LocalMultiplayerChecks
         finally { UnityEngine.Object.Destroy(migrationObject); }
     }
 
+    // Verify a timed-out match produces the expected result instead of continuing indefinitely.
     private static void CheckTimeoutResult()
     {
         GameTimer timer = UnityEngine.Object.FindFirstObjectByType<GameTimer>();

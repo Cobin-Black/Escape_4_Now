@@ -16,6 +16,7 @@ namespace Escape4Now.Map
         [SerializeField, Range(0, 1)] private float maximumOpacity = .8f;
         [SerializeField] private float sprayDegreesPerSecond = 45f;
         private float elapsed;
+        // Pulse environmental highlights and rotate the spray; the event controller owns expiry.
         private void Update()
         {
             if (Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused

@@ -32,6 +32,7 @@ namespace Escape4Now.UI
             slotFrame.SetActive(false); iconMount.gameObject.SetActive(false);
         }
 
+        // Show the supply, socket or battery artwork for this piece's current matching state.
         public void Present(SurvivalPuzzleDefinition definition,int key,bool target,bool matched)
         {
             bool wires = definition.type == SurvivalPuzzleType.MatchWires;

@@ -14,11 +14,13 @@ namespace Escape4Now.Puzzles
         private bool available;
         private float elapsed;
         public void ConfigureSorting(int order) { if (ring != null) ring.sortingOrder = order; }
+        // Show whether this task can currently be approached or attempted.
         public void SetAvailable(bool value)
         {
             available = value;
             if (ring != null) ring.enabled = value;
         }
+        // Animate the task beacon while respecting its available state.
         private void LateUpdate()
         {
             if (!available || ring == null || Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused) return;

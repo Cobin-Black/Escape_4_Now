@@ -13,6 +13,7 @@ namespace Escape4Now.Map
         private readonly Dictionary<Mesh,Color[]> original = new Dictionary<Mesh,Color[]>();
         private bool dark;
         private bool captured;
+        // Dim the saved lamp-head colors during Blackout, then restore their original colors.
         private void Update()
         {
             if (events == null || map == null || events.MatchPlan == null) return;

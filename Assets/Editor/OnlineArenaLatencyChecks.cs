@@ -124,6 +124,7 @@ public static class OnlineArenaLatencyChecks
         Debug.Log("ONLINE ARENA LATENCY CHECKS PASSED: " + arena.Title);
     }
 
+    // Verify guest movement receives temporary host blockers and can use a route after it reopens.
     private static void CheckBlockers(OnlineArenaMatch adapter, ArenaMatch arena, string snapshot)
     {
         var layout = arena.Map.Layout;
@@ -172,6 +173,7 @@ public static class OnlineArenaLatencyChecks
         }
     }
 
+    // Find a clear movement direction so prediction checks do not measure a player blocked by a wall.
     private static Vector2 FindOpenDirection(ArenaMatch arena, ArenaParticipant player)
     {
         foreach (var direction in new[] { Vector2.right, Vector2.left, Vector2.up, Vector2.down })
@@ -184,6 +186,7 @@ public static class OnlineArenaLatencyChecks
         throw new InvalidOperationException("No open direction at the generated guest spawn.");
     }
 
+    // Stop this check with a clear message when a required behavior is missing.
     private static void Require(bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException("Online arena latency check failed: " + message);

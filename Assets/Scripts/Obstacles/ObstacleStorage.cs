@@ -180,6 +180,7 @@ namespace Escape4Now.Obstacles
             return true;
         }
 
+        // Let the authoritative match transfer the stored item through the existing inventory rules.
         public bool TakeNetworkItem(PlayerCharacter player)
         {
             if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient || player == null || !player.isActiveAndEnabled
@@ -317,6 +318,7 @@ namespace Escape4Now.Obstacles
         public static ObstacleStorage OpenStorage => openStorage;
         public PlayerCharacter ViewingPlayer => viewingPlayer;
 
+        // Complete the storage choice through the same menu action used by local play.
         public void ConfirmMenu()
         {
             if (!IsMenuOpen || !CanKeepMenuOpen() || Time.timeScale <= 0f

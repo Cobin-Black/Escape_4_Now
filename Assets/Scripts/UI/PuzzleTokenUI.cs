@@ -56,6 +56,7 @@ namespace Escape4Now.UI
         public PuzzlePieceMotion Motion => motion;
         public PuzzleMatchingPieceView MatchingView => matchingView;
         public SurvivalPowerSwitchHandle PowerSwitch => powerSwitch;
+        // Return the token's socket position in the space used to draw a connection.
         public Vector2 ConnectionPoint(RectTransform space,int column)
         {
             var rect = (RectTransform)transform;
@@ -63,6 +64,7 @@ namespace Escape4Now.UI
                 : rect.TransformPoint(rect.rect.center + Vector2.right*rect.rect.width*(column == 0 ? .5f : -.5f));
             return space.InverseTransformPoint(world);
         }
+        // Show selected, connected and rejected states without changing puzzle answers.
         public void SetMatchingState(bool selected,bool hovered,bool matched,bool valid,Color tint)
         {
             if (connector != null) connector.color = tint;
@@ -71,6 +73,7 @@ namespace Escape4Now.UI
             interactionOutline.enabled = selected || hovered || matched;
             interactionOutline.effectColor = hovered && !valid ? wrongOutline : matched || hovered ? correctOutline : selectedOutline;
         }
+        // Update this token's power indicator from the puzzle's current circuit state.
         public void SetPowered(bool on)
         {
             foreach (var port in circuitPorts) port.color = on ? poweredPortColor : idlePortColor;
@@ -123,6 +126,7 @@ namespace Escape4Now.UI
             dragGroup.blocksRaycasts = false;
         }
 
+        // Pass the live pointer position to the puzzle's drag handling.
         public void OnDrag(PointerEventData data)
         {
             if (owner.DragSource == this)
@@ -143,6 +147,7 @@ namespace Escape4Now.UI
             owner.DragSource = null;
         }
 
+        // Pass the released piece to the puzzle's matching or placement rules.
         public void OnDrop(PointerEventData data)
         {
             if (owner.DragSource != null)
@@ -151,6 +156,7 @@ namespace Escape4Now.UI
         public void OnPointerEnter(PointerEventData data) { owner?.HoverMatch(side,index,true); }
         public void OnPointerExit(PointerEventData data) { owner?.HoverMatch(side,index,false); }
 
+        // Clear transient drag and selection visuals when the token stops being used.
         private void OnDisable()
         {
             if (owner == null || owner.DragSource != this)

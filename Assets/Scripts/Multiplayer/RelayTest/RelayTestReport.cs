@@ -16,6 +16,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
 
         public RelayTestReport(int maximumEntries) { this.maximumEntries = maximumEntries; }
 
+        // Remove sensitive credential patterns before text is displayed or written to a report.
         public static string Safe(string message)
         {
             string clean = Regex.Replace(message ?? "", @"(?i)Bearer\s+\S+", "Bearer [redacted]");
@@ -24,6 +25,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             return clean;
         }
 
+        // Keep a bounded, timestamped history of connection diagnostics.
         public void Add(string message)
         {
             string line = DateTime.UtcNow.ToString("HH:mm:ss") + " UTC  " + Safe(message);
@@ -32,6 +34,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             Debug.Log("[Relay test] " + line);
         }
 
+        // Write a sanitized connection report with the supplied network label and report details.
         public string Export(string summary, string networkLabel)
         {
             string directory = Path.Combine(Application.persistentDataPath, "RelayTests");

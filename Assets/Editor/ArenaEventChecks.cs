@@ -15,6 +15,7 @@ public static class ArenaEventChecks
 {
     private const string Key = "ArenaEventChecks.Running";
     private static double deadline;
+    // Resume the registered checks after Unity enters Play Mode.
     static ArenaEventChecks()
     {
         EditorApplication.playModeStateChanged += state =>
@@ -29,6 +30,7 @@ public static class ArenaEventChecks
         };
     }
 
+    // Start the saved-scene checks for arena event selection, effects and cleanup.
     public static void Run()
     {
         EditorSceneManager.OpenScene("Assets/Scenes/FreeForAll.unity");
@@ -38,6 +40,7 @@ public static class ArenaEventChecks
         EditorApplication.isPlaying = true;
     }
 
+    // Advance the check steps and report failures through the normal validation cleanup.
     private static IEnumerator Guard(IEnumerator routine)
     {
         while (true)
@@ -349,6 +352,7 @@ public static class ArenaEventChecks
         data.ApplyModifiedPropertiesWithoutUndo();
     }
 
+    // Start the arena fixture and prepare its configured event pool for controlled checks.
     private static void Start(ArenaMatch match, int count)
     {
         match.enabled = true;
@@ -366,12 +370,14 @@ public static class ArenaEventChecks
             player.enabled = false;
     }
 
+    // Stop this check with a clear message when a required behavior is missing.
     private static void Require(bool value, string message)
     {
         if (!value)
             throw new Exception(message);
     }
 
+    // Fail a stuck check after its deadline so batch validation cannot wait forever.
     private static void Watchdog()
     {
         if (EditorApplication.timeSinceStartup > deadline)
@@ -381,6 +387,7 @@ public static class ArenaEventChecks
         }
     }
 
+    // Clean up the check and return its result code to the batch runner.
     private static void Finish(int code)
     {
         SessionState.SetBool(Key, false);

@@ -7,6 +7,7 @@ namespace Escape4Now.UI
 {
     public static class InputBindingHints
     {
+        // Read the current primary input bindings so hints follow the configured controls.
         public static void GetPrimaryLabels(InputAction action, string group, List<string> labels)
         {
             labels.Clear();
@@ -15,6 +16,7 @@ namespace Escape4Now.UI
             if (labels.Count == 0 && !string.IsNullOrEmpty(group)) ReadBindings(action, null, labels);
         }
 
+        // Collect usable control labels from an action's real bindings, including composite directions.
         private static void ReadBindings(InputAction action, string group, List<string> labels)
         {
             var mask = InputBinding.MaskByGroup(group);
@@ -36,6 +38,7 @@ namespace Escape4Now.UI
             }
         }
 
+        // Keep movement-direction labels in a consistent order for readable hints.
         private static int DirectionOrder(string name)
         {
             switch (name)

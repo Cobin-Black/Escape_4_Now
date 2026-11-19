@@ -38,6 +38,7 @@ namespace Escape4Now.Arena
             paused = context;
         }
 
+        // Build the shockwave ring once using the Inspector's shape and line settings.
         private void Awake()
         {
             tint = new MaterialPropertyBlock();
@@ -52,6 +53,7 @@ namespace Escape4Now.Arena
             }
         }
 
+        // Expand and fade the flash and shockwave, keeping their animation still while paused.
         private void Update()
         {
             if (paused != null && paused())

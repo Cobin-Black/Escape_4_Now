@@ -18,6 +18,7 @@ namespace Escape4Now.Map
         [SerializeField] private float groundProjection = .5f;
         [SerializeField] private Vector3 nozzleOffset = new Vector3(0,.1f,-.05f);
         private float elapsed;
+        // Advance the sprinkler spray animation while leaving it still during pause.
         private void Update()
         {
             if(Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused

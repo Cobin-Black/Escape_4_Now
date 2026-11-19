@@ -69,6 +69,7 @@ namespace Escape4Now.Arena
             else Relocate();
         }
 
+        // Draw the hill at the host's chosen location instead of choosing another one.
         public void SetOnlineCenter(Vector2 position)
         {
             center = position;

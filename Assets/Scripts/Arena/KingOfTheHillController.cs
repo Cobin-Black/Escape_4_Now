@@ -52,6 +52,7 @@ namespace Escape4Now.Arena
                 activeHill.SetOnlineCenter(center);
         }
 
+        // Copy the host's score and respawn countdown into the existing player display.
         public void ApplyOnlineScore(ArenaParticipant player, int score, int respawn)
         {
             scores[player] = score;

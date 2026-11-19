@@ -19,6 +19,7 @@ public static class ArenaPresentationChecks
     private const string Running = "ArenaPresentationChecks.Running";
     private static Mouse mouse;
     private static double deadline;
+    // Resume the registered checks after Unity enters Play Mode.
     static ArenaPresentationChecks()
     {
         EditorApplication.playModeStateChanged += state =>
@@ -36,6 +37,7 @@ public static class ArenaPresentationChecks
         };
     }
 
+    // Start the saved-scene checks for arena setup, HUD layout and camera framing.
     public static void Run()
     {
         EditorSceneManager.OpenScene("Assets/Scenes/FreeForAll.unity");
@@ -45,6 +47,7 @@ public static class ArenaPresentationChecks
         EditorApplication.isPlaying = true;
     }
 
+    // Advance the check steps and report failures through the normal validation cleanup.
     private static IEnumerator Guard(IEnumerator routine)
     {
         var stack = new Stack<IEnumerator>();
@@ -83,6 +86,7 @@ public static class ArenaPresentationChecks
         Finish(0);
     }
 
+    // Exercise arena setup, HUD layout and camera framing using the saved scene objects.
     private static IEnumerator Check()
     {
         Directory.CreateDirectory("Logs/ArenaPresentationPreviews");
@@ -218,6 +222,7 @@ public static class ArenaPresentationChecks
         }
     }
 
+    // Verify the camera keeps the generated map inside the visible play area.
     private static void CheckMapFrame(ArenaMatch match)
     {
         var layout = match.Map.Layout;
@@ -236,6 +241,7 @@ public static class ArenaPresentationChecks
         }
     }
 
+    // Drive the actual UI input path so the check includes the control's event handling.
     private static IEnumerator Click(Selectable target)
     {
         Canvas.ForceUpdateCanvases();
@@ -268,6 +274,7 @@ public static class ArenaPresentationChecks
         Require(corners[0].x >= 0 && corners[0].y >= 0 && corners[2].x <= Screen.width && corners[2].y <= Screen.height, "UI fits the current screen");
     }
 
+    // Assign serialized test or authoring values through Unity's saved-property interface.
     private static void Set(Object target, string field, Object value)
     {
         var data = new SerializedObject(target);
@@ -275,12 +282,14 @@ public static class ArenaPresentationChecks
         data.ApplyModifiedPropertiesWithoutUndo();
     }
 
+    // Stop this check with a clear message when a required behavior is missing.
     private static void Require(bool condition, string message)
     {
         if (!condition)
             throw new Exception(message);
     }
 
+    // Fail a stuck check after its deadline so batch validation cannot wait forever.
     private static void Watchdog()
     {
         if (EditorApplication.timeSinceStartup > deadline)
@@ -290,6 +299,7 @@ public static class ArenaPresentationChecks
         }
     }
 
+    // Clean up the check and return its result code to the batch runner.
     private static void Finish(int code)
     {
         SessionState.SetBool(Running, false);

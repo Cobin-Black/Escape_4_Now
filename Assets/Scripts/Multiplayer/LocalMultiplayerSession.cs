@@ -116,6 +116,7 @@ namespace Escape4Now.Multiplayer
         private int monsterPlayerIndex = -1;
         private bool statsReported;
 
+        // Keep the saved player arrays large enough for all lobby slots.
         private void OnValidate()
         {
             if (playerIsBot == null || playerIsBot.Length != 4) System.Array.Resize(ref playerIsBot, 4);
@@ -538,6 +539,7 @@ namespace Escape4Now.Multiplayer
                 && playerIsBot != null && index < playerIsBot.Length && playerIsBot[index];
         }
 
+        // Set a lobby slot's bot choice before participants are created.
         public void SetBotPlayer(int index, bool value)
         {
             if (MatchStarted || index < 0 || index >= playerIsBot.Length) return;
@@ -553,6 +555,7 @@ namespace Escape4Now.Multiplayer
             if (LanMultiplayerSession.Active) lan.Submit("pause");
         }
 
+        // Return from the pause menu through the same shared pause handling.
         public void ResumeGame()
         {
             if (LanMultiplayerSession.Active) lan.Submit("resume");
@@ -564,6 +567,7 @@ namespace Escape4Now.Multiplayer
         public bool ShowDisplayOptions => showDisplayOptions;
         public GameTimer Timer => matchTimer;
         public bool ShowEventTiles => showEventTiles;
+        // Ask the active game mode for its result only after a match has started.
         public bool TryGetResult(out MatchResult result)
         {
             result = default;
@@ -619,6 +623,7 @@ namespace Escape4Now.Multiplayer
             AccountStats.Report(stats);
         }
 
+        // Return a trimmed, bounded name and fall back to the slot's default when it is empty.
         public string GetPlayerName(int index)
         {
             string value = index >= 0 && index < playerNames.Length ? playerNames[index] : null;
