@@ -229,9 +229,10 @@ namespace Escape4Now.Multiplayer.RelayTesting
             for (int slot = 0; slot < rows.Length; slot++)
             {
                 var row = rows[slot];
-                row.root.SetActive(slot < session.Capacity || row.locker != null && slot < connection.Settings.maximumPlayers);
+                row.root.SetActive(slot < session.MatchSeats || row.locker != null && slot < connection.Settings.maximumPlayers);
                 if (!row.root.activeSelf) continue;
-                bool available = slot < session.Capacity;
+                // With Fill Bots on, seats past the room size are bot seats rather than closed.
+                bool available = slot < session.MatchSeats;
                 // Seats are not contiguous: P2 can leave while P3 stays, so ask about this seat directly.
                 bool connected = available && session.IsSlotOccupied(slot);
                 bool isReady = connected && session.IsSlotReady(slot);

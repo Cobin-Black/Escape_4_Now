@@ -62,6 +62,27 @@ namespace Escape4Now.Multiplayer.RelayTesting
         private bool previousBackground;
         private bool alive;
         private int capacity;
+        // Players the room was opened for (2-4). The match itself may add bots beyond this.
+        public int Capacity => capacity;
+
+        // A running room handed from a finished match's scene to the same scene loaded again.
+        private sealed class Handoff
+        {
+            public string scene;
+            public NetworkManager network;
+            public UnityTransport transport;
+            public bool hosting, passed;
+            public string roomCode, endpoint, stage, status;
+            public RelayTestProtocol protocol;
+            public int capacity, replies;
+            public float lastRoundTrip;
+            public Dictionary<ulong, Peer> peers;
+            public RelayTestReport report;
+        }
+        private static Handoff handoff;
+        private bool handedOff;
+        // True when this scene took over a room handed off by the previous match's scene.
+        public bool ResumedRoom { get; private set; }
 
         private sealed class Peer
         {
@@ -95,12 +116,85 @@ namespace Escape4Now.Multiplayer.RelayTesting
             Protocol = settings.defaultProtocol;
             capacity = settings.maximumPlayers;
             report = new RelayTestReport(settings.maximumLogEntries);
+            if (handoff != null) AdoptHandoff();
             network.OnClientConnectedCallback += Connected;
             network.OnClientDisconnectCallback += Disconnected;
             network.OnTransportFailure += TransportFailed;
             network.ConnectionApprovalCallback += Approve;
             Application.logMessageReceived += CaptureError;
             report.Add("Ready. No connections or paid service configuration have been created automatically.");
+        }
+
+        // Keeps this room's connection running while the scene reloads for a rematch. The same scene's
+        // next connection component adopts it, so nobody hosts or enters a code again.
+        public bool HandOff()
+        {
+            if (!Active || Busy || network == null || !network.IsListening) return false;
+            handoff = new Handoff
+            {
+                scene = gameObject.scene.name, network = network, transport = transport, hosting = Hosting, passed = Passed,
+                roomCode = RoomCode, endpoint = Endpoint, stage = Stage, status = Status, protocol = Protocol,
+                capacity = capacity, replies = Replies, lastRoundTrip = LastRoundTripMilliseconds,
+                peers = new Dictionary<ulong, Peer>(peers), report = report
+            };
+            handedOff = true;
+            // NetworkManager is a root object; keep it through the reload even before Netcode marks it persistent.
+            DontDestroyOnLoad(network.gameObject);
+            report.Add("Returning to the same room for another match.");
+            return true;
+        }
+
+        private void AdoptHandoff()
+        {
+            var room = handoff;
+            handoff = null;
+            // Only the same mode's scene may continue the room, and only while it is still connected.
+            if (room.scene != gameObject.scene.name || room.network == null || !room.network.IsListening)
+            {
+                if (room.network != null)
+                {
+                    if (room.network.IsListening) room.network.Shutdown(true);
+                    Destroy(room.network.gameObject);
+                }
+                return;
+            }
+            // This scene's own manager never started; the running one replaces it.
+            if (network != null && network != room.network) Destroy(network.gameObject);
+            network = room.network;
+            transport = room.transport;
+            network.SetSingleton();
+            Hosting = room.hosting;
+            Passed = room.passed;
+            RoomCode = room.roomCode;
+            Endpoint = room.endpoint;
+            Stage = room.stage;
+            Status = room.status;
+            Protocol = room.protocol;
+            capacity = room.capacity;
+            Replies = room.replies;
+            LastRoundTripMilliseconds = room.lastRoundTrip;
+            report = room.report ?? report;
+            float now = Time.realtimeSinceStartup;
+            foreach (var entry in room.peers)
+            {
+                // A player who left during the reload is not carried over.
+                if (Hosting && !network.ConnectedClients.ContainsKey(entry.Key)) continue;
+                // A health reply may have been missed during the reload; start the checks again.
+                entry.Value.pendingSequence = 0;
+                entry.Value.lastReply = now;
+                peers[entry.Key] = entry.Value;
+            }
+            Active = true;
+            Busy = false;
+            // The rematch room can still take a new player in a free seat.
+            AcceptingConnections = true;
+            startedAt = now;
+            nextProbe = 0;
+            network.CustomMessagingManager.RegisterNamedMessageHandler(Ping, ReceivePing);
+            network.CustomMessagingManager.RegisterNamedMessageHandler(Pong, ReceivePong);
+            registered = true;
+            ResumedRoom = true;
+            report.Add("Back in the same room after the match.");
         }
 
         public void SelectProtocol(int index)
@@ -486,8 +580,6 @@ namespace Escape4Now.Multiplayer.RelayTesting
         {
             alive = false;
             ++generation;
-            StopNetwork();
-            ShutdownTransport();
             if (network != null)
             {
                 network.OnClientConnectedCallback -= Connected;
@@ -496,6 +588,19 @@ namespace Escape4Now.Multiplayer.RelayTesting
                 network.ConnectionApprovalCallback -= Approve;
             }
             Application.logMessageReceived -= CaptureError;
+            if (handedOff)
+            {
+                // The room keeps running for the reloaded scene. Drop only this object's own handlers,
+                // unless the next scene already registered its replacements.
+                if (handoff != null && registered && network != null && network.CustomMessagingManager != null)
+                {
+                    network.CustomMessagingManager.UnregisterNamedMessageHandler(Ping);
+                    network.CustomMessagingManager.UnregisterNamedMessageHandler(Pong);
+                }
+                return;
+            }
+            StopNetwork();
+            ShutdownTransport();
             Application.runInBackground = previousBackground;
             // NetworkManager marks itself persistent. This scene owns it and must not leak it into another mode.
             if (network != null) Destroy(network.gameObject);

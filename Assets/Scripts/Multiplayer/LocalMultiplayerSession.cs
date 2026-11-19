@@ -620,6 +620,16 @@ namespace Escape4Now.Multiplayer
             SceneManager.LoadScene(gameObject.scene.name);
         }
 
+        // Set by an online room: after a finished match, return to that same room instead of setup.
+        public System.Action OnlineReturnToRoom { get; set; }
+
+        // The results screen's "Back to Lobby". Local play returns to setup; online play keeps its room.
+        public void ReturnAfterMatch()
+        {
+            if (OnlineReturnToRoom != null) OnlineReturnToRoom();
+            else ReturnToSetup();
+        }
+
         //Clears only this session's static reference when the scene closes.
         private void OnDestroy()
         {

@@ -25,6 +25,9 @@ namespace Escape4Now.Multiplayer
         private float peerTimeout = 15f;
         [SerializeField, Min(1f), Tooltip("Seconds allowed for a connection to finish its first handshake.")]
         private float handshakeTimeout = 5f;
+        [SerializeField, Range(2, 4), Tooltip("With Fill Bots on, bots join until the online match has this many players.")]
+        private int botFillSeats = 4;
+        public int BotFillSeats => botFillSeats;
 
         // Keep the LAN port the same on every build so local network discovery works.
         public const int Port = 47777;
@@ -89,7 +92,7 @@ namespace Escape4Now.Multiplayer
         private bool active, host, failed, relayed;
         private int capacity = 2, localPlayer, lobbyCount, sequence;
         private string roomCode = "", status = "";
-        private float connectionStarted, lastServerMessage, nextPublish, nextPing;
+        private float connectionStarted, lastServerMessage, nextPublish, nextPing, nextHello;
         private LanSnapshot latest;
         private bool previousBackground;
 
@@ -137,6 +140,7 @@ namespace Escape4Now.Multiplayer
             lastServerMessage = Time.realtimeSinceStartup;
             Application.runInBackground = true;
             Send(server, new LanMessage { kind = "hello", code = roomCode });
+            nextHello = Time.realtimeSinceStartup + 1f;
             status = "Online: waiting for host.";
             return true;
         }
@@ -149,6 +153,18 @@ namespace Escape4Now.Multiplayer
             peers.RemoveAll(peer => peer.wire.Closed);
             if (peers.Count >= capacity - 1) return false;
             peers.Add(new Peer { wire = connection, joined = Time.realtimeSinceStartup, lastSeen = Time.realtimeSinceStartup });
+            return true;
+        }
+
+        // After a rematch reload the host gives a returning player their previous seat straight away.
+        // They may still be on the results screen, so their seat must not wait for (or time out on) a hello.
+        public bool AcceptReturningGuest(IMatchMessageConnection connection, int slot)
+        {
+            if (!active || !host || MatchStarted || slot < 1 || slot >= capacity || IsSlotConnected(slot)) return AcceptRelayedGuest(connection);
+            peers.RemoveAll(peer => peer.wire.Closed);
+            if (peers.Count >= capacity - 1) return false;
+            peers.Add(new Peer { wire = connection, slot = slot, joined = Time.realtimeSinceStartup, lastSeen = Time.realtimeSinceStartup });
+            nextPublish = 0f;
             return true;
         }
 
@@ -250,6 +266,10 @@ namespace Escape4Now.Multiplayer
             if (!active || !host || failed || (!fillBots && ConnectedPlayers != capacity) || MatchStarted) return false;
             bool botsAllowed = onlineMode != null && onlineMode.SupportsBots || local != null && local.Mode != null && local.Mode.SupportsBots;
             if (fillBots && (!relayed || !botsAllowed)) return false;
+            // Fill Bots tops the match up to the bot seat count: a 2-player room plays with 2 bots,
+            // a 3-player room with 1. The room itself still only admits the players it was opened for.
+            int roomSeats = capacity;
+            if (fillBots && botFillSeats > capacity) SetMatchSeats(botFillSeats);
             if (relayed && local != null)
                 for (int slot = 0; slot < capacity; slot++)
                     local.SetBotPlayer(slot, fillBots && !IsSlotConnected(slot));
@@ -262,10 +282,24 @@ namespace Escape4Now.Multiplayer
                 onlineMode.SetBotSlots(bots);
             }
             bool started = onlineMode != null ? onlineMode.StartHost(capacity) : local.StartNetworkMatch(capacity);
-            if (!started) { status = onlineMode != null ? onlineMode.Error : local.Status; return false; }
+            if (!started)
+            {
+                if (capacity != roomSeats) SetMatchSeats(roomSeats);
+                status = onlineMode != null ? onlineMode.Error : local.Status;
+                return false;
+            }
             status = "Starting match...";
             MatchPaused = false;
             return true;
+        }
+
+        // Guests read their match's player count from the lobby message, so send it before the first match update.
+        private void SetMatchSeats(int seats)
+        {
+            capacity = seats;
+            foreach (Peer peer in peers)
+                if (peer.slot > 0 && !peer.wire.Closed)
+                    Send(peer.wire, new LanMessage { kind = "lobby", player = peer.slot, count = ConnectedPlayers, value = capacity });
         }
 
         public bool IsSlotConnected(int slot) => slot == 0 || peers.Exists(peer => peer.slot == slot && !peer.wire.Closed);
@@ -411,9 +445,12 @@ namespace Escape4Now.Multiplayer
                 LanMessage message = JsonUtility.FromJson<LanMessage>(json);
                 if (message == null || message.version != LanMessage.Version) { Fail("This build does not match the host."); return; }
                 lastServerMessage = Time.realtimeSinceStartup;
+                // A guest back in the lobby can still receive the previous match's last updates while the
+                // host is on the results screen. Until this guest has a seat, those are not for it.
+                if ((message.kind == "mode-state" || message.kind == "state") && localPlayer < 1) return;
                 if (message.kind == "mode-state" && onlineMode != null)
                 {
-                    if (localPlayer < 1 || !onlineMode.Apply(capacity, message.modeState))
+                    if (!onlineMode.Apply(capacity, message.modeState))
                         Fail("The host sent invalid match data.");
                 }
                 else if (message.kind == "lobby")
@@ -443,6 +480,12 @@ namespace Escape4Now.Multiplayer
             {
                 nextPing = Time.realtimeSinceStartup + 1f;
                 Send(server, new LanMessage { kind = "ping" });
+            }
+            // Ask again until seated: after a rematch reload the host may still be on its results screen.
+            if (localPlayer < 0 && Time.realtimeSinceStartup >= nextHello)
+            {
+                nextHello = Time.realtimeSinceStartup + 1f;
+                Send(server, new LanMessage { kind = "hello", code = roomCode });
             }
         }
 

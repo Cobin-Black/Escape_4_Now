@@ -39,6 +39,8 @@ namespace Escape4Now.Multiplayer.RelayTesting
         public int LocalSlot => match.LocalPlayerIndex;
         public bool HasMonsterRole => modeMatch is OnlineSurvivalMatch;
         public bool CanFillWithBots => modeMatch != null && modeMatch.SupportsBots || local != null && local.Mode != null && local.Mode.SupportsBots;
+        // Seats the next match will use: with Fill Bots on, bots join until the configured total (4 by default).
+        public int MatchSeats => FillWithBots && CanFillWithBots ? Mathf.Max(Capacity, match.BotFillSeats) : Capacity;
         public bool FillWithBots { get; private set; }
         public void ToggleFillWithBots()
         {
@@ -134,6 +136,101 @@ namespace Escape4Now.Multiplayer.RelayTesting
             if (modeMatch != null) match.InitializeOnlineMode(modeMatch, local);
             relay.PeerConnected += AddPeer;
             relay.PeerDisconnected += RemovePeer;
+            // Race and Survival's "Back to Lobby" result button returns everyone to this room.
+            if (local != null) local.OnlineReturnToRoom = ReturnToRoom;
+        }
+
+        // What the room looked like when a player left the results screen. The reloaded scene restores it.
+        private sealed class CarriedRoom
+        {
+            public string scene;
+            public readonly Dictionary<ulong, int> seats = new Dictionary<ulong, int>();
+            public string[] names;
+            public int[] skins;
+            public bool fillWithBots;
+            public int monsterSlot = -1, preferredSkin = Skin_Handler.NoSkin;
+        }
+        private static CarriedRoom carried;
+
+        // After a finished match, go back to the same room instead of hosting or entering a code again.
+        // The scene reloads for a fresh match while the Relay room stays connected.
+        public void ReturnToRoom()
+        {
+            // A room that lost a player or the host can't continue; leave as before.
+            if (!relay.Active || relay.Busy || match.Failed || !match.IsActive) { Leave(); return; }
+            var room = new CarriedRoom
+            {
+                scene = gameObject.scene.name, fillWithBots = FillWithBots, monsterSlot = MonsterSlot, preferredSkin = preferredSkin,
+                names = Enumerable.Range(0, Skin_Handler.MaxPlayers).Select(SlotName).ToArray(),
+                skins = Enumerable.Range(0, Skin_Handler.MaxPlayers).Select(ProfileSkinIndex).ToArray()
+            };
+            if (IsHost)
+                foreach (var entry in channels)
+                {
+                    int slot = match.GetRelayedSlot(entry.Value);
+                    if (slot >= 1 && !entry.Value.Closed) room.seats[entry.Key] = slot;
+                }
+            if (!relay.HandOff()) { Leave(); return; }
+            carried = room;
+            // Detach first: closing a channel normally would disconnect that player.
+            foreach (var channel in channels.Values) channel.Detach();
+            channels.Clear();
+            if (listening && relay.Network.CustomMessagingManager != null)
+            {
+                relay.Network.CustomMessagingManager.UnregisterNamedMessageHandler(RelayMessageChannel.MessageName);
+                relay.Network.CustomMessagingManager.UnregisterNamedMessageHandler(LobbyName);
+            }
+            listening = false;
+            match.Disconnect();
+            Time.timeScale = 1;
+            UnityEngine.SceneManagement.SceneManager.LoadScene(gameObject.scene.name);
+        }
+
+        // The reloaded scene picks the room back up once its connection has adopted the running room.
+        // Component start order is not guaranteed, so the room waits here until the connection is active.
+        private CarriedRoom resumeRoom;
+        private void Start()
+        {
+            // Only the scene whose connection adopted the handed-off room may take it.
+            if (carried == null || carried.scene != gameObject.scene.name || !relay.ResumedRoom) return;
+            resumeRoom = carried;
+            carried = null;
+        }
+
+        // Ready starts empty for the next match.
+        private void ResumeRoom()
+        {
+            var room = resumeRoom;
+            resumeRoom = null;
+            preferredSkin = room.preferredSkin;
+            FillWithBots = room.fillWithBots && CanFillWithBots;
+            if (!IsHost)
+            {
+                // The host channel is added in Update; the guest keeps asking for its seat until the host is back.
+                Listen();
+                Status = "Back in the room. Waiting for the host.";
+                return;
+            }
+            if (!match.StartRelayedHost(relay.Capacity, relay.RoomCode)) { relay.Leave(); Status = "The room could not be reopened."; return; }
+            Listen();
+            if (modeMatch is OnlineSurvivalMatch survival && room.monsterSlot < Capacity) survival.MonsterSlot = room.monsterSlot;
+            foreach (ulong client in relay.Network.ConnectedClientsIds)
+            {
+                if (client == relay.Network.LocalClientId || channels.ContainsKey(client)) continue;
+                var channel = new RelayMessageChannel(relay.Network, client);
+                bool returning = room.seats.TryGetValue(client, out int slot);
+                if (!(returning ? match.AcceptReturningGuest(channel, slot) : match.AcceptRelayedGuest(channel))) { channel.Dispose(); continue; }
+                channels.Add(client, channel);
+                // Show returning players with their names and skins until they send their profiles again.
+                if (returning && match.GetRelayedSlot(channel) == slot)
+                {
+                    SetSlotName(slot, room.names[slot]);
+                    Skins?.TryAssign(slot, room.skins[slot]);
+                }
+            }
+            Skins?.FillMissing();
+            SyncSeats();
+            Status = "Back in the same room. Everyone selects Ready for the next match.";
         }
 
         public async Task HostAsync(int players)
@@ -461,6 +558,12 @@ namespace Escape4Now.Multiplayer.RelayTesting
 
         private void Update()
         {
+            if (resumeRoom != null)
+            {
+                if (relay.Active && !relay.Busy) ResumeRoom();
+                // The room ended during the reload: start from host/join as usual.
+                else if (!relay.Busy) resumeRoom = null;
+            }
             SaveOnlineResult();
             // Match the host's input delay to the guests' measured ping.
             if (modeMatch != null) modeMatch.HostInputDelay = IsHost && relay.Active ? relay.AverageGuestInputDelay : 0;

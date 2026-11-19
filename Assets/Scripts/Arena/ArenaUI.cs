@@ -38,6 +38,8 @@ namespace Escape4Now.Arena
         private float resultRevealDelay;
         private float resultAge;
         public System.Action OnlineLeave { get; set; }
+        // Online "Play Again" goes back to the same room; leaving mid-match still uses OnlineLeave.
+        public System.Action OnlineReturnToRoom { get; set; }
         private void Start()
         {
             setup.Initialize(match, () => SceneManager.LoadScene(mainMenuScene));
@@ -45,7 +47,7 @@ namespace Escape4Now.Arena
             pause.onClick.AddListener(() => match.SetPaused(true));
             resume.onClick.AddListener(() => match.SetPaused(false));
             leave.onClick.AddListener(ReturnToSetup);
-            replay.onClick.AddListener(ReturnToSetup);
+            replay.onClick.AddListener(() => { if (OnlineReturnToRoom != null) OnlineReturnToRoom(); else ReturnToSetup(); });
             menu.onClick.AddListener(() => SceneManager.LoadScene(mainMenuScene));
         }
 

@@ -64,6 +64,14 @@ namespace Escape4Now.Multiplayer.RelayTesting
             }
         }
 
+        // Stops using this channel without touching the connection, so the room survives a rematch reload.
+        public void Detach()
+        {
+            Closed = true;
+            incoming.Clear();
+            queuedBytes = 0;
+        }
+
         public void Dispose()
         {
             if (Closed) return;

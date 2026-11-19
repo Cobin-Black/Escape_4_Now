@@ -20,11 +20,16 @@ public static class OnlineArenaLatencyChecks
         private readonly Queue<string> incoming = new Queue<string>();
         public bool Closed { get; private set; }
         public LanMessage LastCommand { get; private set; }
+        // The last seat/size message this connection was sent, and how many hellos it sent.
+        public LanMessage LastLobby { get; private set; }
+        public int Hellos { get; private set; }
         public void Receive(LanMessage message) => incoming.Enqueue(LanMessageCodec.Serialize(message));
         public void Send(string json)
         {
             var message = JsonUtility.FromJson<LanMessage>(json);
             if (message.kind == "command") LastCommand = message;
+            if (message.kind == "lobby") LastLobby = message;
+            if (message.kind == "hello") Hellos++;
         }
         public void Pump(Action<string> onMessage)
         {

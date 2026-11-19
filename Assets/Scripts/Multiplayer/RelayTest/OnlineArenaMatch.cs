@@ -126,6 +126,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
         {
             arena.ConfigureOnline(false);
             arenaUI.OnlineLeave = room.Leave;
+            arenaUI.OnlineReturnToRoom = room.ReturnToRoom;
             arena.OnlinePauseRequested += RequestPause;
             ControllerHandling.AssignmentsChanged += ConfigureLocalInput;
             ListenToMode();

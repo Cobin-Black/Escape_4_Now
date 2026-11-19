@@ -57,6 +57,7 @@ public static class OnlineLobbyChecks
         yield return CheckProfileReplication();
         yield return CheckSeatOccupancy();
         yield return CheckReconnectsAndProfileResults();
+        yield return CheckRematchAndBotFill();
         foreach (string scene in new[] { "OnlineRace", "OnlineSurvival", "OnlineFreeForAll", "OnlineHotPotato" })
         {
             yield return SceneManager.LoadSceneAsync(scene);
@@ -497,6 +498,139 @@ public static class OnlineLobbyChecks
             Require(!guest.ProfileUpdating && !guest.NameRejected && !guest.SkinRejected, scene + " an accepted result syncs without a warning");
         }
         Debug.Log("ONLINE RECONNECT AND PROFILE RESULT CHECKS PASSED: same-frame replacements, closed-seat handshakes, private name/skin rejections, retries and stale results in all four modes.");
+    }
+
+    // Fill Bots tops the match up to four players, and "Back to Lobby"/"Play Again" keeps the same room.
+    private static IEnumerator CheckRematchAndBotFill()
+    {
+        var fillBots = typeof(OnlineRaceSession).GetProperty("FillWithBots");
+        var preferredSkin = typeof(OnlineRaceSession).GetField("preferredSkin", BindingFlags.Instance | BindingFlags.NonPublic);
+        foreach (string scene in new[] { "OnlineRace", "OnlineSurvival", "OnlineFreeForAll", "OnlineHotPotato" })
+        {
+            // Two players with Fill Bots play with two bots; three players with one; no Fill Bots, no bots.
+            foreach (int humans in new[] { 2, 3, 0 })
+            {
+                yield return SceneManager.LoadSceneAsync(scene);
+                var session = Object.FindFirstObjectByType<OnlineRaceSession>();
+                var transport = Object.FindFirstObjectByType<Escape4Now.Multiplayer.LanMultiplayerSession>();
+                bool withBots = humans > 0;
+                int roomSize = withBots ? humans : 2;
+                Require(transport.StartRelayedHost(roomSize, "BOTS"), "Start bot fill test host");
+                var guests = new OnlineArenaLatencyChecks.Connection[roomSize - 1];
+                for (int i = 0; i < guests.Length; i++)
+                {
+                    guests[i] = new OnlineArenaLatencyChecks.Connection();
+                    Require(transport.AcceptRelayedGuest(guests[i]), "Seat bot fill guest");
+                    guests[i].Receive(new Escape4Now.Multiplayer.LanMessage { kind = "hello", code = "BOTS" });
+                }
+                yield return null;
+                yield return null;
+                Require(session.CanFillWithBots, scene + " supports Fill Bots");
+                fillBots.SetValue(session, withBots);
+                Require(session.MatchSeats == (withBots ? 4 : 2), scene + " shows the match size in the lobby");
+                yield return null;
+                var view = Object.FindFirstObjectByType<OnlineRaceLobbyView>();
+                if (withBots) Require(RowText(view, 3, "state") == "BOT SLOT", scene + " the lobby shows the extra seats as bot seats");
+                Require(transport.StartHostedMatch(withBots), scene + " starts with " + roomSize + " players" + (withBots ? " and Fill Bots" : ""));
+                int seats = withBots ? 4 : 2;
+                Require(transport.Capacity == seats, scene + " the match has " + seats + " players");
+                foreach (var guest in guests)
+                    Require(guest.LastLobby != null && guest.LastLobby.value == seats, scene + " guests learn the match size before it starts");
+                var arena = Object.FindFirstObjectByType<Escape4Now.Arena.ArenaMatch>();
+                var local = Object.FindFirstObjectByType<Escape4Now.Multiplayer.LocalMultiplayerSession>();
+                for (int slot = 0; slot < seats; slot++)
+                {
+                    bool bot = slot >= roomSize;
+                    if (Object.FindFirstObjectByType<OnlineArenaMatch>() != null)
+                        Require(arena.Players[slot].IsBot == bot, scene + " seat P" + (slot + 1) + (bot ? " is a bot" : " is a player"));
+                    else Require(local.IsBotPlayer(slot) == bot, scene + " seat P" + (slot + 1) + (bot ? " is a bot" : " is a player"));
+                }
+            }
+
+            // A guest back in the lobby ignores the previous match's updates and keeps asking for a seat.
+            yield return SceneManager.LoadSceneAsync(scene);
+            var guestTransport = Object.FindFirstObjectByType<Escape4Now.Multiplayer.LanMultiplayerSession>();
+            var wire = new OnlineArenaLatencyChecks.Connection();
+            Require(guestTransport.JoinRelayedHost(wire, "SAME42") && wire.Hellos == 1, "Start returning guest");
+            bool arenaScene = Object.FindFirstObjectByType<OnlineArenaMatch>() != null || scene == "OnlineSurvival";
+            wire.Receive(new Escape4Now.Multiplayer.LanMessage { kind = arenaScene ? "mode-state" : "state", modeState = "{}" });
+            yield return null;
+            Require(!guestTransport.Failed, scene + " a guest back in the lobby ignores the old match's last updates");
+            yield return new WaitForSecondsRealtime(1.2f);
+            Require(wire.Hellos >= 2, scene + " a returning guest keeps asking for its seat");
+            wire.Receive(new Escape4Now.Multiplayer.LanMessage { kind = "lobby", player = 2, count = 3, value = 3 });
+            yield return null;
+            int hellos = wire.Hellos;
+            yield return new WaitForSecondsRealtime(1.2f);
+            Require(guestTransport.LocalPlayerIndex == 2 && wire.Hellos == hellos, scene + " a seated guest stops asking");
+
+            // The host keeps a returning player's seat even while they are still on the results screen.
+            yield return SceneManager.LoadSceneAsync(scene);
+            var hostTransport = Object.FindFirstObjectByType<Escape4Now.Multiplayer.LanMultiplayerSession>();
+            Require(hostTransport.StartRelayedHost(4, "SAME42"), "Start returning-seat host");
+            var back = new OnlineArenaLatencyChecks.Connection();
+            Require(hostTransport.AcceptReturningGuest(back, 3) && hostTransport.GetRelayedSlot(back) == 3 && hostTransport.IsSlotConnected(3),
+                scene + " a returning player gets their previous seat");
+            for (int i = 0; i < 3; i++) back.Receive(new Escape4Now.Multiplayer.LanMessage { kind = "ping" });
+            yield return null;
+            yield return null;
+            Require(!back.Closed && back.LastLobby != null && back.LastLobby.player == 3,
+                scene + " pings from the results screen keep the seat, and the seat is announced");
+
+            // The real local network: the host goes back to the same room code with the same connection.
+            yield return SceneManager.LoadSceneAsync(scene);
+            // A real match runs for a while first, so let this scene finish starting.
+            yield return null;
+            var host = Object.FindFirstObjectByType<OnlineRaceSession>();
+            var relay = host.Relay;
+            var match = Object.FindFirstObjectByType<Escape4Now.Multiplayer.LanMultiplayerSession>();
+            typeof(RelayRoomConnection).GetProperty("Hosting").SetValue(relay, true);
+            Call(relay, "ConfigureNetwork");
+            relay.Network.GetComponent<Unity.Netcode.Transports.UTP.UnityTransport>().SetConnectionData("127.0.0.1", 0);
+            Call(relay, "StartTransport", true);
+            typeof(RelayRoomConnection).GetProperty("RoomCode").SetValue(relay, "SAME42");
+            typeof(RelayRoomConnection).GetField("capacity", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(relay, 3);
+            relay.AcceptingConnections = false;
+            Require(match.StartRelayedHost(3, "SAME42"), "Start same-room host");
+            Call(host, "Listen");
+            fillBots.SetValue(host, true);
+            preferredSkin.SetValue(host, 2);
+            var network = relay.Network;
+            host.ReturnToRoom();
+            float limit = Time.realtimeSinceStartup + 10;
+            while ((host != null || Object.FindFirstObjectByType<OnlineRaceSession>() == null) && Time.realtimeSinceStartup < limit) yield return null;
+            yield return null;
+            yield return null;
+            var again = Object.FindFirstObjectByType<OnlineRaceSession>();
+            Require(again != null && again.Relay.Active && again.Relay.RoomCode == "SAME42" && again.Relay.Network == network
+                && network.IsListening && again.Relay.Capacity == 3, scene + " returns to the same room code and connection");
+            Require(again.Relay.AcceptingConnections, scene + " the room can take a new player for the rematch");
+            Require(Object.FindObjectsByType<Unity.Netcode.NetworkManager>(FindObjectsSortMode.None).Length == 1,
+                scene + " keeps exactly one network manager");
+            var againMatch = Object.FindFirstObjectByType<Escape4Now.Multiplayer.LanMultiplayerSession>();
+            Require(againMatch.IsActive && againMatch.IsHost && againMatch.Capacity == 3,
+                scene + " reopens the lobby as the host (active=" + againMatch.IsActive + " host=" + againMatch.IsHost
+                + " capacity=" + againMatch.Capacity + " status=" + again.Status + ")");
+            Require(!again.Playing && !again.Ready, scene + " the next match waits for Ready (playing=" + again.Playing + " ready=" + again.Ready + ")");
+            Require(again.FillWithBots && (int)preferredSkin.GetValue(again) == 2, scene + " keeps Fill Bots and the chosen skin");
+            yield return null;
+            var againView = Object.FindFirstObjectByType<OnlineRaceLobbyView>();
+            Require(Reference<GameObject>(againView, "room").activeSelf, scene + " shows the room, not host/join");
+
+            // Leaving afterwards still closes the room completely.
+            again.Leave();
+            limit = Time.realtimeSinceStartup + 10;
+            while ((again != null || Object.FindFirstObjectByType<OnlineRaceSession>() == null) && Time.realtimeSinceStartup < limit) yield return null;
+            yield return null;
+            yield return null;
+            var fresh = Object.FindFirstObjectByType<OnlineRaceSession>();
+            limit = Time.realtimeSinceStartup + 5;
+            while (!fresh.Relay.CanStart && Time.realtimeSinceStartup < limit) yield return null;
+            Require(network == null && fresh.Relay.CanStart && !fresh.Relay.Active
+                && Object.FindObjectsByType<Unity.Netcode.NetworkManager>(FindObjectsSortMode.None).Length == 1,
+                scene + " leaving after a rematch closes the room and its connection");
+        }
+        Debug.Log("ONLINE REMATCH AND BOT FILL CHECKS PASSED: same room after a match, returning seats and guests, and Fill Bots up to four players in all four modes.");
     }
 
     private static bool UniqueSkins(OnlineRaceSession session)
