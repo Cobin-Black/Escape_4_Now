@@ -304,7 +304,7 @@ MonoBehaviour:
   - type: 22
     enabled: 1
     title: Car Alarm
-    feedback: 
+    feedback: 'Car Alarm: the Monster heads for the noisy car.'
     category: 3
     weight: 1
     instancesPerMatch: {x: 1, y: 2}

@@ -189,6 +189,15 @@ public static class ArenaEventChecks
                         Require(filtered.x > 0 && filtered.x < 4, "Wet ground reduces immediate steering response");
                     }
 
+                    if (rule.kind == ArenaEventKind.Spotlight)
+                    {
+                        var lit = hot.Holder;
+                        var other = match.Players.Find(p => p != lit);
+                        Require(match.Events.SpotlightSpeed(lit) > 1 && match.Events.SpotlightSpeed(other) == 1, "Spotlight speeds up only the potato holder");
+                        Vector2 boosted = match.Events.FilterMovement(lit, Vector2.right * 4, Vector2.zero, .02f);
+                        Require(Mathf.Abs(boosted.x - 4 * rule.holderSpeedFactor) < .001f, "Spotlight holder really moves faster");
+                    }
+
                     if (rule.kind == ArenaEventKind.HazardZone)
                     {
                         first.Place(state.Cells[0]);
@@ -231,6 +240,8 @@ public static class ArenaEventChecks
 
                     match.Events.Step(1);
                     Require(match.Events.Active.Count == 0, "Temporary event expires");
+                    if (rule.kind == ArenaEventKind.Spotlight)
+                        Require(match.Events.SpotlightSpeed(hot.Holder) == 1, "Spotlight speed ends with the light");
                     Require(match.Map.Layout.Connected(), "Routes remain connected after expiry");
                     if (rule.IsBlock)
                         Require(match.Map.Layout.Walkable(state.Cells[0]), "Temporary block removed");

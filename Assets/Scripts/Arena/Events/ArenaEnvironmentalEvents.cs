@@ -293,6 +293,8 @@ namespace Escape4Now.Arena
                 return state.Rule.label + ": +" + Mathf.Abs(state.Rule.amount).ToString("0.#") + "s";
             if (state.Rule.kind == ArenaEventKind.PotatoShuffle)
                 return state.Rule.label + ": " + ((HotPotatoController)Match).Holder.name;
+            if (state.Rule.kind == ArenaEventKind.Spotlight)
+                return state.Rule.label + ": potato holder runs faster";
             if (state.Rule.kind == ArenaEventKind.PlayerSwap)
                 return state.Rule.label + ": " + state.first.name + " / " + state.second.name;
             return state.Rule.label + " active";

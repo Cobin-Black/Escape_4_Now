@@ -362,8 +362,20 @@ namespace Escape4Now.Arena
                         factor = Mathf.Min(factor, state.Rule.lightMovementFactor);
                 }
 
-            desired *= factor;
+            desired *= factor * SpotlightSpeed(player);
             return response > 0 ? Vector2.Lerp(previous, desired, 1 - Mathf.Exp(-response * dt)) : desired;
+        }
+
+        // Spotlight follows the potato, so whoever holds it moves faster until the light ends.
+        public float SpotlightSpeed(ArenaParticipant player)
+        {
+            if (player == null || !(Match is HotPotatoController potato) || potato.Holder != player)
+                return 1;
+            float speed = 1;
+            foreach (var state in active)
+                if (!state.Warning && !state.Ended && state.Rule.kind == ArenaEventKind.Spotlight)
+                    speed = Mathf.Max(speed, state.Rule.holderSpeedFactor);
+            return speed;
         }
 
         internal void Play(AudioClip clip)

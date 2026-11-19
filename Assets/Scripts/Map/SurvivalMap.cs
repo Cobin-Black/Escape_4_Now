@@ -33,6 +33,7 @@ namespace Escape4Now.Map
         [SerializeField] private SurvivalObstacleSpawner obstacleSpawner;
         [SerializeField] private SurvivalEventController eventController;
         public int TraversalCost(Vector2Int cell) => eventController != null ? eventController.MovementCost(cell) : 1;
+        public SurvivalEventController Events => eventController;
         [SerializeField, HideInInspector, FormerlySerializedAs("obstaclePrefabs")]
         private SurvivalPropVisual[] previousObstaclePrefabs;
         [SerializeField, Range(0, 31)] private int blockedTileLayer;

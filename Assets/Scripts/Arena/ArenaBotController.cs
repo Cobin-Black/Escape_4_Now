@@ -21,6 +21,10 @@ namespace Escape4Now.Arena
         private float pathTimer;
         // Control how often the bot searches for an escape position.
         private float escapeTimer;
+        [SerializeField, Min(.05f), Tooltip("Seconds between escape searches while running from the potato holder.")]
+        private float escapeInterval = .5f;
+        [SerializeField, Min(.05f), Tooltip("Faster escape searches while Spotlight makes the potato holder faster.")]
+        private float spotlightEscapeInterval = .25f;
         private ArenaParticipant lastPotatoHolder;
         // Time remaining before each attack can be used again.
         private float rulerCooldown;
@@ -87,7 +91,9 @@ namespace Escape4Now.Arena
                     else if (escapeTimer <= 0f)
                     {
                         RunFromPotatoHolder(hotPotato);
-                        escapeTimer = 0.5f;
+                        // A spotlit holder closes in faster, so check the escape route more often.
+                        bool fastHolder = player.Match.Events != null && player.Match.Events.SpotlightSpeed(hotPotato.Holder) > 1;
+                        escapeTimer = fastHolder ? spotlightEscapeInterval : escapeInterval;
                     }
                 }
                 else

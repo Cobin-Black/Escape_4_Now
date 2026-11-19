@@ -64,6 +64,8 @@ namespace Escape4Now.Arena
         public float steeringResponse = 2;
         [Range(.1f, 1)]
         public float lightMovementFactor = .8f;
+        [Min(1), Tooltip("Spotlight: how much faster the potato holder moves while the light is on them (1.2 = 20% faster).")]
+        public float holderSpeedFactor = 1.2f;
         [Header("Basketballs / Waves")]
         [Min(1)]
         public int ballCount = 3;

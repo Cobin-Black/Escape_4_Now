@@ -16,6 +16,7 @@ namespace Escape4Now.Map
         public HashSet<Vector2Int> Cells { get; } = new HashSet<Vector2Int>();
         internal int turns, amount;
         internal Vector2Int carCell;
+        public Vector2Int CarCell => carCell;
         internal readonly List<GameObject> visuals = new List<GameObject>();
     }
 
@@ -35,6 +36,9 @@ namespace Escape4Now.Map
         public IReadOnlyList<SurvivalEnvironmentalArea> ActiveEffects => active.AsReadOnly();
         public IEnumerable<Vector2Int> TrackBoostCells => boostCells;
         public IEnumerable<Vector2Int> PoolSlipCells => wetPoolCells;
+
+        // The sounding Car Alarm, or null. The computer-controlled Monster is drawn to its car.
+        public SurvivalEnvironmentalArea CarAlarm => active.Find(effect => effect.Type == SurvivalEventType.CarAlarm);
 
         [System.Serializable]
         public sealed class OnlineArea
