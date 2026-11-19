@@ -12,7 +12,7 @@ namespace Escape4Now.Menus
         private const int Rows = 10;
         private const float RowHeight = 36f;
         private static readonly string[] Boards = { AccountStats.Race, AccountStats.FreeForAll, AccountStats.HotPotato, AccountStats.MonsterRole, AccountStats.Survivor };
-        private static readonly string[] Tabs = { "RACE", "FREE FOR ALL", "HOT POTATO", "AS MONSTER", "AS SURVIVOR" };
+        private static readonly string[] Tabs = { "RACE", AccountStats.ModeName(AccountStats.FreeForAll), "HOT POTATO", "AS MONSTER", "AS SURVIVOR" };
         //Column positions from the left of the panel: #, PLAYER, WINS, LOSSES, WIN RATE, FASTEST, ONLINE WINS.
         private static readonly float[] Columns = { 0f, 40f, 240f, 305f, 390f, 475f, 560f };
         private const int FastestColumn = 5;
