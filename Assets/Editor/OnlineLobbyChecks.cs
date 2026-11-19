@@ -53,6 +53,8 @@ public static class OnlineLobbyChecks
     private static IEnumerator CheckModeScreens()
     {
         Directory.CreateDirectory("Logs/OnlineLobbyPreviews");
+        yield return CheckRoomRecovery();
+        yield return CheckProfileReplication();
         foreach (string scene in new[] { "OnlineRace", "OnlineSurvival", "OnlineFreeForAll", "OnlineHotPotato" })
         {
             yield return SceneManager.LoadSceneAsync(scene);
@@ -83,7 +85,12 @@ public static class OnlineLobbyChecks
 
             var arena = Object.FindFirstObjectByType<OnlineArenaMatch>();
             if (arena == null) continue;
-            Require(arena.StartHost(2), scene + " can start through its arena adapter");
+            // Keep two human connections and fill the last seat with the same bot used in local play.
+            arena.SetBotSlots(new[] { false, false, true });
+            Require(arena.StartHost(3), scene + " can start through its arena adapter");
+            var hostMatch = Object.FindFirstObjectByType<Escape4Now.Arena.ArenaMatch>();
+            Require(hostMatch.Players[2].IsBot && hostMatch.Players[2].GetComponent<Escape4Now.Arena.ArenaBotController>() != null,
+                scene + " runs the filled seat's bot on the host");
             yield return null;
             yield return null;
             var hud = Object.FindFirstObjectByType<Escape4Now.Arena.ArenaHudView>().transform;
@@ -102,17 +109,28 @@ public static class OnlineLobbyChecks
             // Reopen the scene as a guest and apply what the host put on the wire.
             Require(hotPotato ? arena is OnlineHotPotatoMatch : arena is OnlineKingOfTheHillMatch,
                 scene + " uses its own online adapter");
+            if (!hotPotato)
+            {
+                hostMatch.Players[0].Damage(1);
+                // Include a real swing in the host update so the guest must build its filled visual too.
+                hostMatch.Players[0].RecordOnlineSwing();
+            }
             string snapshot = arena.Capture();
             yield return SceneManager.LoadSceneAsync(scene);
             arena = Object.FindFirstObjectByType<OnlineArenaMatch>();
             var guestTransport = Object.FindFirstObjectByType<Escape4Now.Multiplayer.LanMultiplayerSession>();
             var guestWire = new OnlineArenaLatencyChecks.Connection();
             Require(guestTransport.JoinRelayedHost(guestWire, "TEST"), "Create an in-process guest connection");
-            guestWire.Receive(new Escape4Now.Multiplayer.LanMessage { kind = "lobby", player = 1, count = 2, value = 2 });
+            guestWire.Receive(new Escape4Now.Multiplayer.LanMessage { kind = "lobby", player = 1, count = 3, value = 3 });
             guestWire.Receive(new Escape4Now.Multiplayer.LanMessage { kind = "mode-state", modeState = snapshot });
             yield return null;
             yield return null;
             Require(arena.Started && !guestTransport.Failed, scene + " guest accepts the host snapshot");
+            var guestMatch = Object.FindFirstObjectByType<Escape4Now.Arena.ArenaMatch>();
+            Require(!guestMatch.Players[1].IsBot && guestMatch.Players[2].IsBot,
+                scene + " preserves human and bot identities on the guest");
+            Require(guestMatch.GetComponentsInChildren<Escape4Now.Arena.ArenaBotController>(true).Length == 0,
+                scene + " guest never runs its own bot decisions");
             if (hotPotato)
             {
                 var potato = Object.FindFirstObjectByType<Escape4Now.Arena.HotPotatoController>();
@@ -123,11 +141,125 @@ public static class OnlineLobbyChecks
                 var hill = Object.FindFirstObjectByType<Escape4Now.Arena.KingOfTheHillController>();
                 Require(hill.HillCenter.HasValue && hill.Items.GetComponentsInChildren<Escape4Now.Items.FreeForAllItem>().Length > 0,
                     "Guest sees the hill and pickups");
+                Require(hill.Players[0].IsInvincible, "Guest receives the host's invincibility timer");
+                var swing = Object.FindFirstObjectByType<Escape4Now.Items.RulerSwingEffect>();
+                Require(swing != null && swing.GetComponentInChildren<MeshFilter>() != null,
+                    "Guest shows main's filled ruler swing");
             }
             OnlineArenaLatencyChecks.Check(arena, snapshot, guestWire);
         }
         Debug.Log("ONLINE MODE SCREENS PASSED: all four private rooms and both arena HUDs.");
     }
+
+    // Exercise the actual profile messages across scene reloads, without using real account credentials.
+    private static IEnumerator CheckRoomRecovery()
+    {
+        foreach (string scene in new[] { "OnlineRace", "OnlineSurvival", "OnlineFreeForAll", "OnlineHotPotato" })
+        {
+            yield return SceneManager.LoadSceneAsync(scene);
+            var session = Object.FindFirstObjectByType<OnlineRaceSession>();
+            var relay = session.Relay;
+            var match = Object.FindFirstObjectByType<Escape4Now.Multiplayer.LanMultiplayerSession>();
+            var transport = relay.Network.GetComponent<Unity.Netcode.Transports.UTP.UnityTransport>();
+            Require(!relay.Settings.limitHostWaiting, scene + " keeps friend rooms open while waiting");
+            for (int attempt = 0; attempt < 2; attempt++)
+            {
+                typeof(RelayRoomConnection).GetProperty("Hosting").SetValue(relay, true);
+                Call(relay, "ConfigureNetwork");
+                transport.SetConnectionData("127.0.0.1", 0);
+                Call(relay, "StartTransport", true);
+                Require(match.StartRelayedHost(2, "RECOVER"), scene + " starts a fresh gameplay session after cleanup");
+                Call(session, "Listen");
+                string other = scene == "OnlineHotPotato" ? "OnlineRace" : "OnlineHotPotato";
+                var request = new Unity.Netcode.NetworkManager.ConnectionApprovalRequest
+                {
+                    ClientNetworkId = 42,
+                    Payload = System.Text.Encoding.UTF8.GetBytes("E4N:" + relay.Settings.testVersion + ":" + other)
+                };
+                var response = new Unity.Netcode.NetworkManager.ConnectionApprovalResponse();
+                Call(relay, "Approve", request, response);
+                Require(!response.Approved && response.Reason.Contains("game mode"), scene + " rejects a different mode clearly");
+                Call(relay, "Disconnected", (ulong)42);
+                Require(relay.Active && relay.Network.IsListening, scene + " rejected guests do not close the host room");
+                typeof(RelayRoomConnection).GetField("startedAt", BindingFlags.NonPublic | BindingFlags.Instance)
+                    .SetValue(relay, Time.realtimeSinceStartup - relay.Settings.hostWaitingTimeout - 1);
+                Call(relay, "Update");
+                Require(relay.Active, scene + " does not expire an ordinary waiting room");
+                // Force the optional diagnostic limit to exercise the same failure path as a timeout.
+                relay.Settings.limitHostWaiting = true;
+                Call(relay, "Update");
+                relay.Settings.limitHostWaiting = false;
+                Require(!relay.Active && !relay.Busy, scene + " timeout ends the attempt");
+                float deadline = Time.realtimeSinceStartup + 5;
+                while ((!relay.CanStart || Escape4Now.Multiplayer.LanMultiplayerSession.Active) && Time.realtimeSinceStartup < deadline)
+                    yield return null;
+                Require(relay.CanStart && !Escape4Now.Multiplayer.LanMultiplayerSession.Active,
+                    scene + " shuts down both layers and enables retry without restarting");
+            }
+            // A failed client attempt must be reusable too, not just an empty host room.
+            typeof(RelayRoomConnection).GetProperty("Hosting").SetValue(relay, false);
+            Call(relay, "ConfigureNetwork");
+            transport.SetConnectionData("127.0.0.1", 47779);
+            Call(relay, "StartTransport", false);
+            Call(session, "Listen");
+            Call(relay, "Disconnected", (ulong)0);
+            float limit = Time.realtimeSinceStartup + 5;
+            while (!relay.CanStart && Time.realtimeSinceStartup < limit) yield return null;
+            Require(relay.CanStart, scene + " can retry after a rejected client connection");
+        }
+        Debug.Log("ONLINE ROOM RECOVERY CHECKS PASSED: wrong-mode rejection, waiting rooms, forced timeouts, client failures and repeated local transport starts in all four modes.");
+    }
+
+    private static IEnumerator CheckProfileReplication()
+    {
+        foreach (string scene in new[] { "OnlineRace", "OnlineSurvival", "OnlineFreeForAll", "OnlineHotPotato" })
+        {
+            yield return SceneManager.LoadSceneAsync(scene);
+            var host = Object.FindFirstObjectByType<OnlineRaceSession>();
+            var transport = Object.FindFirstObjectByType<Escape4Now.Multiplayer.LanMultiplayerSession>();
+            Require(transport.StartRelayedHost(2, "PROFILE"), "Start profile test host");
+            Call(host, "TrackAccountName", "HOST LOGIN");
+            Call(host, "AcceptProfile", 0, Call(host, "ProfileRequest"));
+            Require(host.SlotName(0) == "HOST LOGIN", scene + " publishes a completed login");
+            Call(host, "TrackAccountName", "HOST RENAMED");
+            Call(host, "AcceptProfile", 0, Call(host, "ProfileRequest"));
+            var type = typeof(OnlineRaceSession).GetNestedType("LobbyMessage", BindingFlags.NonPublic);
+            object first = JsonUtility.FromJson("{\"name\":\"FRIEND LOGIN\",\"skin\":-1,\"profileRevision\":1}", type);
+            Call(host, "AcceptProfile", 1, first);
+            string oldState = JsonUtility.ToJson(Call(host, "CaptureLobby"));
+            var readySlots = Reference<System.Collections.Generic.HashSet<int>>(host, "ready");
+            readySlots.Add(1);
+            Call(host, "AcceptProfile", 1, first);
+            Require(readySlots.Contains(1), scene + " profile retries do not clear Ready again");
+            object renamed = JsonUtility.FromJson("{\"name\":\"FRIEND RENAMED\",\"skin\":-1,\"profileRevision\":2}", type);
+            Call(host, "AcceptProfile", 1, renamed);
+            Require(!readySlots.Contains(1), scene + " a changed profile needs Ready again");
+            Call(host, "AcceptProfile", 1, first);
+            Require(host.SlotName(1) == "FRIEND RENAMED", scene + " ignores an older name update");
+            string state = JsonUtility.ToJson(Call(host, "CaptureLobby"));
+
+            yield return SceneManager.LoadSceneAsync(scene);
+            var guest = Object.FindFirstObjectByType<OnlineRaceSession>();
+            transport = Object.FindFirstObjectByType<Escape4Now.Multiplayer.LanMultiplayerSession>();
+            var wire = new OnlineArenaLatencyChecks.Connection();
+            Require(transport.JoinRelayedHost(wire, "PROFILE"), "Start profile test guest");
+            wire.Receive(new Escape4Now.Multiplayer.LanMessage { kind = "lobby", player = 1, count = 2, value = 2 });
+            yield return null;
+            Call(guest, "TrackAccountName", "FRIEND LOGIN");
+            Call(guest, "TrackAccountName", "FRIEND RENAMED");
+            Call(guest, "ApplyLobbyState", JsonUtility.FromJson(oldState, type));
+            Require(guest.ProfileUpdating, scene + " keeps retrying until the newest profile is acknowledged");
+            Call(guest, "ApplyLobbyState", JsonUtility.FromJson(state, type));
+            Require(!guest.ProfileUpdating && guest.SlotName(0) == "HOST RENAMED" && guest.SlotName(1) == "FRIEND RENAMED",
+                scene + " applies both updated account names and acknowledges the guest");
+            Call(guest, "TrackAccountName", "FRIEND RENAMED");
+            Require(!guest.ProfileUpdating, scene + " unchanged names do not create repeated updates");
+        }
+        Debug.Log("ONLINE PROFILE CHECKS PASSED: login, renamed host/guest, stale updates, acknowledgements and readiness in all four modes.");
+    }
+
+    private static object Call(object target, string method, params object[] args) => target.GetType()
+        .GetMethod(method, BindingFlags.Instance | BindingFlags.NonPublic).Invoke(target, args);
 
     private static IEnumerator CheckRaceMatchUI()
     {
@@ -151,6 +283,24 @@ public static class OnlineLobbyChecks
         turns.ApplyNetworkTurn(0, turns.TurnNumber, turns.CopyTurnOrder());
         yield return new WaitForSecondsRealtime(.25f);
         Require(network.IsMyTurn, "The host owns the current turn");
+        // A remote player's turn must never select that room slot's controller on this computer.
+        var pad = UnityEngine.InputSystem.InputSystem.AddDevice<UnityEngine.InputSystem.Gamepad>();
+        Escape4Now.Multiplayer.ControllerHandling.AssignToSlot(pad, 0);
+        turns.ApplyNetworkTurn(1, turns.TurnNumber, turns.CopyTurnOrder());
+        yield return null;
+        Require(Escape4Now.Multiplayer.LocalMultiplayerSession.ActiveInputSlot == 0,
+            "Online turn input keeps this computer's first device slot");
+        foreach (var actions in Escape4Now.Multiplayer.LocalMultiplayerSession.TurnInputMaps())
+        {
+            var devices = actions.devices;
+            Require(devices.HasValue && devices.Value.Count == 1 && devices.Value[0] == pad,
+                "Online controller input excludes other controllers and keyboard gameplay input");
+        }
+        UnityEngine.InputSystem.InputSystem.RemoveDevice(pad);
+        turns.ApplyNetworkTurn(0, turns.TurnNumber, turns.CopyTurnOrder());
+        // Wait for the normal state publisher before sending the next turn-checked command.
+        yield return new WaitForSecondsRealtime(.25f);
+        Require(network.IsMyTurn, "The restored host turn reaches the published state");
         var old = Object.FindFirstObjectByType<Escape4Now.UI.LanMatchUI>(FindObjectsInactive.Include);
         Require(!Reference<GameObject>(old, "panel").activeInHierarchy, "Race hides the duplicate network controls");
 

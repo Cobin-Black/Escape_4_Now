@@ -22,6 +22,8 @@ namespace Escape4Now.Multiplayer.RelayTesting
         [Header("Lobby")]
         [SerializeField, Min(.1f), Tooltip("Seconds between room updates from the host.")]
         private float lobbyPublishInterval = .5f;
+        [SerializeField, Min(.1f), Tooltip("Seconds before retrying a profile update that the host has not acknowledged.")]
+        private float profileRetryInterval = .5f;
         [SerializeField] private string mainMenuScene = "MainMenu";
         [SerializeField] private string startScreenScene = "StartScreen";
 
@@ -29,6 +31,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
         public bool Playing => modeMatch != null ? modeMatch.Started : local.MatchStarted;
         public bool IsHost => relay.Hosting;
         public bool Ready { get; private set; }
+        public bool ProfileUpdating => profilePending || profileRevision == 0;
         public string Status { get; private set; } = "Host a private room or join with a room code.";
         public int PlayerCount => match.ConnectedPlayers;
         public int Capacity => match.Capacity;
@@ -50,18 +53,18 @@ namespace Escape4Now.Multiplayer.RelayTesting
             nextLobby = 0;
         }
         private Skin_Handler Skins => modeMatch != null ? modeMatch.ProfileSkins : local.Skins;
-        public bool CanEditProfile => LocalSlot >= 0 && Skins != null;
+        public bool CanEditProfile => LocalSlot >= 0 && (IsHost || LocalSlot > 0) && Skins != null;
         public int ProfileSkinCount => CanEditProfile ? Skins.Count : 0;
         public string ProfileSkinName(int skin) => Skins.GetSkin(skin)?.skinName ?? "Skin " + (skin + 1);
         public void CycleProfileSkin(int direction)
         {
             if (!CanEditProfile) return;
-            int current = ProfileSkinIndex(LocalSlot);
+            int current = profilePending ? pendingSkin : ProfileSkinIndex(LocalSlot);
             for (int step = 1; step < ProfileSkinCount; step++)
             {
                 int candidate = (current + direction * step + ProfileSkinCount) % ProfileSkinCount;
                 if (Skins.GetSkin(candidate)?.IsValid != true || Skins.IsTaken(candidate)) continue;
-                EditProfile(SlotName(LocalSlot), candidate);
+                EditProfile(profilePending ? pendingName : SlotName(LocalSlot), candidate);
                 return;
             }
         }
@@ -70,7 +73,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
         public Color SlotColor(int slot) => modeMatch != null ? modeMatch.SlotColor(slot) : local.GetPlayerColor(slot);
         public string SlotName(int slot) => modeMatch != null ? modeMatch.SlotName(slot) : local.GetPlayerName(slot);
         public Sprite SlotPortrait(int slot) => modeMatch != null ? modeMatch.SlotPortrait(slot) : Skins != null ? Skins.GetPlayerSkin(slot)?.front : null;
-        public bool CanStart => IsHost && relay.Active && !Playing && (FillWithBots || match.ConnectedPlayers == match.Capacity)
+        public bool CanStart => IsHost && relay.Active && !Playing && !ProfileUpdating && (FillWithBots || match.ConnectedPlayers == match.Capacity)
             && ready.Count == match.ConnectedPlayers && ready.All(slot => slot >= 0 && slot < match.Capacity && match.IsSlotConnected(slot));
         public string PlayerList => string.Join("\n", Enumerable.Range(0, match.Capacity).Select(slot =>
             "Player " + (slot + 1) + (slot == 0 ? " (Host)" : "") + ": " + (ready.Contains(slot) ? "Ready" : "Not ready / waiting")));
@@ -79,7 +82,13 @@ namespace Escape4Now.Multiplayer.RelayTesting
         private readonly Dictionary<ulong, RelayMessageChannel> channels = new Dictionary<ulong, RelayMessageChannel>();
         private readonly HashSet<int> ready = new HashSet<int>();
         private bool listening;
-        private bool profilePublished;
+        private string lastAccountName, pendingName;
+        private int pendingSkin, profileRevision;
+        private bool profilePending;
+        private float nextProfile;
+        // Each revision belongs to a connection's assigned slot. Repeated requests are safe to accept again.
+        private readonly int[] acceptedProfiles = new int[4];
+        private readonly RelayMessageChannel[] profileConnections = new RelayMessageChannel[4];
         private float nextLobby;
 
         [Serializable]
@@ -88,7 +97,9 @@ namespace Escape4Now.Multiplayer.RelayTesting
             public bool request, ready, profile, fillWithBots;
             public string name;
             public int skin, monsterSlot = -1;
+            public int profileRevision;
             public int[] readySlots, skins;
+            public int[] profileRevisions;
             public string[] names;
         }
 
@@ -103,7 +114,8 @@ namespace Escape4Now.Multiplayer.RelayTesting
 
         public async Task HostAsync(int players)
         {
-            if (!relay.CanStart) return;
+            if (!relay.CanStart || Playing) return;
+            ResetLobby();
             await relay.HostAsync(players);
             if (this == null || !relay.Active) return;
             if (!match.StartRelayedHost(players, relay.RoomCode)) { relay.Leave(); Status = "The online lobby could not start."; return; }
@@ -113,7 +125,8 @@ namespace Escape4Now.Multiplayer.RelayTesting
 
         public async Task JoinAsync(string code)
         {
-            if (!relay.CanStart) return;
+            if (!relay.CanStart || Playing) return;
+            ResetLobby();
             await relay.JoinAsync(code);
             if (this != null && relay.Active) Listen();
         }
@@ -142,6 +155,11 @@ namespace Escape4Now.Multiplayer.RelayTesting
 
         private void RemovePeer(ulong peer)
         {
+            if (channels.TryGetValue(peer, out var previous))
+            {
+                int slot = match.GetRelayedSlot(previous);
+                if (slot >= 0 && slot < acceptedProfiles.Length) acceptedProfiles[slot] = 0;
+            }
             if (channels.TryGetValue(peer, out var channel)) channel.Dispose();
             channels.Remove(peer);
             ready.Clear();
@@ -171,37 +189,88 @@ namespace Escape4Now.Multiplayer.RelayTesting
                 // Ownership comes from the authenticated connection, never a supplied player index.
                 int slot = match.GetRelayedSlot(channel);
                 if (slot < 1) return;
-                if (message.profile) SaveProfile(slot, message.name, message.skin);
+                if (message.profile)
+                {
+                    // A replacement connection starts its own revision count, even if it reuses an old seat.
+                    if (profileConnections[slot] != channel)
+                    {
+                        profileConnections[slot] = channel;
+                        acceptedProfiles[slot] = 0;
+                    }
+                    AcceptProfile(slot, message);
+                }
                 else if (message.ready) ready.Add(slot);
                 else ready.Remove(slot);
                 nextLobby = 0;
             }
             else if (!IsHost && sender == NetworkManager.ServerClientId && !message.request && message.readySlots != null)
             {
-                ready.Clear();
-                foreach (int slot in message.readySlots) if (slot >= 0 && slot < match.Capacity) ready.Add(slot);
-                Ready = ready.Contains(match.LocalPlayerIndex);
-                FillWithBots = message.fillWithBots;
-                if (modeMatch is OnlineSurvivalMatch survival) survival.MonsterSlot = message.monsterSlot;
-                if (message.names?.Length == Capacity && message.skins?.Length == Capacity)
-                {
-                    Skins?.ClearAll();
-                    for (int i = 0; i < Capacity; i++)
-                    {
-                        SetSlotName(i, message.names[i]);
-                        Skins?.TryAssign(i, message.skins[i]);
-                    }
-                    Skins?.FillMissing();
-                }
+                ApplyLobbyState(message);
             }
         }
 
         public void EditProfile(string name, int skin)
         {
             if (!CanEditProfile || !relay.Active || Playing) return;
-            if (IsHost) SaveProfile(LocalSlot, name, skin);
-            else SendLobby(NetworkManager.ServerClientId, new LobbyMessage { request = true, profile = true, name = name, skin = skin });
+            lastAccountName = AccountService.DisplayName;
+            QueueProfile(name, skin);
         }
+
+        private void QueueProfile(string name, int skin)
+        {
+            pendingName = name;
+            pendingSkin = skin;
+            profileRevision++;
+            profilePending = true;
+            nextProfile = 0;
+            // An edited profile must be checked again before the match can start.
+            Ready = false;
+        }
+
+        private LobbyMessage ProfileRequest() => new LobbyMessage
+        {
+            request = true, profile = true, name = pendingName, skin = pendingSkin, profileRevision = profileRevision
+        };
+
+        private void AcceptProfile(int slot, LobbyMessage message)
+        {
+            if (message.profileRevision > acceptedProfiles[slot])
+            {
+                SaveProfile(slot, message.name, message.skin);
+                acceptedProfiles[slot] = message.profileRevision;
+            }
+            // A retry only asks for another acknowledgement; it must not clear Ready again.
+            nextLobby = 0;
+        }
+
+        private void ApplyLobbyState(LobbyMessage message)
+        {
+            ready.Clear();
+            foreach (int slot in message.readySlots) if (slot >= 0 && slot < Capacity) ready.Add(slot);
+            Ready = ready.Contains(LocalSlot);
+            FillWithBots = message.fillWithBots;
+            if (modeMatch is OnlineSurvivalMatch survival) survival.MonsterSlot = message.monsterSlot;
+            if (message.names?.Length == Capacity)
+                for (int i = 0; i < Capacity; i++) SetSlotName(i, message.names[i]);
+            if (message.skins?.Length == Capacity)
+            {
+                Skins?.ClearAll();
+                for (int i = 0; i < Capacity; i++) Skins?.TryAssign(i, message.skins[i]);
+                Skins?.FillMissing();
+            }
+            if (LocalSlot >= 0 && message.profileRevisions?.Length == Capacity
+                && message.profileRevisions[LocalSlot] == profileRevision)
+                profilePending = false;
+            if (profilePending) Ready = false;
+        }
+
+        private LobbyMessage CaptureLobby() => new LobbyMessage
+        {
+            readySlots = ready.ToArray(), monsterSlot = MonsterSlot, fillWithBots = FillWithBots,
+            names = Enumerable.Range(0, Capacity).Select(SlotName).ToArray(),
+            skins = Enumerable.Range(0, Capacity).Select(ProfileSkinIndex).ToArray(),
+            profileRevisions = acceptedProfiles.Take(Capacity).ToArray()
+        };
 
         private void SetSlotName(int slot, string name)
         {
@@ -225,7 +294,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
 
         public void ToggleReady()
         {
-            if (!relay.Active || Playing || match.LocalPlayerIndex < 0) return;
+            if (!relay.Active || Playing || match.LocalPlayerIndex < 0 || ProfileUpdating) return;
             Ready = !Ready;
             if (IsHost) { if (Ready) ready.Add(0); else ready.Remove(0); nextLobby = 0; }
             else SendLobby(NetworkManager.ServerClientId, new LobbyMessage { request = true, ready = Ready });
@@ -283,31 +352,67 @@ namespace Escape4Now.Multiplayer.RelayTesting
             // Match the host's input delay to the guests' measured ping.
             if (modeMatch != null) modeMatch.HostInputDelay = IsHost && relay.Active ? relay.AverageGuestInputDelay : 0;
             if (modeMatch != null && Playing && relay.Active) modeMatch.SendLocalInput(match);
-            if (!listening) return;
-            if (!profilePublished && relay.Active && LocalSlot >= 0)
-            {
-                profilePublished = true;
-                EditProfile(AccountService.DisplayName, ProfileSkinIndex(LocalSlot));
-            }
             if (!relay.Active)
             {
-                match.ReportRelayFailure("Online connection ended. " + relay.Error);
+                if (relay.Busy || !listening) return;
+                if (Playing) match.ReportRelayFailure("Online connection ended. " + relay.Error);
+                else ResetLobby();
                 Status = relay.Error;
                 return;
+            }
+            if (!listening) return;
+            if (relay.Active && !Playing && CanEditProfile && (IsHost || channels.ContainsKey(NetworkManager.ServerClientId)))
+            {
+                // Login restoration can briefly switch account profiles. Publish the completed login only.
+                if (!AccountService.IsBusy && AccountService.IsSignedIn)
+                    TrackAccountName(AccountService.DisplayName);
+                if (profilePending && Time.realtimeSinceStartup >= nextProfile)
+                {
+                    nextProfile = Time.realtimeSinceStartup + profileRetryInterval;
+                    if (IsHost)
+                    {
+                        AcceptProfile(LocalSlot, ProfileRequest());
+                        profilePending = false;
+                    }
+                    else SendLobby(NetworkManager.ServerClientId, ProfileRequest());
+                }
             }
             if (!IsHost && relay.Network.IsConnectedClient && !channels.ContainsKey(NetworkManager.ServerClientId))
                 AddPeer(NetworkManager.ServerClientId);
             if (Playing || !IsHost || Time.realtimeSinceStartup < nextLobby) return;
             nextLobby = Time.realtimeSinceStartup + lobbyPublishInterval;
-            var lobby = new LobbyMessage { readySlots = ready.ToArray(), monsterSlot = MonsterSlot, fillWithBots = FillWithBots };
-            if (Skins != null)
-            {
-                lobby.names = Enumerable.Range(0, Capacity).Select(SlotName).ToArray();
-                lobby.skins = Enumerable.Range(0, Capacity).Select(ProfileSkinIndex).ToArray();
-            }
+            var lobby = CaptureLobby();
             foreach (var entry in channels)
                 if (match.GetRelayedSlot(entry.Value) >= 1)
                     SendLobby(entry.Key, lobby);
+        }
+
+        private void TrackAccountName(string name)
+        {
+            if (string.Equals(lastAccountName, name, StringComparison.Ordinal)) return;
+            lastAccountName = name;
+            QueueProfile(name, profilePending ? pendingSkin : ProfileSkinIndex(LocalSlot));
+        }
+
+        // A failed join or timed-out lobby is finished. Clear both networking layers before trying again.
+        private void ResetLobby()
+        {
+            if (listening && relay.Network != null && relay.Network.CustomMessagingManager != null)
+            {
+                relay.Network.CustomMessagingManager.UnregisterNamedMessageHandler(RelayMessageChannel.MessageName);
+                relay.Network.CustomMessagingManager.UnregisterNamedMessageHandler(LobbyName);
+            }
+            listening = false;
+            foreach (var channel in channels.Values) channel.Dispose();
+            channels.Clear();
+            match.Disconnect();
+            ready.Clear();
+            Ready = FillWithBots = profilePending = false;
+            Array.Clear(acceptedProfiles, 0, acceptedProfiles.Length);
+            Array.Clear(profileConnections, 0, profileConnections.Length);
+            profileRevision = 0;
+            lastAccountName = pendingName = null;
+            nextLobby = nextProfile = 0;
         }
 
         public void Leave()

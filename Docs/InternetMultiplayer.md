@@ -137,7 +137,11 @@ Select the Online Arena Presentation component in either online arena scene to e
 
 Hot Potato guests animate the remaining time between updates and estimate transit time from measured ping. The host confirms the holder, explosions and eliminations. Network travel time still affects when confirmed events arrive.
 
-The shared Online Race Connection asset now uses connection version 21. All participants need the updated build, which includes movement acknowledgements. The existing version check rejects earlier builds before they enter the room.
+The shared Online Race Connection asset now uses connection version 22. All participants need the updated build, which includes movement and lobby profile acknowledgements. The existing version check rejects earlier builds before they enter the room.
+
+Online rooms publish the completed account login and later display-name changes. Guest profile requests are retried until the host acknowledges the newest revision, so an early request cannot be lost during slot assignment. Repeated requests do not reset Ready. A changed name or skin needs Ready again. The retry interval is editable on Online Race Session in the Inspector; all four modes share this room code.
+
+Joining a room for another game mode shows which mode to select. Rejected guests do not close the host's room. Failed lobby connections clear both the Relay and gameplay sessions, allowing another host/join attempt after transport shutdown completes. Ordinary game rooms keep waiting for friends; **Limit Host Waiting** in the connection settings can enable a timeout when needed. The diagnostic scene retains its timed test. These recovery paths are checked with simulated approval/disconnect callbacks and real local transport restarts; cross-network recovery still needs a teammate test.
 
 ## Free-tier / costs
 

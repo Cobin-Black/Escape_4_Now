@@ -206,7 +206,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
                 Escape4Now.UI.ArcadeChip.Paint(roomSizes[index].transform, roomSizes[index].isOn);
             }
             join.interactable = canConnect && canPlayOnline && !string.IsNullOrWhiteSpace(joinCode.text);
-            ready.interactable = inRoom && session.LocalSlot >= 0;
+            ready.interactable = inRoom && session.CanEditProfile && !session.ProfileUpdating;
             readyLabel.text = session.Ready ? notReadyText : readyText;
             start.gameObject.SetActive(inRoom && session.IsHost);
             start.interactable = session.CanStart;
@@ -237,7 +237,8 @@ namespace Escape4Now.Multiplayer.RelayTesting
             bool failed = !string.IsNullOrEmpty(connection.Error);
             status.color = failed ? errorColor : normalColor;
             status.text = !canPlayOnline ? "Sign in with your game account to play online."
-                : failed ? failureMessage : connection.Busy || connection.Active && !inRoom ? connectingMessage
+                : failed ? string.IsNullOrEmpty(connection.Status) ? failureMessage : connection.Status
+                : connection.Busy || connection.Active && !inRoom ? connectingMessage
                 : !inRoom ? setupMessage : session.CanStart ? allReadyMessage : session.Ready ? waitingMessage
                 : session.IsHost ? hostMessage : guestMessage;
             diagnosticStatus.text = "PROTOCOL: " + connection.Protocol + "\nSTAGE: " + connection.Stage

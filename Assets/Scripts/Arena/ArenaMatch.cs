@@ -181,7 +181,7 @@ namespace Escape4Now.Arena
             }
 
             var used = new HashSet<Gamepad>();
-            int[] layouts = KeyboardLayouts(pads, count);
+            int[] layouts = KeyboardLayouts(pads, count, bots);
             for (int i = 0; i < count; i++)
             {
                 if (IsBotSlot(bots, i))
@@ -249,18 +249,27 @@ namespace Escape4Now.Arena
 
         // Keyboard players keep their own slot's layout: Player 1 uses the Input System's keyboard bindings,
         // Players 2-4 use the backup Player2..Player4 maps. -1 means that slot has a controller.
-        private static int[] KeyboardLayouts(Gamepad[] pads, int count) => ControllerHandling.KeyboardLayoutsFor(pads, count);
+        private static int[] KeyboardLayouts(Gamepad[] pads, int count, bool[] bots)
+        {
+            int[] layouts = ControllerHandling.KeyboardLayoutsFor(pads, count);
+            // Bots do not use keys, so their layouts must not take keys away from a human.
+            for (int i = 0; i < layouts.Length; i++)
+                if (IsBotSlot(bots, i)) layouts[i] = -1;
+            return layouts;
+        }
 
         private void ApplyInputs(Gamepad[] pads)
         {
-            int[] layouts = KeyboardLayouts(pads, Players.Count);
+            var bots = new bool[Players.Count];
+            for (int i = 0; i < bots.Length; i++) bots[i] = Players[i] != null && Players[i].IsBot;
+            int[] layouts = KeyboardLayouts(pads, Players.Count, bots);
             // Keys used by the other keyboard players are switched off in Player 1's copy so nobody shares a key.
             var reserved = new HashSet<string>();
             for (int i = 1; i < layouts.Length; i++)
                 if (layouts[i] >= 0)
                     ArenaLocalInput.CollectLayoutKeys(inputActions, layouts[i], reserved);
             for (int i = 0; i < Players.Count; i++)
-                if (Players[i] != null)
+                if (Players[i] != null && !Players[i].IsBot)
                     Players[i].ConfigureInput(pads[i], layouts[i], reserved);
         }
 
@@ -271,7 +280,7 @@ namespace Escape4Now.Arena
                 return;
             var pads = new Gamepad[Players.Count];
             for (int i = 0; i < pads.Length; i++)
-                pads[i] = ControllerHandling.GetGamepad(Players[i].Slot);
+                pads[i] = Players[i].IsBot ? null : ControllerHandling.GetGamepad(Players[i].Slot);
             ApplyInputs(pads);
         }
 

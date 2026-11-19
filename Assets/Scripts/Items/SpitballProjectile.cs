@@ -26,7 +26,7 @@ namespace Escape4Now.Items
             owner = shooter;
             match = shooter.Match;
             position = shooter.Position;
-            direction = match.Map.GridDirection(shooter.FacingDirection).normalized;
+            direction = shooter.AttackDirection;
 
             transform.position = match.Map.World(position) + Vector3.back;
         }

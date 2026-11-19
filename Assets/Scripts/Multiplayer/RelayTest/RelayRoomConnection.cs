@@ -42,7 +42,8 @@ namespace Escape4Now.Multiplayer.RelayTesting
         public bool Active { get; private set; }
         public bool Hosting { get; private set; }
         public bool Passed { get; private set; }
-        public bool CanStart => !Busy && !Active && (pendingService == null || pendingService.IsCompleted) && !network.ShutdownInProgress;
+        public bool CanStart => !Busy && !Active && !shutdownQueued && !network.IsListening
+            && (RequiresAccount || pendingService == null || pendingService.IsCompleted) && !network.ShutdownInProgress;
         public int RemotePlayers => peers.Count;
         public string Log => report?.Recent ?? "";
         public int Replies { get; private set; }
@@ -57,6 +58,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
         private float startedAt;
         private float nextProbe;
         private bool registered;
+        private bool shutdownQueued;
         private bool previousBackground;
         private bool alive;
         private int capacity;
@@ -171,6 +173,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
                     string joinCode = await Service(RelayService.Instance.GetJoinCodeAsync(allocation.AllocationId), attempt);
                     Guard(attempt);
                     StartTransport(true);
+                    Guard(attempt);
                     RoomCode = joinCode;
                 }
                 else
@@ -181,6 +184,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
                     transport.SetRelayServerData(AllocationUtils.ToRelayServerData(allocation, protocol));
                     DescribeEndpoint(allocation.ServerEndpoints, protocol);
                     StartTransport(false);
+                    Guard(attempt);
                     RoomCode = code;
                 }
                 Stage = "Transport / peer connection";
@@ -196,6 +200,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
 
         private void ConfigureNetwork()
         {
+            Application.runInBackground = true;
             // This manager belongs only to this scene. No player prefab or scene sync is needed for an echo test.
             network.SetSingleton();
             network.NetworkConfig.NetworkTransport = transport;
@@ -229,7 +234,8 @@ namespace Escape4Now.Multiplayer.RelayTesting
             report.Add("Relay endpoint: " + protocol + "://" + Endpoint);
         }
 
-        // SDK calls cannot all be cancelled. Keep their task tracked and reject new attempts until it finishes.
+        // SDK calls cannot all be cancelled. A generation check keeps late replies out of a newer attempt.
+        // Diagnostic sign-in still waits for its old identity request; signed-in game rooms can retry safely.
         private async Task Service(Task task, int attempt)
         {
             pendingService = task;
@@ -270,13 +276,25 @@ namespace Escape4Now.Multiplayer.RelayTesting
         // Check the room type and protocol version before giving a guest a place in the room.
         private void Approve(NetworkManager.ConnectionApprovalRequest request, NetworkManager.ConnectionApprovalResponse response)
         {
-            bool versionMatches = request.Payload != null && Encoding.UTF8.GetString(request.Payload) == ConnectionSignature;
+            string signature = request.Payload == null ? "" : Encoding.UTF8.GetString(request.Payload);
+            string[] parts = signature.Split(':');
+            bool versionMatches = parts.Length == 3 && parts[0] == "E4N" && parts[1] == settings.testVersion.ToString();
+            bool modeMatches = versionMatches && parts[2] == ModeId;
             bool space = network.ConnectedClientsIds.Count < capacity;
-            response.Approved = versionMatches && space && AcceptingConnections;
+            response.Approved = modeMatches && space && AcceptingConnections;
             response.CreatePlayerObject = false;
             response.Pending = false;
-            response.Reason = !AcceptingConnections ? "The match has already started." : !versionMatches ? "Connection versions do not match." : !space ? "Room is full." : "";
+            response.Reason = !AcceptingConnections ? "The match has already started." : !versionMatches
+                ? "Game builds do not match. Both players need the same updated build."
+                : !modeMatches ? "This room is for " + ModeLabel(ModeId) + ". Select that game mode before joining."
+                : !space ? "Room is full." : "";
         }
+
+        private static string ModeLabel(string mode) => mode switch
+        {
+            "OnlineRace" => "Race", "OnlineSurvival" => "Survival",
+            "OnlineFreeForAll" => "King of the Hill", "OnlineHotPotato" => "Hot Potato", _ => mode
+        };
 
         private void Connected(ulong client)
         {
@@ -301,6 +319,8 @@ namespace Escape4Now.Multiplayer.RelayTesting
             if (!Hosting && network.IsConnectedClient) AddPeer(NetworkManager.ServerClientId);
             if (peers.Count == 0)
             {
+                // Ordinary game lobbies can wait for friends. Diagnostics can still enforce a time limit.
+                if (Hosting && !settings.limitHostWaiting) return;
                 float timeout = Hosting ? settings.hostWaitingTimeout : settings.connectionTimeout;
                 if (now - startedAt > timeout) Fail(new TimeoutException(Hosting
                     ? "No remote player joined before the host waiting limit. This alone does not prove a network restriction."
@@ -377,9 +397,23 @@ namespace Escape4Now.Multiplayer.RelayTesting
         private void Disconnected(ulong client)
         {
             if (!Active) return;
-            PeerDisconnected?.Invoke(client);
-            Fail(new InvalidOperationException("Peer disconnected (" + client + "). " + network.DisconnectReason
-                + " Check Player.log for the transport reason; this callback alone cannot identify a firewall."));
+            if (Hosting)
+            {
+                // Rejected connections never joined our peer list and must not close the host's room.
+                if (!peers.Remove(client)) return;
+                PeerDisconnected?.Invoke(client);
+                if (AcceptingConnections)
+                {
+                    startedAt = Time.realtimeSinceStartup;
+                    Passed = false;
+                    Status = "A player left. Waiting for another player to join.";
+                    return;
+                }
+            }
+            else PeerDisconnected?.Invoke(client);
+            string reason = network.DisconnectReason;
+            Fail(new InvalidOperationException(string.IsNullOrWhiteSpace(reason)
+                ? "The connection to the other player ended." : reason));
         }
 
         private void TransportFailed() => Fail(new InvalidOperationException("Unity Transport reported a transport failure. See Player.log for the underlying driver error."));
@@ -399,7 +433,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             report.Add("FAILED: " + Error);
             Passed = false;
             StopNetwork();
-            Status = "Test failed. Export the report; do not treat this as a confirmed network restriction yet.";
+            Status = error.Message + " You can host or join again after cleanup.";
         }
 
         public void Leave()
@@ -415,9 +449,23 @@ namespace Escape4Now.Multiplayer.RelayTesting
 
         private void StopNetwork()
         {
+            ++generation;
+            Busy = false;
             Active = false;
             RoomCode = "";
             peers.Clear();
+            shutdownQueued = true;
+        }
+
+        // NGO may call us from inside its message loop. Finish teardown after those callbacks return.
+        private void LateUpdate()
+        {
+            if (shutdownQueued) ShutdownTransport();
+        }
+
+        private void ShutdownTransport()
+        {
+            shutdownQueued = false;
             if (network == null) return;
             if (registered && network.CustomMessagingManager != null)
             {
@@ -425,7 +473,8 @@ namespace Escape4Now.Multiplayer.RelayTesting
                 network.CustomMessagingManager.UnregisterNamedMessageHandler(Pong);
             }
             registered = false;
-            if (network.IsListening) network.Shutdown();
+            if (!network.ShutdownInProgress && (network.IsListening || network.IsClient || network.IsServer))
+                network.Shutdown(true);
         }
 
         public string Export(string networkLabel) => report.Export(
@@ -438,6 +487,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             alive = false;
             ++generation;
             StopNetwork();
+            ShutdownTransport();
             if (network != null)
             {
                 network.OnClientConnectedCallback -= Connected;

@@ -37,9 +37,16 @@ namespace Escape4Now.Arena
         private TextMesh nameLabel;
         [SerializeField]
         private TextMesh nameShadow;
-        [Header("Free For All Invincibility")]
+        [Header("King of the Hill Invincibility")]
         [SerializeField] private float invincibilityDuration = 1f;
+        [SerializeField, Min(.02f), Tooltip("Seconds between each on/off blink while invincible.")]
+        private float invincibilityFlashInterval = .1f;
+        [SerializeField, Range(0, 1), Tooltip("Sprite opacity during the off part of each blink.")]
+        private float invincibilityFlashAlpha = .2f;
         private float invincibilityTimer;
+        private SpriteRenderer[] flashRenderers;
+        private float[] flashBaseAlphas;
+        private bool flashing, facingBack, facingRight;
         public PlayerCharacter Character { get; private set; }
         public ArenaLocalInput Input { get; private set; }
         public ArenaMatch Match { get; private set; }
@@ -56,6 +63,27 @@ namespace Escape4Now.Arena
         public Vector2 FacingDirection { get; private set; } = Vector2.down;
         public Vector2 ScreenVelocity { get; private set; }
         public bool IsInvincible => invincibilityTimer > 0;
+        public float InvincibilityRemaining => invincibilityTimer;
+        // Attack along the same floor axis as the character's visible diagonal facing.
+        public Vector2 AttackDirection => facingBack
+            ? (facingRight ? Vector2.right : Vector2.up)
+            : (facingRight ? Vector2.down : Vector2.left);
+
+        // The host owns protection; guests only copy its timer and show the same blinking.
+        public void ApplyOnlineInvincibility(float seconds)
+        {
+            invincibilityTimer = Mathf.Max(0, seconds);
+            if (invincibilityTimer <= 0) StopInvincibilityFlash();
+        }
+
+        private void Face(Vector2 velocity)
+        {
+            if (velocity.sqrMagnitude <= .0001f) return;
+            FacingDirection = velocity.normalized;
+            if (Mathf.Abs(velocity.y) > .0001f) facingBack = velocity.y > 0;
+            if (Mathf.Abs(velocity.x) > .0001f) facingRight = velocity.x > 0;
+            Character.Appearance?.FaceToward(velocity);
+        }
 
         private Vector2 screenVelocity, eventVelocity;
         private Vector2 remoteMove;
@@ -118,7 +146,7 @@ namespace Escape4Now.Arena
         {
             Place(position);
             ScreenVelocity = velocity;
-            if (velocity.sqrMagnitude > .0001f) Character.Appearance?.FaceToward(velocity);
+            Face(velocity);
             Character.ApplyReplicatedHealth(health);
             Alive = alive;
             gameObject.SetActive(alive);
@@ -134,7 +162,7 @@ namespace Escape4Now.Arena
         {
             OnlineSwingCount++;
             OnlineSwingPosition = transform.position;
-            OnlineSwingDirection = FacingDirection;
+            OnlineSwingDirection = Match.Map.ScreenDirection(AttackDirection).normalized;
         }
         // Reuse the existing character identity, skin and health instead of creating a second player system.
         // A bot is driven by ArenaBotController through this player's input, locally and on the online host.
@@ -145,6 +173,7 @@ namespace Escape4Now.Arena
             Alive = true;
             IsBot = isBot;
             invincibilityTimer = 0;
+            StopInvincibilityFlash();
             Character = GetComponent<PlayerCharacter>();
             Input = GetComponent<ArenaLocalInput>();
             if (isBot) Input.ConfigureBot();
@@ -188,12 +217,22 @@ namespace Escape4Now.Arena
 
         private void Update()
         {
-            if (!Alive || Match == null || !Match.Playing || Match.Paused || Match.Replica)
+            if (!Alive || Match == null || !Match.Playing)
+            {
+                StopInvincibilityFlash();
+                return;
+            }
+            if (Match.Paused)
                 return;
 
             // Count down invincibility after taking damage in FFA.
             if (invincibilityTimer > 0)
                 invincibilityTimer = Mathf.Max(0, invincibilityTimer - Time.deltaTime);
+            if (invincibilityTimer > 0) UpdateInvincibilityFlash();
+            else StopInvincibilityFlash();
+
+            // Guests animate the host's protection timer without running damage or movement rules.
+            if (Match.Replica) return;
 
             if (EffectRemaining > 0)
             {
@@ -224,10 +263,45 @@ namespace Escape4Now.Arena
             Vector2 desired = Match.Map.GridDirection(screenVelocity);
             eventVelocity = Match.Events != null ? Match.Events.FilterMovement(this, desired, eventVelocity, seconds) : desired;
             Move(eventVelocity * seconds, seconds);
-            if (ScreenVelocity.sqrMagnitude > .0001f)
+            Face(ScreenVelocity);
+        }
+
+        // Blink every sprite on the player (body, outline, etc.) on and off while invincible.
+        private void UpdateInvincibilityFlash()
+        {
+            if (!flashing)
             {
-                FacingDirection = ScreenVelocity.normalized;
-                Character.Appearance?.FaceToward(ScreenVelocity);
+                flashRenderers = GetComponentsInChildren<SpriteRenderer>(true);
+                flashBaseAlphas = new float[flashRenderers.Length];
+                for (int i = 0; i < flashRenderers.Length; i++)
+                    flashBaseAlphas[i] = flashRenderers[i].color.a;
+                flashing = true;
+            }
+
+            float elapsed = invincibilityDuration - invincibilityTimer;
+            bool dim = Mathf.FloorToInt(elapsed / invincibilityFlashInterval) % 2 == 0;
+            SetFlashAlpha(dim ? invincibilityFlashAlpha : 1f);
+        }
+
+        private void StopInvincibilityFlash()
+        {
+            if (!flashing)
+                return;
+            SetFlashAlpha(1f);
+            flashing = false;
+        }
+
+        private void OnDisable() => StopInvincibilityFlash();
+
+        private void SetFlashAlpha(float multiplier)
+        {
+            for (int i = 0; i < flashRenderers.Length; i++)
+            {
+                if (flashRenderers[i] == null)
+                    continue;
+                Color color = flashRenderers[i].color;
+                color.a = flashBaseAlphas[i] * multiplier;
+                flashRenderers[i].color = color;
             }
         }
 
@@ -274,7 +348,7 @@ namespace Escape4Now.Arena
             if (!Alive || amount <= 0)
                 return;
 
-            // Ignore damage while invincible in Free For All.
+            // Ignore damage while invincible in King of the Hill.
             if (Match is KingOfTheHillController && IsInvincible)
                 return;
 
@@ -290,9 +364,12 @@ namespace Escape4Now.Arena
 
             onDamaged?.Invoke();
 
-            // Start invincibility after taking damage in FFA.
+            // Start invincibility after taking damage in King of the Hill.
             if (Match is KingOfTheHillController && Character.Health > 0)
+            {
                 invincibilityTimer = invincibilityDuration;
+                UpdateInvincibilityFlash();
+            }
 
             if (Character.Health <= 0)
                 Eliminate();
@@ -314,6 +391,8 @@ namespace Escape4Now.Arena
             if (!Alive)
                 return;
             Alive = false;
+            invincibilityTimer = 0;
+            StopInvincibilityFlash();
             onEliminated?.Invoke();
             Eliminated?.Invoke(this);
             gameObject.SetActive(false);
@@ -355,6 +434,7 @@ namespace Escape4Now.Arena
             eventVelocity = screenVelocity = Vector2.zero;
             ScreenVelocity = Vector2.zero;
             invincibilityTimer = 0;
+            StopInvincibilityFlash();
         }
     }
 }

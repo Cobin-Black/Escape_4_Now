@@ -85,6 +85,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             public int inputSequence, movementRevision;
             public float inputAge;
             public float speedMultiplier = 1;
+            public float invincibility;
             // King of the Hill also sends score, respawn, and held item details.
             public int score, respawn, itemType = -1, itemUses, itemMaxUses, shieldBlocks;
             public int swing;
@@ -103,6 +104,8 @@ namespace Escape4Now.Multiplayer.RelayTesting
             public int winner = -1;
             public string[] names;
             public int[] skins;
+            // Guests keep the same bot identities, but only the host runs their decisions.
+            public bool[] bots;
             public Vector2Int[] equipmentCells;
             public int[] blockedCells;
             public Actor[] actors;
@@ -136,14 +139,14 @@ namespace Escape4Now.Multiplayer.RelayTesting
         }
 
         // A guest builds the same map using the seed sent by the host.
-        private bool StartBoard(int count, int? seed, int[] skinIndices = null)
+        private bool StartBoard(int count, int? seed, int[] skinIndices = null, bool[] replicatedBots = null)
         {
             arena.ConfigureOnline(seed.HasValue);
             var slots = Enumerable.Range(0, count).ToArray();
             var defaults = slots.Select(_ => -1).ToArray();
             skinIndices ??= slots.Select(slot => ProfileSkins != null ? ProfileSkins.GetSkinIndex(slot) : -1).ToArray();
             // The host names its bots so every guest sees "BOT 3" in the HUD and results.
-            bool[] bots = seed.HasValue ? null : slots.Select(slot => botSlots != null && slot < botSlots.Length && botSlots[slot]).ToArray();
+            bool[] bots = seed.HasValue ? replicatedBots : slots.Select(slot => botSlots != null && slot < botSlots.Length && botSlots[slot]).ToArray();
             if (bots != null)
                 foreach (int slot in slots)
                     if (bots[slot]) names[slot] = "BOT " + (slot + 1);
@@ -182,6 +185,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             state.seed = arena.Map.Seed;
             state.names = arena.Players.Select(p => SlotName(p.Slot)).ToArray();
             state.skins = arena.Players.Select(p => ProfileSkins != null ? ProfileSkins.GetSkinIndex(p.Slot) : -1).ToArray();
+            state.bots = arena.Players.Select(p => p.IsBot).ToArray();
             state.equipmentCells = arena.Map.EquipmentViews.Select(prop => prop.Cell).ToArray();
             var layout = arena.Map.Layout;
             state.blockedCells = Enumerable.Range(0, layout.Width * layout.Height)
@@ -204,7 +208,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
                 position = player.Position, velocity = player.ScreenVelocity, health = player.Character.Health, alive = player.Alive,
                 motorVelocity = movement.motorVelocity, eventVelocity = movement.eventVelocity,
                 inputSequence = appliedInput[player.Slot], inputAge = inputAge[player.Slot], movementRevision = player.MovementRevision,
-                speedMultiplier = player.SpeedMultiplier
+                speedMultiplier = player.SpeedMultiplier, invincibility = player.InvincibilityRemaining
             };
             CapturePlayer(player, actor);
             return actor;
@@ -215,15 +219,17 @@ namespace Escape4Now.Multiplayer.RelayTesting
         {
             var state = ReadSnapshot(payload, count);
             if (state?.actors == null || state.actors.Length != count
+                || (state.bots != null && state.bots.Length != count)
                 || state.actors.Any(p => p == null || !Finite(p.position) || !Finite(p.velocity)
                     || !Finite(p.motorVelocity) || !Finite(p.eventVelocity) || p.inputSequence < 0
                     || float.IsNaN(p.inputAge) || p.inputAge < 0
-                    || float.IsNaN(p.speedMultiplier) || float.IsInfinity(p.speedMultiplier) || p.speedMultiplier < 0)) return false;
+                    || float.IsNaN(p.speedMultiplier) || float.IsInfinity(p.speedMultiplier) || p.speedMultiplier < 0
+                    || float.IsNaN(p.invincibility) || float.IsInfinity(p.invincibility) || p.invincibility < 0)) return false;
             if (!started)
             {
                 if (state.names?.Length != count || state.skins?.Length != count) return false;
                 for (int i = 0; i < count; i++) SetSlotName(i, state.names[i]);
-                if (!StartBoard(count, state.seed, state.skins)) return false;
+                if (!StartBoard(count, state.seed, state.skins, state.bots)) return false;
             }
             if (arena.Map.Seed != state.seed || count != arena.Players.Count) return false;
             var layout = arena.Map.Layout;
@@ -236,6 +242,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
                 Actor actor = state.actors[i];
                 var player = arena.Players[i];
                 player.ApplyOnlineState(actor.position, actor.velocity, actor.health, actor.alive);
+                player.ApplyOnlineInvincibility(actor.invincibility);
                 player.SpeedMultiplier = actor.speedMultiplier;
                 ApplyPlayer(player, actor);
             }

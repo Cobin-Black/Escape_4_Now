@@ -28,8 +28,8 @@ namespace Escape4Now.Items
                 attacker.Match.Paused)
                 return;
 
-            Vector2 direction = attacker.Match.Map
-                .GridDirection(attacker.FacingDirection).normalized;
+            // Use the sprite's facing for both the hit and its visible swing.
+            Vector2 direction = attacker.AttackDirection;
 
             foreach (ArenaParticipant target in attacker.Match.Players)
             {
@@ -57,13 +57,15 @@ namespace Escape4Now.Items
                     target.Knockback(direction * knockback);
             }
 
-            ShowSwing(attacker.transform.position, attacker.FacingDirection);
+            Vector2 visualDirection = attacker.Match.Map.ScreenDirection(direction).normalized;
+            ShowSwing(attacker.transform.position, visualDirection);
             if (attacker.Match.Online) attacker.RecordOnlineSwing();
             ConsumeUse(inventory);
         }
 
         public void ShowSwing(Vector3 position, Vector2 direction)
         {
+            // The host and guests share this effect prefab; guests never repeat the hit check.
             if (swingEffectPrefab == null) return;
             var effect = Instantiate(swingEffectPrefab, position, Quaternion.identity);
             effect.GetComponent<RulerSwingEffect>()?.Initialize(direction.normalized, attackRange, swingAngle);

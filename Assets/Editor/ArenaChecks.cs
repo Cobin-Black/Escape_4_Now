@@ -219,6 +219,39 @@ public static class ArenaChecks
             yield return null;
         }
 
+        // A bot must keep its input when a controller is connected, and must not reserve keyboard keys.
+        Require(match.StartMatch(2, new[] { "Human", "Bot" }, new[] { -1, -1 }, new[] { false, true }), match.Error);
+        var botInput = match.Players[1].Input;
+        var human = match.Players[0];
+        var sprites = human.GetComponentsInChildren<SpriteRenderer>();
+        var originalAlpha = new float[sprites.Length];
+        for (int i = 0; i < sprites.Length; i++) originalAlpha[i] = sprites[i].color.a;
+        human.Damage(1);
+        Require(human.IsInvincible, "King of the Hill damage starts protection");
+        bool dimmed = false;
+        foreach (var sprite in human.GetComponentsInChildren<SpriteRenderer>())
+            dimmed |= sprite.color.a < .9f;
+        Require(dimmed, "Protection visibly blinks the player as on main");
+        human.ClearRoundEffects();
+        for (int i = 0; i < sprites.Length; i++)
+            Require(Mathf.Approximately(sprites[i].color.a, originalAlpha[i]), "Clearing protection restores sprite opacity");
+        human.ApplyOnlineState(human.Position, new Vector2(-1, 1), human.Character.Health, true);
+        Require(human.AttackDirection == Vector2.up, "Upper-left facing attacks along the matching floor axis");
+        human.ApplyOnlineState(human.Position, new Vector2(1, -1), human.Character.Health, true);
+        Require(human.AttackDirection == Vector2.down, "Lower-right facing attacks along the matching floor axis");
+        var swingPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Arena/FFA Items/RulerSwingEffect.prefab");
+        var swing = Object.Instantiate(swingPrefab).GetComponent<Escape4Now.Items.RulerSwingEffect>();
+        swing.Initialize(Vector2.right, 2, 90);
+        Require(swing.GetComponentInChildren<MeshFilter>().sharedMesh.triangles.Length > 0,
+            "The ruler shows main's filled attack wedge");
+        Require(botInput.IsBot && !botInput.UsesKeyboard, "Bots never claim a keyboard layout");
+        var hotplug = InputSystem.AddDevice<Gamepad>();
+        yield return null;
+        Require(botInput.IsBot, "Controller hotplug leaves the bot's input intact");
+        InputSystem.RemoveDevice(hotplug);
+        match.ReturnToSetup();
+        yield return null;
+
         // Explicitly paired gamepads must never drive both players from one device.
         var pad1 = InputSystem.AddDevice<Gamepad>();
         var pad2 = InputSystem.AddDevice<Gamepad>();

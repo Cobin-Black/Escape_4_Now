@@ -25,6 +25,8 @@ namespace Escape4Now.Multiplayer.RelayTesting
         [Min(3)] public float responseTimeout = 12;
         [Min(.25f)] public float probeInterval = 1;
         [Min(10)] public float hostWaitingTimeout = 180;
+        [Tooltip("Close an empty host room after the waiting timeout. Turn off for game rooms that wait for friends.")]
+        public bool limitHostWaiting = true;
 
         [Header("Pass Criteria")]
         [Min(1)] public int requiredRoundTrips = 5;

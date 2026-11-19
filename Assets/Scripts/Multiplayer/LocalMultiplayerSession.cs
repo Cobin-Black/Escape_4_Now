@@ -75,14 +75,17 @@ namespace Escape4Now.Multiplayer
         public static bool ShowItemObstacles => instance != null && instance.showItemObstacles;
         public static bool ShowKeyLocation => instance != null && instance.showKeyLocation;
 
-        // The lobby slot (0-3) whose controller should drive the shared actions this turn, or -1 for any device.
-        // ControllerHandling uses this so only the current player's controller moves their piece.
+        // The local device slot (0-3) allowed to drive the shared actions, or -1 for any device.
+        // Online always uses this computer's first slot; local play follows the turn's lobby slot.
         public static int ActiveInputSlot
         {
             get
             {
-                if (instance == null || !instance.MatchStarted || LanMultiplayerSession.Active
+                if (instance == null || !instance.MatchStarted
                     || instance.turns == null || instance.participants == null) return -1;
+                // Online, this computer controls one human through its first local device slot.
+                // The room checks whose turn it is; remote lobby slots never select our controller.
+                if (LanMultiplayerSession.Active) return 0;
                 if (instance.turns.CurrentTurnOwner == TurnOwner.Enemy)
                     return instance.monsterPlayerIndex >= 0 && !instance.IsBotPlayer(instance.monsterPlayerIndex)
                         ? instance.monsterPlayerIndex : -1;

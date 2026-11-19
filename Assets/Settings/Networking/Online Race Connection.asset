@@ -16,12 +16,13 @@ MonoBehaviour:
   region: 
   defaultProtocol: 0
   maximumPlayers: 4
-  testVersion: 21
+  testVersion: 22
   serviceTimeout: 30
   connectionTimeout: 30
   responseTimeout: 12
   probeInterval: 1
   hostWaitingTimeout: 180
+  limitHostWaiting: 0
   requiredRoundTrips: 5
   minimumObservationSeconds: 10
   connectAttemptTimeoutMilliseconds: 1000

@@ -40,7 +40,7 @@ public static class OnlineArenaLatencyChecks
         Require(view != null, "The saved online scene exposes guest movement settings");
         adapter.enabled = false;
         view.Configure(arena, 1);
-        Require(adapter.Apply(2, snapshot), "Initialize a guest with the host's snapshot");
+        Require(adapter.Apply(arena.Players.Count, snapshot), "Initialize a guest with the host's snapshot");
         var player = arena.Players[1];
         int revision = JsonUtility.FromJson<SnapshotInfo>(snapshot).actors[1].movementRevision;
         Vector2 start = player.Position;
@@ -54,9 +54,9 @@ public static class OnlineArenaLatencyChecks
         Require(Vector2.Distance(start, predicted) > .01f, "Guest movement responds before the next host reply");
         Require(player.Character.Health == health, "Predicting movement does not change health");
 
-        Require(adapter.Apply(2, snapshot), "Apply a delayed host update");
+        Require(adapter.Apply(arena.Players.Count, snapshot), "Apply a delayed host update");
         Require(Vector2.Distance(predicted, player.Position) < .001f, "Pending movement is replayed after a correction");
-        Require(adapter.Apply(2, snapshot), "Apply a repeated update");
+        Require(adapter.Apply(arena.Players.Count, snapshot), "Apply a repeated update");
         Require(Vector2.Distance(predicted, player.Position) < .001f, "Repeated updates do not double the predicted distance");
 
         var predictedMovement = player.CaptureMovement();
@@ -97,11 +97,11 @@ public static class OnlineArenaLatencyChecks
         Require(view.PendingFrames == 0 && player.Position == start, "A teleport or new round clears the old movement history");
 
         string paused = snapshot.Replace("\"paused\":false", "\"paused\":true");
-        Require(adapter.Apply(2, paused), "Apply host pause");
+        Require(adapter.Apply(arena.Players.Count, paused), "Apply host pause");
         Vector2 frozen = player.Position;
         view.Advance(direction, .2f);
         Require(player.Position == frozen && view.PendingFrames == 0, "Paused guests stay still");
-        Require(adapter.Apply(2, snapshot), "Resume from a host update");
+        Require(adapter.Apply(arena.Players.Count, snapshot), "Resume from a host update");
         CheckBlockers(adapter, arena, snapshot);
         CheckImmediateInput(adapter, arena, connection);
 
@@ -114,7 +114,7 @@ public static class OnlineArenaLatencyChecks
             potato.AdvanceOnlineClock(1000);
             Require(potato.Playing && potato.Holder == holder && holder.Alive,
                 "The guest clock never decides an explosion or elimination");
-            Require(adapter.Apply(2, snapshot), "Restore the host's clock");
+            Require(adapter.Apply(arena.Players.Count, snapshot), "Restore the host's clock");
         }
         Debug.Log("ONLINE ARENA LATENCY CHECKS PASSED: " + arena.Title);
     }
@@ -131,8 +131,8 @@ public static class OnlineArenaLatencyChecks
             int start = snapshot.IndexOf('[', snapshot.IndexOf("\"blockedCells\":", StringComparison.Ordinal));
             int end = snapshot.IndexOf(']', start);
             string blocked = snapshot.Substring(0, start + 1) + string.Join(",", blocks) + snapshot.Substring(end);
-            Require(adapter.Apply(2, blocked) && layout.blocked[point.x, point.y], "Guest prediction receives the host's temporary blockers");
-            Require(adapter.Apply(2, snapshot) && !layout.blocked[point.x, point.y], "The host can reopen a temporary blocked route");
+            Require(adapter.Apply(arena.Players.Count, blocked) && layout.blocked[point.x, point.y], "Guest prediction receives the host's temporary blockers");
+            Require(adapter.Apply(arena.Players.Count, snapshot) && !layout.blocked[point.x, point.y], "The host can reopen a temporary blocked route");
             return;
         }
         throw new InvalidOperationException("No open tile for the blocker replication check.");

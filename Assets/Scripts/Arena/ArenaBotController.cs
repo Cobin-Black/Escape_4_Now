@@ -33,7 +33,7 @@ namespace Escape4Now.Arena
         }
 
         // Straight ahead from the way this bot is facing, in floor (grid) space, the same direction its items attack in.
-        private Vector2 AttackDirection => player.Match.Map.GridDirection(player.FacingDirection).normalized;
+        private Vector2 AttackDirection => player.AttackDirection;
 
         private void Update()
         {

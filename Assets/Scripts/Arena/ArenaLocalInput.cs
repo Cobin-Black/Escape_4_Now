@@ -28,8 +28,9 @@ namespace Escape4Now.Arena
         public bool AttackPressed => isBot ? botAttack : attackAction != null && attackAction.WasPressedThisFrame();
         // Kept for existing callers.
         public bool TagPressed => PassPressed;
+        public bool UseItemPressed => AttackPressed;
         public Gamepad Gamepad { get; private set; }
-        public bool UsesKeyboard => Gamepad == null;
+        public bool UsesKeyboard => !isBot && Gamepad == null;
         public int KeyboardLayout { get; private set; } = -1;
 
         // Controller player: a private copy of the Player map that only listens to this controller.

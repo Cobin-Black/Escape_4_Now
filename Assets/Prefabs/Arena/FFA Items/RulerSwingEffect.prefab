@@ -47,7 +47,10 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Items.RulerSwingEffect
   duration: 0.2
   segments: 16
-  swingColor: {r: 0.1, g: 0.1, b: 0.1, a: 1}
+  swingColor: {r: 1, g: 0.85, b: 0.3, a: 0.9}
+  fillColor: {r: 1, g: 0.85, b: 0.3, a: 1}
+  lineWidth: 0.06
+  sortingOrder: 100
 --- !u!120 &7818382068100001677
 LineRenderer:
   serializedVersion: 3
