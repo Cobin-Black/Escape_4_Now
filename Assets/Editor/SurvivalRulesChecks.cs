@@ -269,7 +269,9 @@ public static class SurvivalRulesChecks
             SurvivalMonsterSpawnChecks.Check(map.Layout,mode.Objectives,mode.Rules);
             Require(mode.ActiveSurvivors.Count == (monsterSlot >= 0 ? count-1 : count),"AI and player-controlled setups retain the correct survivors");
             Debug.Log("SURVIVAL RUNTIME SPAWN CHECK PASSED: "+mode.ActiveSurvivors.Count+" survivors, monster slot "+monsterSlot+", seed "+map.LayoutSeed);
-            yield break;
+            // With -eventTriggers, keep going so the event checks run with the AI Monster on the map (Car Alarm lure).
+            if (Argument("-eventTriggers", "false") != "true")
+                yield break;
         }
         if (external != null)
             Require(mode.Turns.CopyTurnOrder().Length == 5 && mode.ActiveSurvivors.Count == 4, "Four survivors plus one external turn slot; no AI implementation");
