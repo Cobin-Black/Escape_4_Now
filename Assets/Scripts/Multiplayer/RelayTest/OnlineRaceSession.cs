@@ -33,7 +33,8 @@ namespace Escape4Now.Multiplayer.RelayTesting
         public bool Ready { get; private set; }
         public bool ProfileUpdating => profilePending || profileRevision == 0;
         public string Status { get; private set; } = "Host a private room or join with a room code.";
-        public int PlayerCount => match.ConnectedPlayers;
+        // Counts occupied seats, so a guest's summary agrees with the rows it shows.
+        public int PlayerCount => Enumerable.Range(0, Capacity).Count(IsSlotOccupied);
         public int Capacity => match.Capacity;
         public int LocalSlot => match.LocalPlayerIndex;
         public bool HasMonsterRole => modeMatch is OnlineSurvivalMatch;
@@ -63,10 +64,24 @@ namespace Escape4Now.Multiplayer.RelayTesting
             for (int step = 1; step < ProfileSkinCount; step++)
             {
                 int candidate = (current + direction * step + ProfileSkinCount) % ProfileSkinCount;
-                if (Skins.GetSkin(candidate)?.IsValid != true || Skins.IsTaken(candidate)) continue;
+                if (Skins.GetSkin(candidate)?.IsValid != true || SkinHeldByOtherPlayer(candidate, LocalSlot)) continue;
                 EditProfile(profilePending ? pendingName : SlotName(LocalSlot), candidate);
                 return;
             }
+        }
+        // Only a connected player's skin blocks another player. Open seats keep a placeholder skin for bots.
+        private bool SkinHeldByOtherPlayer(int skin, int slot)
+        {
+            int owner = Skins != null ? Skins.GetOwner(skin) : -1;
+            return owner >= 0 && owner != slot && IsSlotOccupied(owner);
+        }
+        // The host knows its connections. Guests use the occupied seats the host last published.
+        public bool IsSlotOccupied(int slot)
+        {
+            if (slot < 0 || slot >= Capacity || !match.IsActive) return false;
+            if (match.IsHost) return match.IsSlotConnected(slot);
+            if (LocalSlot < 0) return false;
+            return slot == 0 || slot == LocalSlot || slot < guestOccupied.Length && guestOccupied[slot];
         }
         public int ProfileSkinIndex(int slot) => Skins != null ? Skins.GetSkinIndex(slot) : -1;
         public bool IsSlotReady(int slot) => ready.Contains(slot);
@@ -90,6 +105,12 @@ namespace Escape4Now.Multiplayer.RelayTesting
         private readonly int[] acceptedProfiles = new int[4];
         private readonly RelayMessageChannel[] profileConnections = new RelayMessageChannel[4];
         private float nextLobby;
+        // Host: the connection last seen in each guest seat. A change means the previous player left.
+        private readonly IMatchMessageConnection[] seatOwners = new IMatchMessageConnection[4];
+        // Guest: seats the host reported as occupied. A middle seat can be empty while later seats are not.
+        private readonly bool[] guestOccupied = new bool[4];
+        // The skin this computer's player last chose. It is requested again in the next room after a retry.
+        private int preferredSkin = Skin_Handler.NoSkin;
 
         [Serializable]
         private sealed class LobbyMessage
@@ -100,6 +121,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
             public int profileRevision;
             public int[] readySlots, skins;
             public int[] profileRevisions;
+            public int[] occupiedSlots;
             public string[] names;
         }
 
@@ -155,15 +177,38 @@ namespace Escape4Now.Multiplayer.RelayTesting
 
         private void RemovePeer(ulong peer)
         {
-            if (channels.TryGetValue(peer, out var previous))
-            {
-                int slot = match.GetRelayedSlot(previous);
-                if (slot >= 0 && slot < acceptedProfiles.Length) acceptedProfiles[slot] = 0;
-            }
             if (channels.TryGetValue(peer, out var channel)) channel.Dispose();
             channels.Remove(peer);
+            // Free the departed player's seat now, before a replacement can be given it.
+            if (IsHost && !Playing) SyncSeats();
+            // Any change to the room asks everyone to confirm Ready again.
             ready.Clear();
             Ready = false;
+        }
+
+        // Host: compare each guest seat's connection with the one seen before. A departure, or a new
+        // player taking a freed seat (possibly in the same frame), clears the previous player's identity.
+        private void SyncSeats()
+        {
+            for (int slot = 1; slot < seatOwners.Length; slot++)
+            {
+                var owner = match.GetSlotConnection(slot);
+                if (ReferenceEquals(seatOwners[slot], owner)) continue;
+                if (seatOwners[slot] != null) ReleaseSeat(slot);
+                seatOwners[slot] = owner;
+                nextLobby = 0;
+            }
+        }
+
+        // The seat returns to its default name and a free placeholder skin (used by a bot if filled).
+        private void ReleaseSeat(int slot)
+        {
+            SetSlotName(slot, null);
+            Skins?.Release(slot);
+            Skins?.FillMissing();
+            ready.Remove(slot);
+            acceptedProfiles[slot] = 0;
+            profileConnections[slot] = null;
         }
 
         private void ReceiveMatch(ulong sender, FastBufferReader reader)
@@ -186,6 +231,8 @@ namespace Escape4Now.Multiplayer.RelayTesting
             if (message == null) return;
             if (IsHost && message.request && channels.TryGetValue(sender, out var channel))
             {
+                // Release a departed player's seat first, so it cannot erase the replacement's new profile later.
+                SyncSeats();
                 // Ownership comes from the authenticated connection, never a supplied player index.
                 int slot = match.GetRelayedSlot(channel);
                 if (slot < 1) return;
@@ -213,7 +260,15 @@ namespace Escape4Now.Multiplayer.RelayTesting
         {
             if (!CanEditProfile || !relay.Active || Playing) return;
             lastAccountName = AccountService.DisplayName;
+            if (Skins?.GetSkin(skin)?.IsValid == true) preferredSkin = skin;
             QueueProfile(name, skin);
+        }
+
+        // The remembered skin, if it is still available in this room; otherwise the seat's current skin.
+        private int RequestedSkin()
+        {
+            bool usable = preferredSkin >= 0 && Skins?.GetSkin(preferredSkin)?.IsValid == true && !SkinHeldByOtherPlayer(preferredSkin, LocalSlot);
+            return usable ? preferredSkin : ProfileSkinIndex(LocalSlot);
         }
 
         private void QueueProfile(string name, int skin)
@@ -249,6 +304,12 @@ namespace Escape4Now.Multiplayer.RelayTesting
             foreach (int slot in message.readySlots) if (slot >= 0 && slot < Capacity) ready.Add(slot);
             Ready = ready.Contains(LocalSlot);
             FillWithBots = message.fillWithBots;
+            if (message.occupiedSlots != null)
+            {
+                Array.Clear(guestOccupied, 0, guestOccupied.Length);
+                foreach (int slot in message.occupiedSlots)
+                    if (slot >= 0 && slot < Capacity && slot < guestOccupied.Length) guestOccupied[slot] = true;
+            }
             if (modeMatch is OnlineSurvivalMatch survival) survival.MonsterSlot = message.monsterSlot;
             if (message.names?.Length == Capacity)
                 for (int i = 0; i < Capacity; i++) SetSlotName(i, message.names[i]);
@@ -269,7 +330,8 @@ namespace Escape4Now.Multiplayer.RelayTesting
             readySlots = ready.ToArray(), monsterSlot = MonsterSlot, fillWithBots = FillWithBots,
             names = Enumerable.Range(0, Capacity).Select(SlotName).ToArray(),
             skins = Enumerable.Range(0, Capacity).Select(ProfileSkinIndex).ToArray(),
-            profileRevisions = acceptedProfiles.Take(Capacity).ToArray()
+            profileRevisions = acceptedProfiles.Take(Capacity).ToArray(),
+            occupiedSlots = Enumerable.Range(0, Capacity).Where(IsSlotOccupied).ToArray()
         };
 
         private void SetSlotName(int slot, string name)
@@ -283,10 +345,19 @@ namespace Escape4Now.Multiplayer.RelayTesting
             string previous = SlotName(slot);
             SetSlotName(slot, name);
             string requested = SlotName(slot);
-            if (Enumerable.Range(0, Capacity).Any(i => i != slot &&
+            // Only connected players' names count. An open seat's leftover or default name never blocks a profile.
+            if (Enumerable.Range(0, Capacity).Any(i => i != slot && IsSlotOccupied(i) &&
                 string.Equals(SlotName(i), requested, StringComparison.OrdinalIgnoreCase)))
                 SetSlotName(slot, previous);
-            Skins?.TryAssign(slot, skin);
+            if (Skins != null)
+            {
+                // An open seat's placeholder skin moves aside for a connected player who chose it.
+                int owner = Skins.GetOwner(skin);
+                if (owner >= 0 && owner != slot && !IsSlotOccupied(owner)) Skins.Release(owner);
+                Skins.TryAssign(slot, skin);
+                // Every seat keeps a unique skin, even if the requested one could not be assigned.
+                Skins.FillMissing();
+            }
             ready.Remove(slot);
             if (slot == 0) Ready = false;
             nextLobby = 0;
@@ -379,6 +450,8 @@ namespace Escape4Now.Multiplayer.RelayTesting
             }
             if (!IsHost && relay.Network.IsConnectedClient && !channels.ContainsKey(NetworkManager.ServerClientId))
                 AddPeer(NetworkManager.ServerClientId);
+            // Catches seats freed by the gameplay layer's own timeouts as well as Relay disconnects.
+            if (IsHost && !Playing) SyncSeats();
             if (Playing || !IsHost || Time.realtimeSinceStartup < nextLobby) return;
             nextLobby = Time.realtimeSinceStartup + lobbyPublishInterval;
             var lobby = CaptureLobby();
@@ -391,7 +464,7 @@ namespace Escape4Now.Multiplayer.RelayTesting
         {
             if (string.Equals(lastAccountName, name, StringComparison.Ordinal)) return;
             lastAccountName = name;
-            QueueProfile(name, profilePending ? pendingSkin : ProfileSkinIndex(LocalSlot));
+            QueueProfile(name, profilePending ? pendingSkin : RequestedSkin());
         }
 
         // A failed join or timed-out lobby is finished. Clear both networking layers before trying again.
@@ -410,9 +483,15 @@ namespace Escape4Now.Multiplayer.RelayTesting
             Ready = FillWithBots = profilePending = false;
             Array.Clear(acceptedProfiles, 0, acceptedProfiles.Length);
             Array.Clear(profileConnections, 0, profileConnections.Length);
+            Array.Clear(seatOwners, 0, seatOwners.Length);
+            Array.Clear(guestOccupied, 0, guestOccupied.Length);
             profileRevision = 0;
             lastAccountName = pendingName = null;
             nextLobby = nextProfile = 0;
+            // Names and skins from the previous room belong to players who are not in the next one.
+            // This player's own name and remembered skin are sent again once the new room assigns a seat.
+            for (int slot = 0; slot < Skin_Handler.MaxPlayers; slot++) SetSlotName(slot, null);
+            Skins?.ResetToDefaults();
         }
 
         public void Leave()

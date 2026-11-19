@@ -262,6 +262,8 @@ namespace Escape4Now.Multiplayer
         }
 
         public bool IsSlotConnected(int slot) => slot == 0 || peers.Exists(peer => peer.slot == slot && !peer.wire.Closed);
+        // Host: the open connection holding a guest seat, or null. Lets the lobby tell a replacement from the previous player.
+        public IMatchMessageConnection GetSlotConnection(int slot) => peers.Find(peer => peer.slot == slot && slot > 0 && !peer.wire.Closed)?.wire;
 
         //Polls sockets using real time, including while the game is paused after a win.
         private void Update()
@@ -482,6 +484,7 @@ namespace Escape4Now.Multiplayer
         public void ChooseRaceOpponent(int index) => RaceActions.ChooseRaceOpponent(index);
         public void ChooseNumber(int value) => RaceActions.ChooseNumber(value);
         public bool Failed => failed;
+        public bool IsActive => active;
         public bool IsHost => host;
         public int Capacity => capacity;
         public bool ChoosingNumber => RaceActions.ChoosingNumber;

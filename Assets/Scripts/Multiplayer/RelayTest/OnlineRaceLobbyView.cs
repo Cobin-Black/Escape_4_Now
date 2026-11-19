@@ -219,7 +219,8 @@ namespace Escape4Now.Multiplayer.RelayTesting
                 row.root.SetActive(slot < session.Capacity || row.locker != null && slot < connection.Settings.maximumPlayers);
                 if (!row.root.activeSelf) continue;
                 bool available = slot < session.Capacity;
-                bool connected = available && slot < session.PlayerCount;
+                // Seats are not contiguous: P2 can leave while P3 stays, so ask about this seat directly.
+                bool connected = available && session.IsSlotOccupied(slot);
                 bool isReady = connected && session.IsSlotReady(slot);
                 int skinIndex = session.ProfileSkinIndex(slot);
                 row.locker?.Present(connected, available, session.FillWithBots, connected && slot == session.LocalSlot && editProfile,

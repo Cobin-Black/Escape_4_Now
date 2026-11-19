@@ -55,6 +55,7 @@ public static class OnlineLobbyChecks
         Directory.CreateDirectory("Logs/OnlineLobbyPreviews");
         yield return CheckRoomRecovery();
         yield return CheckProfileReplication();
+        yield return CheckSeatOccupancy();
         foreach (string scene in new[] { "OnlineRace", "OnlineSurvival", "OnlineFreeForAll", "OnlineHotPotato" })
         {
             yield return SceneManager.LoadSceneAsync(scene);
@@ -256,6 +257,139 @@ public static class OnlineLobbyChecks
             Require(!guest.ProfileUpdating, scene + " unchanged names do not create repeated updates");
         }
         Debug.Log("ONLINE PROFILE CHECKS PASSED: login, renamed host/guest, stale updates, acknowledgements and readiness in all four modes.");
+    }
+
+    // Seats are not contiguous: P2 can leave while P3/P4 stay, and a new player can take the freed seat.
+    // Runs the host's real seat assignment with in-process connections, then applies its state on a guest.
+    private static IEnumerator CheckSeatOccupancy()
+    {
+        var type = typeof(OnlineRaceSession).GetNestedType("LobbyMessage", BindingFlags.NonPublic);
+        object Profile(string name, int revision) =>
+            JsonUtility.FromJson("{\"name\":\"" + name + "\",\"skin\":-1,\"profileRevision\":" + revision + "}", type);
+        foreach (string scene in new[] { "OnlineRace", "OnlineSurvival", "OnlineFreeForAll", "OnlineHotPotato" })
+        {
+            yield return SceneManager.LoadSceneAsync(scene);
+            var host = Object.FindFirstObjectByType<OnlineRaceSession>();
+            var view = Object.FindFirstObjectByType<OnlineRaceLobbyView>();
+            var transport = Object.FindFirstObjectByType<Escape4Now.Multiplayer.LanMultiplayerSession>();
+            Require(transport.StartRelayedHost(4, "SEATS"), "Start seat test host");
+            var guests = new OnlineArenaLatencyChecks.Connection[3];
+            for (int i = 0; i < guests.Length; i++)
+            {
+                guests[i] = new OnlineArenaLatencyChecks.Connection();
+                Require(transport.AcceptRelayedGuest(guests[i]), scene + " accepts guest P" + (i + 2));
+                guests[i].Receive(new Escape4Now.Multiplayer.LanMessage { kind = "hello", code = "SEATS" });
+            }
+            yield return null;
+            yield return null;
+            for (int i = 0; i < guests.Length; i++)
+                Require(transport.GetRelayedSlot(guests[i]) == i + 1, scene + " assigns P" + (i + 2) + " its own seat");
+            Call(host, "SyncSeats");
+            string[] names = { "LEAVER", "STAYER", "THIRD" };
+            for (int slot = 1; slot < 4; slot++) Call(host, "AcceptProfile", slot, Profile(names[slot - 1], 1));
+            var readySlots = Reference<System.Collections.Generic.HashSet<int>>(host, "ready");
+            readySlots.Add(2);
+            readySlots.Add(3);
+
+            // P2 leaves while P3 and P4 stay.
+            guests[0].Dispose();
+            Call(host, "SyncSeats");
+            Require(!host.IsSlotOccupied(1) && host.IsSlotOccupied(2) && host.IsSlotOccupied(3) && host.PlayerCount == 3,
+                scene + " P2 leaving keeps P3 and P4 seated");
+            Require(host.SlotName(1) == "Player 2" && host.SlotName(2) == "STAYER" && host.SlotName(3) == "THIRD",
+                scene + " the freed seat drops the departed player's name only");
+            Require(!readySlots.Contains(1) && readySlots.Contains(2) && readySlots.Contains(3),
+                scene + " releasing a seat keeps the remaining players' Ready state");
+            Require(!transport.IsSlotConnected(1) && transport.IsSlotConnected(2) && transport.IsSlotConnected(3),
+                scene + " Fill Bots sees the freed P2 seat as open");
+            Require(UniqueSkins(host), scene + " the freed seat keeps a unique placeholder skin for a bot");
+            yield return null;
+            string open = Reference<string>(view, "emptySlotText");
+            Require(RowText(view, 1, "state") == open && RowText(view, 2, "name") == "STAYER" && RowText(view, 3, "name") == "THIRD",
+                scene + " host lobby shows P3 and P4 after P2 leaves");
+
+            // A departed player's name no longer blocks a profile; a connected player's name still does.
+            Call(host, "AcceptProfile", 3, Profile("LEAVER", 2));
+            Require(host.SlotName(3) == "LEAVER", scene + " an old name does not block a valid profile");
+            Call(host, "AcceptProfile", 3, Profile("STAYER", 3));
+            Require(host.SlotName(3) == "LEAVER", scene + " a connected player's name is still protected");
+            object hostState = JsonUtility.FromJson(JsonUtility.ToJson(Call(host, "CaptureLobby")), type);
+            var occupied = (int[])type.GetField("occupiedSlots").GetValue(hostState);
+            Require(occupied != null && string.Join(",", occupied) == "0,2,3", scene + " the host publishes the occupied seats");
+
+            // A replacement takes the freed seat and starts its own profile revisions.
+            yield return null;
+            var replacement = new OnlineArenaLatencyChecks.Connection();
+            Require(transport.AcceptRelayedGuest(replacement), scene + " accepts a replacement player");
+            replacement.Receive(new Escape4Now.Multiplayer.LanMessage { kind = "hello", code = "SEATS" });
+            yield return null;
+            yield return null;
+            Require(transport.GetRelayedSlot(replacement) == 1, scene + " the replacement joins the freed P2 seat");
+            Call(host, "SyncSeats");
+            Call(host, "AcceptProfile", 1, Profile("NEWCOMER", 1));
+            var revisions = (int[])type.GetField("profileRevisions").GetValue(Call(host, "CaptureLobby"));
+            Require(host.SlotName(1) == "NEWCOMER" && host.IsSlotOccupied(1) && revisions[1] == 1,
+                scene + " the replacement's first profile is accepted and acknowledged");
+
+            // P4 leaves and a new player takes that seat before the lobby checks seats again.
+            guests[2].Dispose();
+            yield return null;
+            var quick = new OnlineArenaLatencyChecks.Connection();
+            Require(transport.AcceptRelayedGuest(quick), scene + " accepts a quick replacement");
+            quick.Receive(new Escape4Now.Multiplayer.LanMessage { kind = "hello", code = "SEATS" });
+            yield return null;
+            yield return null;
+            Require(transport.GetRelayedSlot(quick) == 3, scene + " the quick replacement takes P4");
+            Call(host, "SyncSeats");
+            Require(host.SlotName(3) == "Player 4" && !readySlots.Contains(3),
+                scene + " a quick replacement does not inherit the previous name or Ready");
+            Call(host, "AcceptProfile", 3, Profile("QUICK", 1));
+            Require(host.SlotName(3) == "QUICK", scene + " the quick replacement's profile is accepted");
+
+            // Retrying clears the previous room's names, but keeps this player's chosen skin.
+            typeof(OnlineRaceSession).GetField("preferredSkin", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(host, 2);
+            Call(host, "ResetLobby");
+            for (int slot = 0; slot < 4; slot++)
+                Require(host.SlotName(slot) == "Player " + (slot + 1), scene + " a retry clears the previous room's names");
+            Require((int)Call(host, "RequestedSkin") == 2, scene + " a retry keeps this player's skin choice");
+
+            // A guest in P4 receives the host's seats while P2 was empty.
+            yield return SceneManager.LoadSceneAsync(scene);
+            var guest = Object.FindFirstObjectByType<OnlineRaceSession>();
+            view = Object.FindFirstObjectByType<OnlineRaceLobbyView>();
+            transport = Object.FindFirstObjectByType<Escape4Now.Multiplayer.LanMultiplayerSession>();
+            var wire = new OnlineArenaLatencyChecks.Connection();
+            Require(transport.JoinRelayedHost(wire, "SEATS"), "Start seat test guest");
+            wire.Receive(new Escape4Now.Multiplayer.LanMessage { kind = "lobby", player = 3, count = 3, value = 4 });
+            yield return null;
+            Require(guest.LocalSlot == 3, scene + " guest is seated as P4");
+            Call(guest, "ApplyLobbyState", hostState);
+            Require(!guest.IsSlotOccupied(1) && guest.IsSlotOccupied(2) && guest.IsSlotOccupied(3) && guest.PlayerCount == 3,
+                scene + " guests receive the host's occupied seats");
+            yield return null;
+            open = Reference<string>(view, "emptySlotText");
+            Require(RowText(view, 1, "state") == open && RowText(view, 2, "name") == "STAYER" && RowText(view, 3, "name") == "LEAVER",
+                scene + " guest lobby matches the host's seats and names");
+        }
+        Debug.Log("ONLINE SEAT CHECKS PASSED: middle-seat departures, guest occupancy, replacements, stale names and retries in all four modes.");
+    }
+
+    private static bool UniqueSkins(OnlineRaceSession session)
+    {
+        var seen = new System.Collections.Generic.HashSet<int>();
+        for (int slot = 0; slot < session.Capacity; slot++)
+        {
+            int skin = session.ProfileSkinIndex(slot);
+            if (skin >= 0 && !seen.Add(skin)) return false;
+        }
+        return true;
+    }
+
+    private static string RowText(OnlineRaceLobbyView view, int slot, string field)
+    {
+        var rows = (Array)typeof(OnlineRaceLobbyView).GetField("rows", BindingFlags.Instance | BindingFlags.NonPublic).GetValue(view);
+        object row = rows.GetValue(slot);
+        return ((Text)row.GetType().GetField(field).GetValue(row)).text;
     }
 
     private static object Call(object target, string method, params object[] args) => target.GetType()

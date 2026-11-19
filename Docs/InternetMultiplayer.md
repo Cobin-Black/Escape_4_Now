@@ -137,7 +137,9 @@ Select the Online Arena Presentation component in either online arena scene to e
 
 Hot Potato guests animate the remaining time between updates and estimate transit time from measured ping. The host confirms the holder, explosions and eliminations. Network travel time still affects when confirmed events arrive.
 
-The shared Online Race Connection asset now uses connection version 22. All participants need the updated build, which includes movement and lobby profile acknowledgements. The existing version check rejects earlier builds before they enter the room.
+The shared Online Race Connection asset now uses connection version 23. All participants need the updated build, which includes movement, lobby profile acknowledgements and the host's list of occupied seats. The existing version check rejects earlier builds before they enter the room.
+
+Seats are not filled in order: if P2 leaves while P3 and P4 stay, P2's card shows an open (or bot) seat and P3/P4 keep their cards. The host decides occupancy from its connections and includes the occupied seats in each lobby update, so every computer shows the same players. When a guest leaves, or another player takes that seat, the host clears the seat's name, skin, Ready state and profile revision; the seat keeps a free placeholder skin for a bot. Leaving still asks the remaining players to select Ready again. Duplicate-name checks only compare connected players, so a departed player's name never blocks someone else. Hosting or joining again clears names from the previous room but keeps the skin this player last chose.
 
 Online rooms publish the completed account login and later display-name changes. Guest profile requests are retried until the host acknowledges the newest revision, so an early request cannot be lost during slot assignment. Repeated requests do not reset Ready. A changed name or skin needs Ready again. The retry interval is editable on Online Race Session in the Inspector; all four modes share this room code.
 
@@ -149,6 +151,7 @@ Unity currently lists Authentication as free and Relay's first **50 average mont
 
 ## Test status
 
+- Lobby seat update (connection version 23) is covered by `OnlineLobbyChecks.ModeScreens` in all four modes with in-process connections: P2 leaving while P3/P4 stay (host and guest lobby rows), the host's published occupied seats, a replacement taking the freed seat (including between two lobby updates), old names no longer blocking profiles, profile acknowledgements, Ready, bot-fill occupancy and retry cleanup. Live Relay testing with three or four computers is pending.
 - Guest response update on 2026-11-18 passed Unity checks for a simulated 200 ms gap between updates, partial input acknowledgements, repeated snapshots, prediction limits, pause/teleport resets, temporary blockers, immediate movement/release packets, and the guest potato clock. Both arena modes, the local arena controls, Race HUD, all online room scenes and saved connection references passed. Live Relay testing of this update with teammates is pending.
 - Presentation update on 2026-11-17 passed Unity Play Mode checks for all four online rooms, local and online Race battle dice, local arena controls, and Survival HUD/input. The shared palette is assigned in all eight mode scenes. Live Relay testing of this update with teammates is pending.
 - Native Windows builds and saved-reference/Input System checks: **passed**.
