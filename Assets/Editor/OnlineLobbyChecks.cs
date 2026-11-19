@@ -119,6 +119,7 @@ public static class OnlineLobbyChecks
                 hostMatch.Players[0].RecordOnlineSwing();
             }
             string snapshot = arena.Capture();
+            string hostBotName = arena.SlotName(2);
             yield return SceneManager.LoadSceneAsync(scene);
             arena = Object.FindFirstObjectByType<OnlineArenaMatch>();
             var guestTransport = Object.FindFirstObjectByType<Escape4Now.Multiplayer.LanMultiplayerSession>();
@@ -129,6 +130,8 @@ public static class OnlineLobbyChecks
             yield return null;
             yield return null;
             Require(arena.Started && !guestTransport.Failed, scene + " guest accepts the host snapshot");
+            Require(hostBotName.EndsWith("(BOT)") && arena.SlotName(2) == hostBotName,
+                scene + " guests see the bot name the host picked (" + arena.SlotName(2) + ")");
             var guestMatch = Object.FindFirstObjectByType<Escape4Now.Arena.ArenaMatch>();
             Require(!guestMatch.Players[1].IsBot && guestMatch.Players[2].IsBot,
                 scene + " preserves human and bot identities on the guest");
@@ -538,13 +541,21 @@ public static class OnlineLobbyChecks
                     Require(guest.LastLobby != null && guest.LastLobby.value == seats, scene + " guests learn the match size before it starts");
                 var arena = Object.FindFirstObjectByType<Escape4Now.Arena.ArenaMatch>();
                 var local = Object.FindFirstObjectByType<Escape4Now.Multiplayer.LocalMultiplayerSession>();
+                var botNames = new System.Collections.Generic.HashSet<string>();
+                var online = Object.FindFirstObjectByType<OnlineArenaMatch>();
                 for (int slot = 0; slot < seats; slot++)
                 {
                     bool bot = slot >= roomSize;
-                    if (Object.FindFirstObjectByType<OnlineArenaMatch>() != null)
+                    if (online != null)
                         Require(arena.Players[slot].IsBot == bot, scene + " seat P" + (slot + 1) + (bot ? " is a bot" : " is a player"));
                     else Require(local.IsBotPlayer(slot) == bot, scene + " seat P" + (slot + 1) + (bot ? " is a bot" : " is a player"));
+                    // Bots get a random, tagged name from Bot Names; players keep theirs.
+                    string name = online != null ? online.SlotName(slot) : local.GetPlayerName(slot);
+                    if (bot) Require(name.EndsWith("(BOT)") && name.Length <= Escape4Now.Player.BotNameList.MaxLength && botNames.Add(name),
+                        scene + " bot P" + (slot + 1) + " has its own random bot name (" + name + ")");
+                    else Require(name == "Player " + (slot + 1), scene + " player P" + (slot + 1) + " keeps their name (" + name + ")");
                 }
+                Require(Resources.Load<Escape4Now.Player.BotNameList>("Bot Names") != null, "The editable Bot Names list loads");
             }
 
             // A guest back in the lobby ignores the previous match's updates and keeps asking for a seat.

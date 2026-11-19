@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6ede33185920e1faa52e5e0c9eec3c40, type: 3}
+  m_Name: Bot Names
+  m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Player.BotNameList
+  names:
+  - Pop Quiz
+  - Hall Pass
+  - Recess
+  - Doodle
+  - Sparky
+  - Crayon
+  - Eraser
+  - Mr Chalk
+  - Ms Ruler
+  - Glue Stick
+  - Lunchbox
+  - Homework
+  - Backpack
+  - Detention
+  - Gym Sock
+  - Pencil
+  - Sharpie
+  - Locker
+  - Field Trip
+  - Spitball
+  - Paperclip
+  - Bookworm
+  - Snack Time
+  format: '{0} (BOT)'

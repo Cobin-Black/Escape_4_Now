@@ -248,6 +248,22 @@ namespace Escape4Now.Multiplayer
         internal bool StartNetworkMatch(int count) => gameMode != null && gameMode.SupportsLan && CreateParticipants(count);
 
 
+        // Bots get a random name from Bot Names for this match. Only the computer running the match marks
+        // bots, so online guests keep the names the host sends instead of picking their own.
+        private void NameBots(int count)
+        {
+            var bots = new bool[count];
+            var current = new string[count];
+            for (int i = 0; i < count; i++)
+            {
+                bots[i] = IsBotPlayer(i);
+                current[i] = GetPlayerName(i);
+            }
+            string[] named = Escape4Now.Player.BotNameList.Assign(bots, current);
+            for (int i = 0; i < count && i < playerNames.Length; i++)
+                if (bots[i]) playerNames[i] = named[i];
+        }
+
         // Creates the players and Monster for the selected game mode.
         // Check setup and prepare the chosen mode before cloning players or starting the timer.
         private bool CreateParticipants(int count, int? hostSeed = null)
@@ -259,6 +275,7 @@ namespace Escape4Now.Multiplayer
                 return false;
             }
 
+            NameBots(count);
             var usedNames = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
             if (skinHandler != null && !skinHandler.AllAssigned(count))
             { status = "Each player needs to pick a skin."; return false; }

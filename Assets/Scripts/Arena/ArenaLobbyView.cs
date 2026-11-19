@@ -530,9 +530,11 @@ namespace Escape4Now.Arena
             for (int i = 0; i < playerCount; i++)
             {
                 bots[i] = IsBot(i);
-                labels[i] = bots[i] ? "BOT " + (i + 1) : names[i].text;
+                labels[i] = names[i].text;
                 looks[i] = skins[i].value - 1;
             }
+            // Bots get a random name from Bot Names, never one a player is using.
+            labels = Escape4Now.Player.BotNameList.Assign(bots, labels);
 
             match.StartMatch(playerCount, labels, looks, bots);
             bool failed = !string.IsNullOrEmpty(match.Error);

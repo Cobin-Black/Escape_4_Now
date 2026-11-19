@@ -146,11 +146,14 @@ namespace Escape4Now.Multiplayer.RelayTesting
             var slots = Enumerable.Range(0, count).ToArray();
             var defaults = slots.Select(_ => -1).ToArray();
             skinIndices ??= slots.Select(slot => ProfileSkins != null ? ProfileSkins.GetSkinIndex(slot) : -1).ToArray();
-            // The host names its bots so every guest sees "BOT 3" in the HUD and results.
             bool[] bots = seed.HasValue ? replicatedBots : slots.Select(slot => botSlots != null && slot < botSlots.Length && botSlots[slot]).ToArray();
-            if (bots != null)
+            // The host picks its bots' random names and sends them in its updates; guests keep those names.
+            if (bots != null && !seed.HasValue)
+            {
+                string[] named = Escape4Now.Player.BotNameList.Assign(bots, slots.Select(SlotName).ToArray());
                 foreach (int slot in slots)
-                    if (bots[slot]) names[slot] = "BOT " + (slot + 1);
+                    if (bots[slot]) names[slot] = named[slot];
+            }
             started = arena.StartMatch(count, slots.Select(SlotName).ToArray(), defaults, skinIndices, seed, bots);
             if (!started) return false;
             disconnected = false;
