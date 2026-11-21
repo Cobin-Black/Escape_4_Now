@@ -5,19 +5,23 @@ using static Escape4Now.Menus.ArcadeMenuKit;
 
 namespace Escape4Now.Menus
 {
-    //The main menu's leaderboard: one tab per mode, showing wins, losses, win rate, fastest time,
-    //and finally how many of the wins were online. Online games already count in the wins, losses and win rate.
+    //The main menu's leaderboard: one tab per mode. Local and online games are shown apart, each with its own
+    //wins, losses and win rate, so online games never mix into the local numbers. Race and Monster tabs add the fastest time.
     public sealed class LeaderboardPanel
     {
         private const int Rows = 10;
-        private const float RowHeight = 36f;
+        private const float RowHeight = 34f;
         private static readonly string[] Boards = { AccountStats.Race, AccountStats.FreeForAll, AccountStats.HotPotato, AccountStats.MonsterRole, AccountStats.Survivor };
         private static readonly string[] Tabs = { "RACE", AccountStats.ModeName(AccountStats.FreeForAll), "HOT POTATO", "AS MONSTER", "AS SURVIVOR" };
-        //Column positions from the left of the panel: #, PLAYER, WINS, LOSSES, WIN RATE, FASTEST, ONLINE WINS.
-        private static readonly float[] Columns = { 0f, 40f, 240f, 305f, 390f, 475f, 560f };
-        private const int FastestColumn = 5;
-        private const int OnlineColumn = 6;
-        private const string OnlineNote = "Wins, losses and win rate include online games.";
+        //Columns from the left of the panel: #, PLAYER, LOCAL W / L / WIN %, ONLINE W / L / WIN %, FASTEST.
+        //The rank and name read left to right; every number is centered under its heading.
+        private static readonly float[] ColumnX = { 6f, 40f, 260f, 304f, 350f, 424f, 468f, 514f, 581f };
+        private static readonly float[] ColumnWidth = { 28f, 210f, 44f, 44f, 56f, 44f, 44f, 56f, 70f };
+        private const int NameColumn = 1;
+        private const int FastestColumn = 8;
+        //Group headings above the two sets of columns.
+        private const float LocalX = 258f, OnlineX = 422f, GroupWidth = 150f;
+        private const string Note = "Ranked by all wins. Local and online games are counted separately.";
 
         private int board;
         private bool requested;
@@ -57,37 +61,70 @@ namespace Escape4Now.Menus
         private void DrawTable(Rect inner, Color accent)
         {
             float y = inner.y + 100f;
-            string[] headers = { "#", "PLAYER", "WINS", "LOSSES", "WIN RATE", "FASTEST", "ONLINE WINS" };
             GUIStyle headerStyle = Text(MonoBoldFont, 12);
+            Group(new Rect(inner.x + LocalX, y, GroupWidth, 18f), "LOCAL", Muted, headerStyle);
+            Group(new Rect(inner.x + OnlineX, y, GroupWidth, 18f), "ONLINE", Muted, headerStyle);
+            y += 20f;
+            string[] headers = { "#", "PLAYER", "W", "L", "WIN %", "W", "L", "WIN %", "FASTEST" };
+            GUIStyle centeredHeader = Text(MonoBoldFont, 12, TextAnchor.MiddleCenter);
             for (int i = 0; i < headers.Length; i++)
-                if (i != FastestColumn || ShowsFastest) Label(new Rect(inner.x + ColumnX(i), y, 120f, 20f), headers[i], headerStyle, Muted);
+                if (i != FastestColumn || ShowsFastest)
+                    Label(Cell(inner.x, y, 20f, i), headers[i], i <= NameColumn ? headerStyle : centeredHeader, Muted);
 
             GUIStyle rowStyle = Text(MonoFont, 15);
+            GUIStyle numberStyle = Text(MonoFont, 15, TextAnchor.MiddleCenter);
             for (int i = 0; i < entries.Count; i++)
             {
                 BoardEntry entry = entries[i];
                 Rect row = new Rect(inner.x, y + 24f + i * RowHeight, inner.width, RowHeight - 4f);
                 bool me = entry.Name == AccountService.DisplayName;
                 Fill(row, me ? WithAlpha(accent, 0.2f) : PanelDark);
-                int played = entry.Wins + entry.Losses;
                 string[] cells =
                 {
-                    entry.Rank.ToString(), entry.Name, entry.Wins.ToString(), entry.Losses.ToString(),
-                    played > 0 ? Mathf.RoundToInt(entry.Wins * 100f / played) + "%" : "--",
-                    entry.Fastest > 0f ? FormatTime(entry.Fastest) : "--",
-                    //"5 of 12" shows online wins are part of the wins total, not extra wins.
-                    entry.OnlineWins + " of " + entry.Wins
+                    entry.Rank.ToString(), FitName(entry.Name, rowStyle, ColumnWidth[NameColumn]),
+                    entry.LocalWins.ToString(), entry.LocalLosses.ToString(), Rate(entry.LocalWins, entry.LocalLosses),
+                    entry.OnlineWins.ToString(), entry.OnlineLosses.ToString(), Rate(entry.OnlineWins, entry.OnlineLosses),
+                    entry.Fastest > 0f ? FormatTime(entry.Fastest) : "--"
                 };
                 for (int c = 0; c < cells.Length; c++)
-                    if (c != FastestColumn || ShowsFastest) Label(new Rect(row.x + ColumnX(c) + 6f, row.y, 120f, row.height), cells[c], rowStyle, Color.white);
+                    if (c != FastestColumn || ShowsFastest)
+                        Label(Cell(row.x, row.y, row.height, c), cells[c], c <= NameColumn ? rowStyle : numberStyle, Color.white);
             }
-            //Answers "does online change the ratio?" right under the table.
             float noteY = y + 24f + entries.Count * RowHeight;
-            Label(new Rect(inner.x, noteY, inner.width, 18f), OnlineNote, Text(MonoFont, 11), Muted);
+            Label(new Rect(inner.x, noteY, inner.width, 18f), Note, Text(MonoFont, 11), Muted);
         }
 
-        //Online wins move into the fastest-time position on tabs without a timer, so there is no gap.
-        private float ColumnX(int column) => column == OnlineColumn && !ShowsFastest ? Columns[FastestColumn] : Columns[column];
+        private static Rect Cell(float left, float top, float height, int column) =>
+            new Rect(left + ColumnX[column], top, ColumnWidth[column], height);
+
+        //Accounts without a username get a generated name like "StrongBowingBoat#74201". The number is dropped,
+        //and anything still too wide ends with "..." so it never runs into the numbers.
+        private static string FitName(string name, GUIStyle style, float width)
+        {
+            if (string.IsNullOrEmpty(name)) return "";
+            int tag = name.LastIndexOf('#');
+            if (tag > 0 && int.TryParse(name.Substring(tag + 1), out _)) name = name.Substring(0, tag);
+            if (style.CalcSize(new GUIContent(name)).x <= width) return name;
+            for (int length = name.Length - 1; length > 0; length--)
+            {
+                string shortened = name.Substring(0, length) + "...";
+                if (style.CalcSize(new GUIContent(shortened)).x <= width) return shortened;
+            }
+            return name.Substring(0, 1);
+        }
+
+        //A heading with a thin line under it, spanning its three columns.
+        private static void Group(Rect r, string text, Color color, GUIStyle style)
+        {
+            Label(new Rect(r.x, r.y, r.width, r.height - 3f), text, Text(style.font, style.fontSize, TextAnchor.MiddleCenter), color);
+            Fill(new Rect(r.x + 4f, r.yMax - 2f, r.width - 8f, 1f), WithAlpha(color, 0.6f));
+        }
+
+        private static string Rate(int wins, int losses)
+        {
+            int played = wins + losses;
+            return played > 0 ? Mathf.RoundToInt(wins * 100f / played) + "%" : "--";
+        }
 
         private static void Message(Rect inner, string text)
         {

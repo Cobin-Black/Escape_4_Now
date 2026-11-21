@@ -44,8 +44,9 @@ namespace Escape4Now.Accounts
         public int wins;
         public int losses;
         public float fastest;
-        //How many of the wins came from online rooms. Older scores don't have it and read as 0.
+        //How many of the wins and losses came from online rooms. Older scores don't have them and read as 0.
         public int onlineWins;
+        public int onlineLosses;
     }
 
     //One row of a leaderboard. Fastest is 0 when the player has no timed win.
@@ -57,6 +58,10 @@ namespace Escape4Now.Accounts
         public int Losses;
         public float Fastest;
         public int OnlineWins;
+        public int OnlineLosses;
+        //Wins and Losses are every game; the leaderboard shows local and online separately.
+        public int LocalWins => Mathf.Max(0, Wins - OnlineWins);
+        public int LocalLosses => Mathf.Max(0, Losses - OnlineLosses);
     }
 
     //Saves match results online. Totals and history live in Cloud Save, and each leaderboard score
@@ -126,25 +131,33 @@ namespace Escape4Now.Accounts
             string lossesKey = "losses-" + stat.Mode;
             string fastestKey = "fastest-" + stat.Mode;
             string onlineWinsKey = "online-wins-" + stat.Mode;
-            var saved = await CloudSaveService.Instance.Data.Player.LoadAsync(new HashSet<string> { winsKey, lossesKey, fastestKey, onlineWinsKey, HistoryKey });
+            string onlineLossesKey = "online-losses-" + stat.Mode;
+            var saved = await CloudSaveService.Instance.Data.Player.LoadAsync(new HashSet<string> { winsKey, lossesKey, fastestKey, onlineWinsKey, onlineLossesKey, HistoryKey });
 
             int wins = Read<int>(saved, winsKey) + (stat.Won ? 1 : 0);
             int losses = Read<int>(saved, lossesKey) + (stat.Won ? 0 : 1);
-            //Online wins still count in the normal wins total; this just shows how many were online.
-            int onlineWins = Read<int>(saved, onlineWinsKey) + (stat.Won && stat.Online ? 1 : 0);
             float fastest = Read<float>(saved, fastestKey);
             if (stat.Won && stat.Seconds > 0f && (fastest <= 0f || stat.Seconds < fastest)) fastest = stat.Seconds;
 
             List<MatchRecord> history = Read<List<MatchRecord>>(saved, HistoryKey) ?? new List<MatchRecord>();
+            //Wins and losses stay totals of every game, and the online part is kept beside them so the
+            //leaderboard can show local (total minus online) and online separately.
+            //Accounts saved before these keys existed get them counted once from the match history.
+            int onlineWinsSoFar = saved.ContainsKey(onlineWinsKey) ? Read<int>(saved, onlineWinsKey)
+                : history.Count(match => match.online && match.won && match.mode == stat.Mode);
+            int onlineLossesSoFar = saved.ContainsKey(onlineLossesKey) ? Read<int>(saved, onlineLossesKey)
+                : history.Count(match => match.online && !match.won && match.mode == stat.Mode);
+            int onlineWins = onlineWinsSoFar + (stat.Won && stat.Online ? 1 : 0);
+            int onlineLosses = onlineLossesSoFar + (!stat.Won && stat.Online ? 1 : 0);
             history.Insert(0, new MatchRecord { mode = stat.Mode, won = stat.Won, players = stat.Players, playedAt = DateTimeOffset.UtcNow.ToUnixTimeSeconds(), online = stat.Online });
             if (history.Count > MaxHistory) history.RemoveRange(MaxHistory, history.Count - MaxHistory);
 
             await CloudSaveService.Instance.Data.Player.SaveAsync(new Dictionary<string, object>
             {
-                { winsKey, wins }, { lossesKey, losses }, { fastestKey, fastest }, { onlineWinsKey, onlineWins }, { HistoryKey, history }
+                { winsKey, wins }, { lossesKey, losses }, { fastestKey, fastest }, { onlineWinsKey, onlineWins }, { onlineLossesKey, onlineLosses }, { HistoryKey, history }
             });
             //Losses are sent too, which is why the leaderboards must use Keep Latest Score.
-            var metadata = new BoardMetadata { name = AccountService.LinkedName(stat.Slot), wins = wins, losses = losses, fastest = fastest, onlineWins = onlineWins };
+            var metadata = new BoardMetadata { name = AccountService.LinkedName(stat.Slot), wins = wins, losses = losses, fastest = fastest, onlineWins = onlineWins, onlineLosses = onlineLosses };
             await LeaderboardsService.Instance.AddPlayerScoreAsync(winsKey, wins, new AddPlayerScoreOptions { Metadata = metadata });
         }
 
@@ -192,7 +205,8 @@ namespace Escape4Now.Accounts
                 Wins = (int)entry.Score,
                 Losses = extra.losses,
                 Fastest = extra.fastest,
-                OnlineWins = extra.onlineWins
+                OnlineWins = extra.onlineWins,
+                OnlineLosses = extra.onlineLosses
             };
         }
     }
