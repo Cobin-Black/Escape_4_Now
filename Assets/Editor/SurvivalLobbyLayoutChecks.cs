@@ -23,6 +23,7 @@ public static class SurvivalLobbyLayoutChecks
     private static InputSettings.BackgroundBehavior background;
     private static InputSettings.EditorInputBehaviorInPlayMode editorInput;
 
+    // Resume the registered checks after Unity enters Play Mode.
     static SurvivalLobbyLayoutChecks()
     {
         EditorApplication.playModeStateChanged += state =>
@@ -39,6 +40,7 @@ public static class SurvivalLobbyLayoutChecks
         };
     }
 
+    // Start the saved-scene checks for Survival lobby sizing and input.
     public static void Run()
     {
         EditorSceneManager.OpenScene("Assets/Scenes/SurvivalMode.unity");
@@ -48,6 +50,7 @@ public static class SurvivalLobbyLayoutChecks
         EditorApplication.isPlaying = true;
     }
 
+    // Run the saved lobby layout checks and report any setup or input failure.
     private static IEnumerator Execute()
     {
         var stack = new Stack<IEnumerator>(); stack.Push(Check());
@@ -67,6 +70,7 @@ public static class SurvivalLobbyLayoutChecks
         }
     }
 
+    // Exercise Survival lobby sizing and input using the saved scene objects.
     private static IEnumerator Check()
     {
         for (int frame = 0; frame < 12; frame++) yield return null;
@@ -132,6 +136,7 @@ public static class SurvivalLobbyLayoutChecks
         Debug.Log("SURVIVAL LOBBY LAYOUT CHECKS PASSED: 1-4 players, equal contained controls, compact rows, native pointer Start, three viewport sizes.");
     }
 
+    // Drive the actual UI input path so the check includes the control's event handling.
     private static IEnumerator Click(Component component)
     {
         Canvas.ForceUpdateCanvases();
@@ -143,6 +148,7 @@ public static class SurvivalLobbyLayoutChecks
     }
     private static void Require(bool condition, string message) { if (!condition) throw new InvalidOperationException("FAIL: " + message); }
     private static void Watchdog() { if (EditorApplication.timeSinceStartup > deadline) { Debug.LogError("Lobby layout checks timed out."); Finish(1); } }
+    // Clean up the check and return its result code to the batch runner.
     private static void Finish(int result)
     {
         SessionState.SetBool(Running, false); EditorApplication.update -= Watchdog;

@@ -287,7 +287,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: 
   startScreenScene: StartScreen
   tutorialScene: Tutorial
-  leaderboardScene: Leaderboard
+  onlineRaceScene: OnlineRace
   modeScenes:
   - Race_Gamemode
   - SurvivalMode
@@ -297,6 +297,29 @@ MonoBehaviour:
   tapeStripe: {r: 0.831, g: 0.941, b: 1, a: 1}
   accent: {r: 0.212, g: 0.945, b: 0.804, a: 1}
   headingColor: {r: 0.561, g: 0.816, b: 1, a: 1}
+  navigate: {fileID: 11400000, guid: 34e2435aa840e62458e0bfea98bdd6ac, type: 2}
+  submit: {fileID: 11400000, guid: f9ce908343878114eb9512c419439b55, type: 2}
+  cancel: {fileID: 11400000, guid: eebe1a250bef9494c94e7e5d217de558, type: 2}
+  navigationThreshold: 0.5
+  menuRowHeight: 66
+  menuRowGap: 12
+  MenuTitles:
+  - ONLINE MODE
+  - GAME MODE
+  - START TUTORIAL
+  - SETTINGS
+  - LEADERBOARD
+  - ACCOUNT
+  - QUIT
+  MenuSubtitles:
+  - Play together over the internet
+  - Pick how you want to play
+  - New here? Start with this
+  - Sound, screen, controls
+  - Wins and fastest times
+  - Match history and log out
+  - Close the game
+  onlineHeading: ONLINE MODE
   ModeNames:
   - RACE
   - SURVIVAL
@@ -311,12 +334,12 @@ MonoBehaviour:
   - One key is hidden in a locker. Find it, battle other players for it on the same
     tile, and carry it out.
   - Something is loose in the school. Stay alive together until the clock runs out.
-  - Free movement in the gym. Combat rules are still being developed.
+  - Fight for control of a moving hill in the gym.
   - Chase, tag and pass the potato before it explodes.
   ModeWin:
   - Carry the key through the EXIT first
   - Survive until time is up or complete the tasks to escape
-  - Be the last player standing
+  - Reach the hill score target first
   - Be the last player standing
 --- !u!4 &1200000003
 Transform:

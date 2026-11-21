@@ -14,11 +14,13 @@ namespace Escape4Now.UI
         [SerializeField] private Color outlineColor = new Color(0,0,0,.65f);
         private Vector2 start, end;
         private float thickness = 5;
+        // Keep the cable endpoints and color together, then request a UI mesh redraw.
         public void SetCable(Vector2 from,Vector2 to,Color tint,float width)
         {
             if (start == from && end == to && color == tint && Mathf.Approximately(thickness,width)) return;
             start = from; end = to; color = tint; thickness = width; SetVerticesDirty();
         }
+        // Build the cable drawing from the current connection endpoints.
         protected override void OnPopulateMesh(VertexHelper helper)
         {
             helper.Clear();
@@ -26,6 +28,7 @@ namespace Escape4Now.UI
             if (outlineWidth > 0) Strip(helper,thickness+outlineWidth*2,outlineColor);
             Strip(helper,thickness,color);
         }
+        // Build a thick wire strip between curve points so it remains visible while dragged.
         private void Strip(VertexHelper helper,float width,Color tint)
         {
             int offset = helper.currentVertCount;

@@ -45,6 +45,12 @@ namespace Escape4Now.Player
         [SerializeField, Min(1)] private int stompRange = 1;
         [SerializeField, Min(0)] private int stompCooldown = 2;
 
+        [Header("Events")]
+        [SerializeField, Tooltip("Car Alarm: the computer-controlled Monster heads for the sounding car until it reaches it or the alarm stops.")]
+        private bool followCarAlarms = true;
+
+        // The alarm the Monster already reached, so it goes back to hunting instead of staying at the car.
+        private SurvivalEnvironmentalArea reachedAlarm;
         private int movesUsed;
         private int chargeReadyTurn;
         private int roarReadyTurn;
@@ -223,8 +229,57 @@ namespace Escape4Now.Player
     + ", World: " + transform.position);
         }
 
+        // Copy the host's monster pose and movement state for guest presentation.
+        public void ApplyOnlinePose(Vector2Int cell, Vector3 position, int roll, int moves, bool rolled, bool rolling,
+            int chargeCooldown, int roarCooldown, int stompCooldown)
+        {
+            gridPosition = cell;
+            transform.position = position;
+            rolledMoves = roll;
+            movesUsed = Mathf.Max(0, roll - moves);
+            hasRolled = rolled;
+            isRolling = rolling;
+            chargeReadyTurn = monsterTurn + chargeCooldown;
+            roarReadyTurn = monsterTurn + roarCooldown;
+            stompReadyTurn = monsterTurn + stompCooldown;
+        }
+
+        public bool OnlinePlayerControlled { get; set; }
+
+        // The slot owner reads the same action map used in local Survival.
+        public void SendOnlineInput(System.Action<string, Vector2Int> send)
+        {
+            SetupInputActions();
+            var direction = ReadMoveDirection();
+            if (Pressed(rollDiceAction)) send("roll", default);
+            if (Pressed(chargeAction)) send("charge", default);
+            if (direction != Vector2Int.zero) send("move", direction);
+            if (Pressed(roarAction)) send("roar", default);
+            if (Pressed(stompAction)) send("stomp", default);
+        }
+
+        // Accept the remote monster's current movement and actions through its existing input handling.
+        public void ReceiveOnlineInput(string action, Vector2Int direction)
+        {
+            if (!OnlinePlayerControlled || !turnStarted || isMoving || turnSystem.CurrentTurnOwner != TurnOwner.Enemy) return;
+            if (action == "roll" && !hasRolled && !isRolling) { StartCoroutine(RollDice()); return; }
+            if (isChoosingChargeDirection)
+            {
+                if (action == "move" && Mathf.Abs(direction.x) + Mathf.Abs(direction.y) == 1) TryCharge(direction);
+                return;
+            }
+            switch (action)
+            {
+                case "charge" when monsterTurn >= chargeReadyTurn: isChoosingChargeDirection = true; break;
+                case "move" when Mathf.Abs(direction.x) + Mathf.Abs(direction.y) == 1: TryMove(direction); break;
+                case "roar": TryRoar(); break;
+                case "stomp": TryStomp(); break;
+            }
+        }
+
         private void Update()
         {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) return;
             if (map == null || turnSystem == null || isMoving)
                 return;
 
@@ -248,7 +303,7 @@ namespace Escape4Now.Player
 
             if (aiControlled)
                 TakeAITurn();
-            else
+            else if (!OnlinePlayerControlled)
                 ReadMonsterInput();
         }
 
@@ -698,7 +753,40 @@ namespace Escape4Now.Player
             Debug.Log("Monster rolled " + rolledMoves);
         }
 
+        // Car Alarm: returns the sounding car while the Monster is still on its way to it.
+        // Reaching the car (next to its footprint) ends the lure for that alarm.
+        public bool FollowingCarAlarm(out Vector2Int car)
+        {
+            car = default;
+            var alarm = followCarAlarms && map != null && map.Events != null && map.Events.Environment != null
+                ? map.Events.Environment.CarAlarm : null;
+            if (alarm == null || alarm == reachedAlarm)
+                return false;
+            car = alarm.CarCell;
+            if (GetDistanceToFootprint(car) > 1)
+                return true;
+            reachedAlarm = alarm;
+            return false;
+        }
+
         private List<Vector2Int> FindPathToSurvivor()
+        {
+            List<Vector2Int> targets = new List<Vector2Int>();
+
+            foreach (PlayerCharacter survivor in players)
+            {
+                if (survivor == null || !survivor.isActiveAndEnabled
+                    || survivor.Health <= 0)
+                    continue;
+
+                targets.Add(survivor.GridPosition);
+            }
+
+            return FindPathToCells(targets);
+        }
+
+        // Finds the shortest path that brings the Monster's footprint closest to any target cell.
+        private List<Vector2Int> FindPathToCells(List<Vector2Int> targets)
         {
             Vector2Int start = gridPosition;
 
@@ -725,16 +813,10 @@ namespace Escape4Now.Player
             {
                 Vector2Int current = queue.Dequeue();
 
-                // Find the closest living Survivor to this position.
-                foreach (PlayerCharacter survivor in players)
+                // Find the closest target to this position.
+                foreach (Vector2Int position in targets)
                 {
-                    if (survivor == null || !survivor.isActiveAndEnabled
-                        || survivor.Health <= 0)
-                        continue;
-
-                    Vector2Int position = survivor.GridPosition;
-
-                    // Distance from the Survivor to the 2x2 footprint.
+                    // Distance from the target to the 2x2 footprint.
                     int distanceX = Mathf.Max(0,
                         Mathf.Max(current.x - position.x,
                             position.x - (current.x + 1)));
@@ -751,7 +833,7 @@ namespace Escape4Now.Player
                         closestPosition = current;
                     }
 
-                    // A Survivor is inside the Monster's footprint.
+                    // A target is inside the Monster's footprint.
                     if (distance == 0)
                     {
                         closestPosition = current;
@@ -873,8 +955,11 @@ namespace Escape4Now.Player
                 return;
             }
 
+            // Car Alarm pulls the Monster toward the noise instead of the closest Survivor.
+            bool lured = FollowingCarAlarm(out Vector2Int car);
+
             // Try Charge when a Survivor is in a straight line.
-            Vector2Int chargeDirection = GetAIChargeDirection();
+            Vector2Int chargeDirection = lured ? Vector2Int.zero : GetAIChargeDirection();
 
             if (chargeDirection != Vector2Int.zero)
             {
@@ -907,8 +992,15 @@ namespace Escape4Now.Player
                 return;
             }
 
-            // Find the shortest reachable path to a Survivor.
-            List<Vector2Int> path = FindPathToSurvivor();
+            // Find the shortest reachable path to the alarm or to a Survivor.
+            List<Vector2Int> path = lured ? FindPathToCells(new List<Vector2Int> { car }) : FindPathToSurvivor();
+
+            // The car cannot be reached any closer: stop following this alarm and hunt instead.
+            if (lured && (path == null || path.Count == 0))
+            {
+                reachedAlarm = map.Events.Environment.CarAlarm;
+                path = FindPathToSurvivor();
+            }
 
             if (path == null || path.Count == 0)
             {

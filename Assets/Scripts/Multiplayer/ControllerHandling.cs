@@ -305,8 +305,8 @@ namespace Escape4Now.Multiplayer
 
         // ---------- Turn-based modes (Race / Survival) ----------
 
-        // The shared Player/Monster action maps only hear the current turn's controller (plus keyboard and mouse),
-        // so another player's controller cannot move someone else's piece.
+        // The shared Player/Monster action maps hear the selected controller, or keyboard and mouse.
+        // Online, the room uses this computer's first device slot; offline, it uses the current turn's slot.
         private void Update()
         {
             ListenForAssignment();

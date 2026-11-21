@@ -11,6 +11,7 @@ namespace Escape4Now.Arena
             mesh = value;
         }
 
+        // Release the generated mesh when its owning object is removed.
         private void OnDestroy()
         {
             if (mesh != null)

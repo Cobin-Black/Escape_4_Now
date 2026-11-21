@@ -41,19 +41,18 @@ namespace Escape4Now.Arena
         [SerializeField] private float invincibilityDuration = 1f;
         [SerializeField, Min(.02f), Tooltip("Seconds between each on/off blink while invincible.")]
         private float invincibilityFlashInterval = .1f;
-        [SerializeField, Range(0, 1), Tooltip("Sprite opacity during the 'off' part of each blink.")]
+        [SerializeField, Range(0, 1), Tooltip("Sprite opacity during the off part of each blink.")]
         private float invincibilityFlashAlpha = .2f;
         private float invincibilityTimer;
         private SpriteRenderer[] flashRenderers;
         private float[] flashBaseAlphas;
-        private bool flashing;
-        // Tracks the same four diagonal facings the player sprite uses (see PlayerAppearance.FaceToward).
-        private bool facingBack, facingRight;
+        private bool flashing, facingBack, facingRight;
         public PlayerCharacter Character { get; private set; }
         public ArenaLocalInput Input { get; private set; }
         public ArenaMatch Match { get; private set; }
         public Vector2 Position { get; private set; }
         public bool Alive { get; private set; }
+        public bool IsBot { get; private set; }
         public int Slot { get; private set; }
         public int InitialHealth { get; private set; }
         public float SpeedMultiplier { get; set; } = 1;
@@ -64,28 +63,125 @@ namespace Escape4Now.Arena
         public Vector2 FacingDirection { get; private set; } = Vector2.down;
         public Vector2 ScreenVelocity { get; private set; }
         public bool IsInvincible => invincibilityTimer > 0;
-
-        // Straight ahead from the way the sprite is facing, in floor (grid) space.
-        // The sprite only faces the four screen diagonals, and each of those runs along one floor axis.
+        public float InvincibilityRemaining => invincibilityTimer;
+        // Attack along the same floor axis as the character's visible diagonal facing.
         public Vector2 AttackDirection => facingBack
-            ? (facingRight ? Vector2.right : Vector2.up)      // Up-right / up-left
-            : (facingRight ? Vector2.down : Vector2.left);    // Down-right / down-left
+            ? (facingRight ? Vector2.right : Vector2.up)
+            : (facingRight ? Vector2.down : Vector2.left);
+
+        // The host owns protection; guests only copy its timer and show the same blinking.
+        public void ApplyOnlineInvincibility(float seconds)
+        {
+            invincibilityTimer = Mathf.Max(0, seconds);
+            if (invincibilityTimer <= 0) StopInvincibilityFlash();
+        }
+
+        // Keep the sprite and attack direction facing the same way when movement changes.
+        private void Face(Vector2 velocity)
+        {
+            if (velocity.sqrMagnitude <= .0001f) return;
+            FacingDirection = velocity.normalized;
+            if (Mathf.Abs(velocity.y) > .0001f) facingBack = velocity.y > 0;
+            if (Mathf.Abs(velocity.x) > .0001f) facingRight = velocity.x > 0;
+            Character.Appearance?.FaceToward(velocity);
+        }
 
         private Vector2 screenVelocity, eventVelocity;
+        private Vector2 remoteMove;
+        private bool remoteTag, remoteUseItem;
+        private float lastInput;
+        public int MovementRevision { get; private set; }
+
+        // The guest keeps the same movement state as the host when correcting a prediction.
+        public struct MovementState
+        {
+            public Vector2 position, motorVelocity, eventVelocity;
+        }
+
+        public MovementState CaptureMovement() => new MovementState
+        {
+            position = Position, motorVelocity = screenVelocity, eventVelocity = eventVelocity
+        };
+
+        // Restore the motor state before replaying unconfirmed guest movement.
+        public void RestoreMovement(MovementState state)
+        {
+            SetPosition(state.position);
+            screenVelocity = state.motorVelocity;
+            eventVelocity = state.eventVelocity;
+        }
+
+        public void SetPresentationOffset(Vector3 offset) => transform.position = Match.Map.World(Position) + Vector3.back + offset;
+        // Local Potato Pass and a pass request from the network use the same check.
+        public bool TagPressed
+        {
+            get
+            {
+                if (!Match.Online || IsBot) return Input.PassPressed;
+                bool pressed = remoteTag && Time.unscaledTime - lastInput < .5f;
+                remoteTag = false;
+                return pressed;
+            }
+        }
+
+        // King of the Hill uses Attack for the held item, with the same action online.
+        public bool UseItemPressed
+        {
+            get
+            {
+                if (!Match.Online || IsBot) return Input.AttackPressed;
+                bool pressed = remoteUseItem && Time.unscaledTime - lastInput < .5f;
+                remoteUseItem = false;
+                return pressed;
+            }
+        }
+
+        // Keep the latest remote movement and button presses until the host consumes them.
+        public void SetOnlineInput(Vector2 move, bool tag, bool useItem = false)
+        {
+            remoteMove = Vector2.ClampMagnitude(move, 1);
+            remoteTag |= tag;
+            remoteUseItem |= useItem;
+            lastInput = Time.unscaledTime;
+        }
+
+        // Show the host's position, facing, health and alive state on this copy.
+        public void ApplyOnlineState(Vector2 position, Vector2 velocity, int health, bool alive)
+        {
+            Place(position);
+            ScreenVelocity = velocity;
+            Face(velocity);
+            Character.ApplyReplicatedHealth(health);
+            Alive = alive;
+            gameObject.SetActive(alive);
+        }
         public event Action<ArenaParticipant> Eliminated;
+        public int OnlineItemType { get; set; } = -1;
+        public int OnlineItemUses { get; set; }
+        public int OnlineItemMaxUses { get; set; }
+        public int OnlineSwingCount { get; private set; }
+        public Vector3 OnlineSwingPosition { get; private set; }
+        public Vector2 OnlineSwingDirection { get; private set; }
+        // Record one attack cue so guests can show its effect without repeating damage.
+        public void RecordOnlineSwing()
+        {
+            OnlineSwingCount++;
+            OnlineSwingPosition = transform.position;
+            OnlineSwingDirection = Match.Map.ScreenDirection(AttackDirection).normalized;
+        }
         // Reuse the existing character identity, skin and health instead of creating a second player system.
-        // Initialize the player's identity and starting position.
-        public void Initialize(ArenaMatch match, int slot, string displayName, Color color, Vector2 position)
+        // A bot is driven by ArenaBotController through this player's input, locally and on the online host.
+        public void Initialize(ArenaMatch match, int slot, string displayName, Color color, Vector2 position, bool isBot = false)
         {
             Match = match;
             Slot = slot;
             Alive = true;
+            IsBot = isBot;
             invincibilityTimer = 0;
             StopInvincibilityFlash();
-            // Matches the skin's starting pose: front facing, down and to the left.
-            facingBack = facingRight = false;
             Character = GetComponent<PlayerCharacter>();
             Input = GetComponent<ArenaLocalInput>();
+            if (isBot) Input.ConfigureBot();
             InitialHealth = Character.Health;
             Character.ConfigureArenaIdentity(slot + 1, displayName, color);
             Place(position);
@@ -112,7 +208,10 @@ namespace Escape4Now.Arena
         {
             if (Input == null)
                 Input = GetComponent<ArenaLocalInput>();
-            if (pad != null)
+            // Bots never take a keyboard layout or controller.
+            if (IsBot)
+                Input.ConfigureBot();
+            else if (pad != null)
                 Input.ConfigureGamepad(Match.GamepadActions, pad);
             else if (keyboardLayout <= 0)
                 Input.ConfigurePrimaryKeyboard(Match.GamepadActions, reservedKeys);
@@ -125,23 +224,20 @@ namespace Escape4Now.Arena
         {
             if (!Alive || Match == null || !Match.Playing)
             {
-                // Never leave a player see-through once the match is over.
                 StopInvincibilityFlash();
                 return;
             }
-
             if (Match.Paused)
                 return;
 
-            // Count down invincibility after taking damage in King of the Hill, blinking the sprite the whole time.
+            // Count down invincibility after taking damage in FFA.
             if (invincibilityTimer > 0)
-            {
                 invincibilityTimer = Mathf.Max(0, invincibilityTimer - Time.deltaTime);
-                if (invincibilityTimer > 0)
-                    UpdateInvincibilityFlash();
-                else
-                    StopInvincibilityFlash();
-            }
+            if (invincibilityTimer > 0) UpdateInvincibilityFlash();
+            else StopInvincibilityFlash();
+
+            // Guests animate the host's protection timer without running damage or movement rules.
+            if (Match.Replica) return;
 
             if (EffectRemaining > 0)
             {
@@ -154,22 +250,25 @@ namespace Escape4Now.Arena
             }
 
             Vector2 direction = Input.Move;
+            // Online people move from the input their computer sent; bots keep reading their own input on the host.
+            if (Match.Online && !IsBot) direction = Time.unscaledTime - lastInput < .5f ? remoteMove : Vector2.zero;
+            SimulateMovement(direction, Time.deltaTime);
+        }
+
+        // Local players, the host, and guest predictions share acceleration, event effects and collision.
+        public void SimulateMovement(Vector2 direction, float seconds)
+        {
+            if (!Alive || Match == null || !Match.Playing || Match.Paused || seconds <= 0) return;
+            direction = Vector2.ClampMagnitude(direction, 1);
             if (direction.magnitude < inputDeadzone)
                 direction = Vector2.zero;
             Vector2 target = direction * speed * SpeedMultiplier;
             // A short ramp smooths direction changes. No ordinary inertia survives input release.
-            screenVelocity = direction == Vector2.zero || acceleration <= 0 ? target : Vector2.MoveTowards(screenVelocity, target, acceleration * Time.deltaTime);
+            screenVelocity = direction == Vector2.zero || acceleration <= 0 ? target : Vector2.MoveTowards(screenVelocity, target, acceleration * seconds);
             Vector2 desired = Match.Map.GridDirection(screenVelocity);
-            eventVelocity = Match.Events != null ? Match.Events.FilterMovement(this, desired, eventVelocity, Time.deltaTime) : desired;
-            Move(eventVelocity * Time.deltaTime);
-            if (ScreenVelocity.sqrMagnitude > .0001f)
-            {
-                FacingDirection = ScreenVelocity.normalized;
-                const float threshold = 0.0001f;
-                if (Mathf.Abs(ScreenVelocity.y) > threshold) facingBack = ScreenVelocity.y > 0f;
-                if (Mathf.Abs(ScreenVelocity.x) > threshold) facingRight = ScreenVelocity.x > 0f;
-                Character.Appearance?.FaceToward(ScreenVelocity);
-            }
+            eventVelocity = Match.Events != null ? Match.Events.FilterMovement(this, desired, eventVelocity, seconds) : desired;
+            Move(eventVelocity * seconds, seconds);
+            Face(ScreenVelocity);
         }
 
         // Blink every sprite on the player (body, outline, etc.) on and off while invincible.
@@ -197,6 +296,8 @@ namespace Escape4Now.Arena
             flashing = false;
         }
 
+        private void OnDisable() => StopInvincibilityFlash();
+
         private void SetFlashAlpha(float multiplier)
         {
             for (int i = 0; i < flashRenderers.Length; i++)
@@ -210,19 +311,30 @@ namespace Escape4Now.Arena
         }
 
         // Small swept steps prevent tunneling; contact normals make wall sliding stable and predictable.
-        public void Move(Vector2 delta)
+        public void Move(Vector2 delta) => Move(delta, Time.deltaTime);
+
+        public void Move(Vector2 delta, float seconds)
         {
-            Vector3 before = transform.position;
+            // Visual smoothing on a guest must not change the distance moved by the motor.
+            Vector3 before = Match.Map.World(Position) + Vector3.back;
             float safeStep = Mathf.Min(collisionStep, Match.Map.Settings.playerRadius);
             int steps = Mathf.Max(1, Mathf.CeilToInt(delta.magnitude / Mathf.Max(.01f, safeStep)));
             delta /= steps;
             for (int i = 0; i < steps; i++)
                 Position = ArenaMovementCollision.Step(this, Position, delta, slideContacts, contactSearchSteps, contactSkin);
-            Place(Position);
-            ScreenVelocity = (Vector2)(transform.position - before) / Mathf.Max(.0001f, Time.deltaTime);
+            SetPosition(Position);
+            ScreenVelocity = (Vector2)(transform.position - before) / Mathf.Max(.0001f, seconds);
         }
 
         public void Place(Vector2 point)
+        {
+            // A spawn, swap or teleport starts a new movement history on guests.
+            MovementRevision++;
+            SetPosition(point);
+        }
+
+        // Update the logical floor position and its matching world position together.
+        private void SetPosition(Vector2 point)
         {
             ScreenVelocity = Vector2.zero;
             Position = point;
@@ -269,10 +381,14 @@ namespace Escape4Now.Arena
                 Eliminate();
         }
 
+        // Move the player from the impact and mark the correction for online guests.
         public void Knockback(Vector2 impulse)
         {
             if (Alive)
+            {
+                MovementRevision++;
                 Move(impulse);
+            }
         }
 
         [ContextMenu("Testing / Eliminate Player")]
@@ -316,6 +432,7 @@ namespace Escape4Now.Arena
                 nameShadow.text = scoreText;
         }
 
+        // Remove temporary movement, shield and flashing effects before the next round or respawn.
         public void ClearRoundEffects()
         {
             SpeedMultiplier = 1;

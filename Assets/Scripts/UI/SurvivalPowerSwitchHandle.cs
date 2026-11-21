@@ -25,6 +25,7 @@ namespace Escape4Now.UI
         private bool dragging, visible, state;
         private Vector2 start;
         public bool IsSliding => dragging;
+        // Show the switch handle at its current or dragged position with the matching indicator.
         public void Present(SurvivalPowerSwitchBoard owner,int slot,bool enabled,bool on)
         {
             board=owner;index=slot;visible=enabled;state=on;housing.SetActive(enabled);
@@ -38,12 +39,14 @@ namespace Escape4Now.UI
         }
         public void OnBeginDrag(PointerEventData data)
         {if(visible && board.CanInteract){dragging=true;start=data.position;}}
+        // Move the switch preview along its allowed track using the pointer position.
         public void OnDrag(PointerEventData data)
         {
             if(!dragging)return;
             float delta=(data.position.x-start.x)/Mathf.Max(.01f,knob.lossyScale.x);
             knob.anchoredPosition=new Vector2(Mathf.Clamp((state?travel:-travel)+delta,-travel,travel),0);
         }
+        // Commit the released switch position through the puzzle's input callback.
         public void OnEndDrag(PointerEventData data)
         {
             if(!dragging)return;dragging=false;

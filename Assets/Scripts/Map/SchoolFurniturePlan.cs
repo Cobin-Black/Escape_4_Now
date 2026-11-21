@@ -224,6 +224,7 @@ namespace Escape4Now.Map
         public int RoomLayoutAttempts => roomLayoutAttempts;
         public int CandidateChecksPerObject => candidateChecksPerObject;
 
+        // Copy the furniture settings and nested room patterns, then bound counts to supported ranges.
         public SchoolFurnitureSettings Copy()
         {
             var copy = (SchoolFurnitureSettings)MemberwiseClone();
@@ -268,6 +269,7 @@ namespace Escape4Now.Map
             && countVariation >= 0f && countVariation <= 1f && optionalFurnitureChance >= 0f && optionalFurnitureChance <= 1f
             && roomLayoutAttempts >= 1 && roomLayoutAttempts <= 32 && candidateChecksPerObject >= 1 && candidateChecksPerObject <= 625;
 
+        // Check that room patterns are valid and that each room type appears only once.
         private bool ValidPatterns()
         {
             var rooms = new HashSet<SchoolRoomType>();
@@ -443,6 +445,7 @@ namespace Escape4Now.Map
             throw new InvalidOperationException("Cannot fit the required " + room.Type + " furniture safely. Reduce counts or spacing, or enable another layout pattern.");
         }
 
+        // Use pattern weights when choosing which furniture group to try.
         private SchoolFurniturePattern ChoosePattern(SchoolRoomPatternSettings profile, SchoolRoom room)
         {
             var choices = new List<SchoolFurniturePattern>();
@@ -461,6 +464,7 @@ namespace Escape4Now.Map
             return choices[choices.Count - 1];
         }
 
+        // Convert the configured density into a bounded number of placements.
         private int DensityCount(int area, int minimum, int maximum)
         {
             if (minimum == maximum) return minimum;
@@ -469,6 +473,7 @@ namespace Escape4Now.Map
             return minimum + (int)Math.Round((maximum - minimum) * Math.Max(0, Math.Min(1, density)));
         }
 
+        // Rank candidate locations so furniture follows the room layout rather than filling routes.
         private float PlacementScore(SchoolRoom room, SchoolRoomPatternSettings profile, SchoolFurniturePattern pattern,
             ObstacleFacing front, int phase, int cell, SchoolFurnitureKind kind)
         {
@@ -517,9 +522,31 @@ namespace Escape4Now.Map
             {
                 SchoolFurniturePlacement item = furniture[i];
                 int target = item.Kind == SchoolFurnitureKind.StudentDesk ? whiteboard : -1;
-                ObstacleFacing facing = ObstacleOrientation.Choose(map, item.Cell, blocked, target);
+                //Row furniture shares its room's front so a row never points in mixed directions.
+                //Wall pieces and perimeter layouts keep their backs to the nearest wall.
+                ObstacleFacing facing = target < 0 && SharesRoomFront(item, out ObstacleFacing front)
+                    ? front : ObstacleOrientation.Choose(map, item.Cell, blocked, target);
                 furniture[i] = new SchoolFurniturePlacement(item.Cell, item.Kind, facing);
             }
+        }
+
+        //True for furniture laid out in rows or aisles, when the tile in front of it is open floor in the same room.
+        //Then it faces the room's chosen front instead of turning on its own toward the nearest open side.
+        private bool SharesRoomFront(SchoolFurniturePlacement item, out ObstacleFacing front)
+        {
+            front = ObstacleFacing.South;
+            if (item.Kind != SchoolFurnitureKind.Bookshelf && item.Kind != SchoolFurnitureKind.ReadingTable
+                && item.Kind != SchoolFurnitureKind.ComputerDesk && item.Kind != SchoolFurnitureKind.LabTable) return false;
+            int x = item.Cell % SchoolMapLayout.Size, y = item.Cell / SchoolMapLayout.Size;
+            SchoolRoomType room = map.GetRoomType(x, y);
+            SchoolRoomArrangement arrangement = arrangements.Find(value => value.Room == room);
+            if (arrangement == null || arrangement.Pattern == SchoolFurniturePattern.Perimeter) return false;
+            ObstacleOrientation.GetStep(arrangement.FrontWall, out int dx, out int dy);
+            int frontX = x + dx, frontY = y + dy;
+            if (map.GetTile(frontX, frontY) != SchoolTileType.Floor || map.GetRoomType(frontX, frontY) != room
+                || blocked.Contains(frontY * SchoolMapLayout.Size + frontX)) return false;
+            front = arrangement.FrontWall;
+            return true;
         }
 
         //Small rooms get one or two matching obstacles, away from their entrance.
@@ -658,6 +685,7 @@ namespace Escape4Now.Map
             return placed;
         }
 
+        // Count nearby walls when choosing a suitable placement and facing.
         private int AdjacentWalls(int cell)
         {
             int count = 0;

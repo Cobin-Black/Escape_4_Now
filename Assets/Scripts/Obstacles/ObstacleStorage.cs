@@ -170,6 +170,17 @@ namespace Escape4Now.Obstacles
         }
 
         //The host checks adjacency before giving a remote player the stored item.
+        public bool InspectNetworkItem(PlayerCharacter player)
+        {
+            if (openStorage != null || player == null || !player.isActiveAndEnabled
+                || !player.IsCurrentTurn || player.IsMoving || player.HasReachedExit
+                || player.IsUsingItem() || player.IsInMenu() || !CanInteract
+                || !IsNextTo(player.GridPosition)) return false;
+            OpenMenu(player);
+            return true;
+        }
+
+        // Let the authoritative match transfer the stored item through the existing inventory rules.
         public bool TakeNetworkItem(PlayerCharacter player)
         {
             if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient || player == null || !player.isActiveAndEnabled
@@ -270,9 +281,10 @@ namespace Escape4Now.Obstacles
         }
 
         // Lets a bot search this object using the existing storage rules.
+        // Online, bots run on the host, so only a guest's copy of the map refuses.
         public bool SearchForBot(PlayerCharacter player)
         {
-            if (Escape4Now.Multiplayer.LanMultiplayerSession.Active
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient
                 || player == null
                 || !player.isActiveAndEnabled
                 || !player.IsCurrentTurn
@@ -306,6 +318,7 @@ namespace Escape4Now.Obstacles
         public static ObstacleStorage OpenStorage => openStorage;
         public PlayerCharacter ViewingPlayer => viewingPlayer;
 
+        // Complete the storage choice through the same menu action used by local play.
         public void ConfirmMenu()
         {
             if (!IsMenuOpen || !CanKeepMenuOpen() || Time.timeScale <= 0f

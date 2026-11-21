@@ -37,14 +37,18 @@ namespace Escape4Now.Arena
         [SerializeField, Min(0)]
         private float resultRevealDelay;
         private float resultAge;
+        public System.Action OnlineLeave { get; set; }
+        // Online "Play Again" goes back to the same room; leaving mid-match still uses OnlineLeave.
+        public System.Action OnlineReturnToRoom { get; set; }
+        // Connect the saved menu buttons to the mode, including online leave and rematch actions.
         private void Start()
         {
-            setup.Initialize(match);
+            setup.Initialize(match, () => SceneManager.LoadScene(mainMenuScene));
             showEvents.onClick.AddListener(() => match.Events.SetEventLocationsVisible(!match.Events.EventLocationsVisible));
             pause.onClick.AddListener(() => match.SetPaused(true));
             resume.onClick.AddListener(() => match.SetPaused(false));
-            leave.onClick.AddListener(match.ReturnToSetup);
-            replay.onClick.AddListener(match.ReturnToSetup);
+            leave.onClick.AddListener(ReturnToSetup);
+            replay.onClick.AddListener(() => { if (OnlineReturnToRoom != null) OnlineReturnToRoom(); else ReturnToSetup(); });
             menu.onClick.AddListener(() => SceneManager.LoadScene(mainMenuScene));
         }
 
@@ -52,7 +56,7 @@ namespace Escape4Now.Arena
         private void LateUpdate()
         {
             bool finished = !string.IsNullOrEmpty(match.Result);
-            lobby.SetActive(!match.Playing && !finished);
+            lobby.SetActive(!match.Online && !match.Playing && !finished);
             hud.SetActive(match.Playing);
             pausePanel.SetActive(match.Playing && match.Paused);
             resultAge = finished ? resultAge + Time.unscaledDeltaTime : 0;
@@ -71,5 +75,12 @@ namespace Escape4Now.Arena
         }
 
         public void StartMatch() => setup.StartMatch();
+
+        // Use the online room's leave action when present; otherwise return to local setup.
+        private void ReturnToSetup()
+        {
+            if (OnlineLeave != null) OnlineLeave();
+            else match.ReturnToSetup();
+        }
     }
 }

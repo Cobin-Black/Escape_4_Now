@@ -20,6 +20,7 @@ namespace Escape4Now.UI
             public TutorialAction action;
         }
         [SerializeField] private Lesson[] lessons;
+        // Find the configured lesson text for the current tutorial section.
         public Lesson Find(string id)
         {
             if (lessons != null) foreach (var lesson in lessons) if (lesson.id == id) return lesson;

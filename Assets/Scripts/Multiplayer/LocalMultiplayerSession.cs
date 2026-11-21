@@ -25,7 +25,8 @@ namespace Escape4Now.Multiplayer
         [SerializeField] private bool showDisplayOptions = true;
         [Header("Player Colors")]
         [SerializeField]
-        private Color[] playerColors =
+        private PlayerColorPalette playerPalette;
+        [SerializeField, HideInInspector] private Color[] playerColors =
         {
             new Color(0.15f, 0.7f, 1f), new Color(1f, 0.35f, 0.3f),
             new Color(0.3f, 0.85f, 0.4f), new Color(1f, 0.8f, 0.2f)
@@ -74,14 +75,17 @@ namespace Escape4Now.Multiplayer
         public static bool ShowItemObstacles => instance != null && instance.showItemObstacles;
         public static bool ShowKeyLocation => instance != null && instance.showKeyLocation;
 
-        // The lobby slot (0-3) whose controller should drive the shared actions this turn, or -1 for any device.
-        // ControllerHandling uses this so only the current player's controller moves their piece.
+        // The local device slot (0-3) allowed to drive the shared actions, or -1 for any device.
+        // Online always uses this computer's first slot; local play follows the turn's lobby slot.
         public static int ActiveInputSlot
         {
             get
             {
-                if (instance == null || !instance.MatchStarted || LanMultiplayerSession.Active
+                if (instance == null || !instance.MatchStarted
                     || instance.turns == null || instance.participants == null) return -1;
+                // Online, this computer controls one human through its first local device slot.
+                // The room checks whose turn it is; remote lobby slots never select our controller.
+                if (LanMultiplayerSession.Active) return 0;
                 if (instance.turns.CurrentTurnOwner == TurnOwner.Enemy)
                     return instance.monsterPlayerIndex >= 0 && !instance.IsBotPlayer(instance.monsterPlayerIndex)
                         ? instance.monsterPlayerIndex : -1;
@@ -112,6 +116,7 @@ namespace Escape4Now.Multiplayer
         private int monsterPlayerIndex = -1;
         private bool statsReported;
 
+        // Keep the saved player arrays large enough for all lobby slots.
         private void OnValidate()
         {
             if (playerIsBot == null || playerIsBot.Length != 4) System.Array.Resize(ref playerIsBot, 4);
@@ -124,6 +129,8 @@ namespace Escape4Now.Multiplayer
 
         public Color GetPlayerColor(int index)
         {
+            // Older scenes can keep their saved colors until a shared palette is assigned.
+            if (playerPalette != null) return playerPalette.GetColor(index);
             return playerColors != null && index >= 0 && index < playerColors.Length
                 ? playerColors[index] : Color.white;
         }
@@ -233,12 +240,34 @@ namespace Escape4Now.Multiplayer
         }
 
         //The network session calls this after the lobby is ready.
+        internal bool StartOnlineSurvival(int count, int? hostSeed)
+        {
+            if (!(gameMode is SurvivalModeController)) return false;
+            return CreateParticipants(count, hostSeed);
+        }
+
         internal bool StartNetworkMatch(int count) => gameMode != null && gameMode.SupportsLan && CreateParticipants(count);
 
 
+        // Bots get a random name from Bot Names for this match. Only the computer running the match marks
+        // bots, so online guests keep the names the host sends instead of picking their own.
+        private void NameBots(int count)
+        {
+            var bots = new bool[count];
+            var current = new string[count];
+            for (int i = 0; i < count; i++)
+            {
+                bots[i] = IsBotPlayer(i);
+                current[i] = GetPlayerName(i);
+            }
+            string[] named = Escape4Now.Player.BotNameList.Assign(bots, current);
+            for (int i = 0; i < count && i < playerNames.Length; i++)
+                if (bots[i]) playerNames[i] = named[i];
+        }
+
         // Creates the players and Monster for the selected game mode.
         // Check setup and prepare the chosen mode before cloning players or starting the timer.
-        private bool CreateParticipants(int count)
+        private bool CreateParticipants(int count, int? hostSeed = null)
         {
             if (MatchStarted) return false;
             if (gameMode == null || count < gameMode.MinimumPlayers || count > gameMode.MaximumPlayers)
@@ -247,6 +276,7 @@ namespace Escape4Now.Multiplayer
                 return false;
             }
 
+            NameBots(count);
             var usedNames = new HashSet<string>(System.StringComparer.OrdinalIgnoreCase);
             if (skinHandler != null && !skinHandler.AllAssigned(count))
             { status = "Each player needs to pick a skin."; return false; }
@@ -309,7 +339,11 @@ namespace Escape4Now.Multiplayer
 
             try
             {
-                ActiveMap.PrepareLayout();
+                if (hostSeed.HasValue && ActiveMap is SurvivalMap replicated)
+                {
+                    if (!replicated.GenerateWithSeed(hostSeed.Value)) throw new System.InvalidOperationException(replicated.LastGenerationError);
+                }
+                else ActiveMap.PrepareLayout();
             }
             catch (System.InvalidOperationException error)
             {
@@ -389,7 +423,7 @@ namespace Escape4Now.Multiplayer
                     skinHandler.ApplyTo(player, lobbyIndex);
 
                 bool isBot = gameMode.SupportsBots
-                    && !LanMultiplayerSession.Active
+                    && (!LanMultiplayerSession.Active || LanMultiplayerSession.RunsOnlineBots)
                     && IsBotPlayer(lobbyIndex);
 
                 player.SetBotControlled(isBot);
@@ -505,6 +539,7 @@ namespace Escape4Now.Multiplayer
                 && playerIsBot != null && index < playerIsBot.Length && playerIsBot[index];
         }
 
+        // Set a lobby slot's bot choice before participants are created.
         public void SetBotPlayer(int index, bool value)
         {
             if (MatchStarted || index < 0 || index >= playerIsBot.Length) return;
@@ -520,6 +555,7 @@ namespace Escape4Now.Multiplayer
             if (LanMultiplayerSession.Active) lan.Submit("pause");
         }
 
+        // Return from the pause menu through the same shared pause handling.
         public void ResumeGame()
         {
             if (LanMultiplayerSession.Active) lan.Submit("resume");
@@ -531,6 +567,7 @@ namespace Escape4Now.Multiplayer
         public bool ShowDisplayOptions => showDisplayOptions;
         public GameTimer Timer => matchTimer;
         public bool ShowEventTiles => showEventTiles;
+        // Ask the active game mode for its result only after a match has started.
         public bool TryGetResult(out MatchResult result)
         {
             result = default;
@@ -586,6 +623,7 @@ namespace Escape4Now.Multiplayer
             AccountStats.Report(stats);
         }
 
+        // Return a trimmed, bounded name and fall back to the slot's default when it is empty.
         public string GetPlayerName(int index)
         {
             string value = index >= 0 && index < playerNames.Length ? playerNames[index] : null;
@@ -602,6 +640,16 @@ namespace Escape4Now.Multiplayer
             if (lan != null) lan.Disconnect();
             Time.timeScale = 1f;
             SceneManager.LoadScene(gameObject.scene.name);
+        }
+
+        // Set by an online room: after a finished match, return to that same room instead of setup.
+        public System.Action OnlineReturnToRoom { get; set; }
+
+        // The results screen's "Back to Lobby". Local play returns to setup; online play keeps its room.
+        public void ReturnAfterMatch()
+        {
+            if (OnlineReturnToRoom != null) OnlineReturnToRoom();
+            else ReturnToSetup();
         }
 
         //Clears only this session's static reference when the scene closes.

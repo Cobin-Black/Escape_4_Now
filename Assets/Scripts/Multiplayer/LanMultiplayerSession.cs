@@ -6,25 +6,36 @@ using System.Net;
 using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
-using Escape4Now.Items;
 using Escape4Now.Map;
-using Escape4Now.Obstacles;
-using Escape4Now.Player;
 using Escape4Now.TurnSystem;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace Escape4Now.Multiplayer
 {
     //One host runs the match. Each connection owns one of the remaining player slots.
+    [DefaultExecutionOrder(-200)]
     public sealed class LanMultiplayerSession : MonoBehaviour
     {
+        [Header("Match Network Timing")]
+        [SerializeField, Min(.04f), Tooltip("Seconds between host state updates sent to guests.")]
+        private float snapshotInterval = .05f;
+        [SerializeField, Range(30, 240), Tooltip("Input and heartbeat messages allowed per guest each second. Includes immediate direction changes.")]
+        private int maximumRequestsPerSecond = 120;
+        [SerializeField, Min(2f), Tooltip("Seconds without a reply before the connection closes.")]
+        private float peerTimeout = 15f;
+        [SerializeField, Min(1f), Tooltip("Seconds allowed for a connection to finish its first handshake.")]
+        private float handshakeTimeout = 5f;
+        [SerializeField, Range(2, 4), Tooltip("With Fill Bots on, bots join until the online match has this many players.")]
+        private int botFillSeats = 4;
+        public int BotFillSeats => botFillSeats;
+
+        // Keep the LAN port the same on every build so local network discovery works.
         public const int Port = 47777;
         public static LanMultiplayerSession Instance { get; private set; }
         public static bool Active => Instance != null && Instance.active;
         public static bool IsClient => Active && !Instance.host;
         public bool Connecting => searching || connectTask != null;
-        public bool IsMyTurn => active && !failed && !MatchPaused && latest != null && latest.turn == localPlayer
+        public bool IsMyTurn => onlineMode != null ? active && !failed && onlineMode.CanUseTurn(localPlayer) : active && !failed && !MatchPaused && latest != null && latest.turn == localPlayer
             && !latest.players[localPlayer].won;
         public bool MatchPaused { get; private set; }
         public string Status => status;
@@ -32,34 +43,64 @@ namespace Escape4Now.Multiplayer
         public int ConnectedPlayers => host ? 1 + peers.FindAll(peer => peer.slot > 0 && !peer.wire.Closed).Count : lobbyCount;
         public int LocalPlayerIndex => localPlayer;
         public LanSnapshot LatestState => latest;
+        public bool HasOnlineRaceInventory => relayed && onlineMode == null;
+        public bool UsesRaceMatchUI => HasOnlineRaceInventory && active;
+        public bool ShowingRaceStorage => UsesRaceMatchUI && IsMyTurn && latest?.storageOpen == true;
+        public int SelectedDiceNumber => RaceActions.SelectedDiceNumber;
+        public IReadOnlyList<int> RaceBattleTargets => RaceActions.BattleTargets;
+        private RaceNetworkActions raceActions;
+        private RaceNetworkActions RaceActions => raceActions ??= new RaceNetworkActions(this);
+        public static bool RunsOnlineBots => Active && Instance.relayed && Instance.host;
         private bool MatchFinished
         {
             get
             {
+                if (onlineMode != null) return onlineMode.Finished;
                 if (latest == null) return false;
                 foreach (LanPlayerState player in latest.players) if (player.won) return true;
                 return false;
             }
         }
+        //True once the match is over: someone reached the exit, or the online mode reports its own finish.
+        public bool HasMatchFinished => MatchFinished;
         private LocalMultiplayerSession local;
+        private RelayTesting.OnlineModeMatch onlineMode;
+        private bool MatchStarted => onlineMode != null ? onlineMode.Started : local != null && local.MatchStarted;
+
+        // Attach the selected mode adapter so all modes use the same room transport.
+        public void InitializeOnlineMode(RelayTesting.OnlineModeMatch mode, LocalMultiplayerSession owner)
+        {
+            onlineMode = mode;
+            local = owner;
+            if (mode.UsesTurnSystem) Instance = this;
+            previousBackground = Application.runInBackground;
+        }
+
+        // Send mode-specific input through the existing checked command channel.
+        public void SubmitModeInput(string input)
+        {
+            if (!active || failed || !MatchStarted) return;
+            if (host) onlineMode.ReceiveInput(0, input);
+            else Send(server, new LanMessage { kind = "command", sequence = ++sequence, modeState = input });
+        }
         private LanWorldView world;
         private TcpListener listener;
         private LanDiscovery discovery;
         private bool searching;
         private TcpClient connectingClient;
         private Task connectTask;
-        private LanConnection server;
+        private IMatchMessageConnection server;
         private readonly List<Peer> peers = new List<Peer>();
-        private bool active, host, failed, choosingNumber;
+        private bool active, host, failed, relayed;
         private int capacity = 2, localPlayer, lobbyCount, sequence;
         private string roomCode = "", status = "";
-        private float connectionStarted, lastServerMessage, nextPublish, nextPing;
+        private float connectionStarted, lastServerMessage, nextPublish, nextPing, nextHello;
         private LanSnapshot latest;
         private bool previousBackground;
 
         private sealed class Peer
         {
-            public LanConnection wire;
+            public IMatchMessageConnection wire;
             public int slot = -1, sequence, requests;
             public float lastSeen, rateWindow, joined;
         }
@@ -73,10 +114,79 @@ namespace Escape4Now.Multiplayer
             world = new LanWorldView(owner);
         }
 
+        // Online play reuses the same authoritative Race commands and snapshots through a Relay channel.
+        // These entry points never open a LAN socket or run broadcast discovery.
+        public bool StartRelayedHost(int count, string code)
+        {
+            if (active || Connecting || MatchStarted || count < 2 || count > 4) return false;
+            capacity = count;
+            roomCode = code;
+            active = host = true;
+            relayed = true;
+            failed = false;
+            localPlayer = 0;
+            Application.runInBackground = true;
+            status = "Online room ready. Waiting for players.";
+            return true;
+        }
+
+        // Attach the host connection, reset the local seat, and begin the room handshake.
+        public bool JoinRelayedHost(IMatchMessageConnection connection, string code)
+        {
+            if (active || Connecting || MatchStarted || connection == null || connection.Closed) return false;
+            server = connection;
+            roomCode = code;
+            active = true;
+            relayed = true;
+            host = failed = false;
+            localPlayer = -1;
+            lastServerMessage = Time.realtimeSinceStartup;
+            Application.runInBackground = true;
+            Send(server, new LanMessage { kind = "hello", code = roomCode });
+            nextHello = Time.realtimeSinceStartup + 1f;
+            status = "Online: waiting for host.";
+            return true;
+        }
+
+        public bool AcceptRelayedGuest(IMatchMessageConnection connection)
+        {
+            if (!active || !host || MatchStarted) return false;
+            // A player who just left stays in the list until the next update. In the lobby that seat is
+            // already free, so drop closed connections now and let an immediate replacement in.
+            peers.RemoveAll(peer => peer.wire.Closed);
+            if (peers.Count >= capacity - 1) return false;
+            peers.Add(new Peer { wire = connection, joined = Time.realtimeSinceStartup, lastSeen = Time.realtimeSinceStartup });
+            return true;
+        }
+
+        // After a rematch reload the host gives a returning player their previous seat straight away.
+        // They may still be on the results screen, so their seat must not wait for (or time out on) a hello.
+        public bool AcceptReturningGuest(IMatchMessageConnection connection, int slot)
+        {
+            if (!active || !host || MatchStarted || slot < 1 || slot >= capacity || IsSlotConnected(slot)) return AcceptRelayedGuest(connection);
+            peers.RemoveAll(peer => peer.wire.Closed);
+            if (peers.Count >= capacity - 1) return false;
+            peers.Add(new Peer { wire = connection, slot = slot, joined = Time.realtimeSinceStartup, lastSeen = Time.realtimeSinceStartup });
+            nextPublish = 0f;
+            return true;
+        }
+
+        // Open connections only, including guests still finishing their hello.
+        private int OpenPeers => peers.FindAll(peer => !peer.wire.Closed).Count;
+
+        public void ReportRelayFailure(string reason) { if (active && !failed) Fail(reason); }
+
+        // Look up the seat owned by this exact connection, rather than trusting a supplied player index.
+        public int GetRelayedSlot(IMatchMessageConnection connection)
+        {
+            Peer peer = peers.Find(value => ReferenceEquals(value.wire, connection));
+            return peer != null ? peer.slot : -1;
+        }
+
         //Starts a small lobby on this computer's local network.
         public bool StartHost(int count)
         {
-            if (active || Connecting || local.MatchStarted || count < 2 || count > 4) return false;
+            if (active || Connecting || MatchStarted || count < 2 || count > 4) return false;
             try
             {
                 listener = new TcpListener(IPAddress.Any, Port);
@@ -99,7 +209,7 @@ namespace Escape4Now.Multiplayer
         //Uses an explicit local IPv4 address so joining does not contact an outside service.
         public bool Join(string hostAddress, string code)
         {
-            if (active || Connecting || local.MatchStarted) return false;
+            if (active || Connecting || MatchStarted) return false;
             if (hostAddress == null || !IPAddress.TryParse(hostAddress.Trim(), out IPAddress ip) || !IsLocalAddress(ip)
                 || !LanDiscovery.ValidCode(code))
             { status = "Enter the host's local IPv4 address and six-digit room code."; return false; }
@@ -114,7 +224,7 @@ namespace Escape4Now.Multiplayer
         //Finds the host from its code without asking the player for an IP address.
         public bool Join(string code)
         {
-            if (active || Connecting || local.MatchStarted) return false;
+            if (active || Connecting || MatchStarted) return false;
             code = code?.Trim();
             if (!LanDiscovery.ValidCode(code)) { status = "Enter a six-digit room code."; return false; }
             try
@@ -155,14 +265,50 @@ namespace Escape4Now.Multiplayer
         }
 
         //Starts only when all selected slots are connected.
-        public bool StartHostedMatch()
+        public bool StartHostedMatch(bool fillBots = false)
         {
-            if (!active || !host || failed || ConnectedPlayers != capacity || local.MatchStarted) return false;
-            if (!local.StartNetworkMatch(capacity)) { status = local.Status; return false; }
+            if (!active || !host || failed || (!fillBots && ConnectedPlayers != capacity) || MatchStarted) return false;
+            bool botsAllowed = onlineMode != null && onlineMode.SupportsBots || local != null && local.Mode != null && local.Mode.SupportsBots;
+            if (fillBots && (!relayed || !botsAllowed)) return false;
+            // Fill Bots tops the match up to the bot seat count: a 2-player room plays with 2 bots,
+            // a 3-player room with 1. The room itself still only admits the players it was opened for.
+            int roomSeats = capacity;
+            if (fillBots && botFillSeats > capacity) SetMatchSeats(botFillSeats);
+            if (relayed && local != null)
+                for (int slot = 0; slot < capacity; slot++)
+                    local.SetBotPlayer(slot, fillBots && !IsSlotConnected(slot));
+            // Arena modes: empty slots become bots that the host drives.
+            if (onlineMode != null && onlineMode.SupportsBots)
+            {
+                var bots = new bool[capacity];
+                for (int slot = 0; slot < capacity; slot++)
+                    bots[slot] = fillBots && relayed && !IsSlotConnected(slot);
+                onlineMode.SetBotSlots(bots);
+            }
+            bool started = onlineMode != null ? onlineMode.StartHost(capacity) : local.StartNetworkMatch(capacity);
+            if (!started)
+            {
+                if (capacity != roomSeats) SetMatchSeats(roomSeats);
+                status = onlineMode != null ? onlineMode.Error : local.Status;
+                return false;
+            }
             status = "Starting match...";
             MatchPaused = false;
             return true;
         }
+
+        // Guests read their match's player count from the lobby message, so send it before the first match update.
+        private void SetMatchSeats(int seats)
+        {
+            capacity = seats;
+            foreach (Peer peer in peers)
+                if (peer.slot > 0 && !peer.wire.Closed)
+                    Send(peer.wire, new LanMessage { kind = "lobby", player = peer.slot, count = ConnectedPlayers, value = capacity });
+        }
+
+        public bool IsSlotConnected(int slot) => slot == 0 || peers.Exists(peer => peer.slot == slot && !peer.wire.Closed);
+        // Host: the open connection holding a guest seat, or null. Lets the lobby tell a replacement from the previous player.
+        public IMatchMessageConnection GetSlotConnection(int slot) => peers.Find(peer => peer.slot == slot && slot > 0 && !peer.wire.Closed)?.wire;
 
         //Polls sockets using real time, including while the game is paused after a win.
         private void Update()
@@ -178,7 +324,7 @@ namespace Escape4Now.Multiplayer
             {
                 if (host) PumpHost();
                 else PumpClient();
-                if (!failed && local.MatchStarted) ReadInput();
+                if (!failed && MatchStarted && onlineMode == null) RaceActions.ReadInput();
             }
             catch (Exception error) when (error is SocketException || error is ArgumentException || error is InvalidOperationException)
             {
@@ -189,7 +335,7 @@ namespace Escape4Now.Multiplayer
         //Finishes or cancels an asynchronous connection without freezing the menu.
         private void CompleteConnection()
         {
-            if (!connectTask.IsCompleted && Time.realtimeSinceStartup - connectionStarted < 5f) return;
+            if (!connectTask.IsCompleted && Time.realtimeSinceStartup - connectionStarted < handshakeTimeout) return;
             if (!connectTask.IsCompleted || connectTask.IsFaulted || connectTask.IsCanceled)
             {
                 if (connectTask.IsFaulted) _ = connectTask.Exception;
@@ -209,30 +355,54 @@ namespace Escape4Now.Multiplayer
         }
 
         //Accepts at most three guests and rejects late joins or stalled handshakes.
+        // Read guest requests first, then send the current match state to all guests.
         private void PumpHost()
         {
-            discovery?.Poll(!local.MatchStarted && ConnectedPlayers < capacity);
+            discovery?.Poll(!MatchStarted && ConnectedPlayers < capacity);
             if (listener != null && listener.Pending())
             {
                 Socket socket = listener.AcceptSocket();
-                if (local.MatchStarted || peers.Count >= 3 || !IsLocalAddress(((IPEndPoint)socket.RemoteEndPoint).Address)) socket.Dispose();
+                if (MatchStarted || OpenPeers >= 3 || !IsLocalAddress(((IPEndPoint)socket.RemoteEndPoint).Address)) socket.Dispose();
                 else peers.Add(new Peer { wire = new LanConnection(socket), joined = Time.realtimeSinceStartup,
                     lastSeen = Time.realtimeSinceStartup });
             }
             foreach (Peer peer in peers.ToArray())
             {
                 peer.wire.Pump(json => ReceiveGuest(peer, json));
-                if (Time.realtimeSinceStartup - peer.lastSeen > 15f
-                    || (peer.slot < 0 && Time.realtimeSinceStartup - peer.joined > 5f)) peer.wire.Dispose();
+                if (Time.realtimeSinceStartup - peer.lastSeen > peerTimeout
+                    || (peer.slot < 0 && Time.realtimeSinceStartup - peer.joined > handshakeTimeout)) peer.wire.Dispose();
                 if (!peer.wire.Closed) continue;
                 peers.Remove(peer);
-                if (local.MatchStarted && peer.slot > 0 && !MatchFinished)
+                if (MatchStarted && peer.slot > 0 && !MatchFinished)
                 { Fail("Player " + (peer.slot + 1) + " disconnected. Start a new match."); return; }
             }
+            if (!MatchStarted) PublishState();
+        }
+
+        // Capture after gameplay Update, so guests receive the movement from this frame.
+        private void LateUpdate()
+        {
+            if (!active || !host || failed || !MatchStarted) return;
+            try { PublishState(); }
+            catch (Exception error) when (error is SocketException || error is ArgumentException || error is InvalidOperationException)
+            {
+                Fail("The network match stopped because its data was invalid or its connection was lost.");
+            }
+        }
+
+        // Send lobby information before play and authoritative mode or Race state during play.
+        private void PublishState()
+        {
             if (Time.realtimeSinceStartup < nextPublish) return;
-            nextPublish = Time.realtimeSinceStartup + 0.1f;
-            IsometricMapTemplate map = FindFirstObjectByType<IsometricMapTemplate>();
-            if (local.MatchStarted && map.ExitReady) latest = world.Capture();
+            nextPublish = Time.realtimeSinceStartup + snapshotInterval;
+            if (onlineMode != null && MatchStarted)
+            {
+                var state = new LanMessage { kind = "mode-state", modeState = onlineMode.Capture() };
+                foreach (Peer peer in peers)
+                    if (peer.slot > 0 && !peer.wire.Closed) Send(peer.wire, state);
+                return;
+            }
+            if (MatchStarted && FindFirstObjectByType<IsometricMapTemplate>().ExitReady) latest = world.Capture();
             foreach (Peer peer in peers)
                 if (peer.slot > 0) Send(peer.wire, latest == null
                     ? new LanMessage { kind = "lobby", player = peer.slot, count = ConnectedPlayers, value = capacity }
@@ -248,21 +418,28 @@ namespace Escape4Now.Multiplayer
             catch (ArgumentException) { peer.wire.Dispose(); return; }
             if (message == null || message.version != LanMessage.Version) { peer.wire.Dispose(); return; }
             if (Time.realtimeSinceStartup - peer.rateWindow >= 1f) { peer.rateWindow = Time.realtimeSinceStartup; peer.requests = 0; }
-            if (++peer.requests > 30) { peer.wire.Dispose(); return; }
+            if (++peer.requests > maximumRequestsPerSecond) { peer.wire.Dispose(); return; }
             peer.lastSeen = Time.realtimeSinceStartup;
             if (peer.slot < 0)
             {
-                if (message.kind != "hello" || message.code != roomCode || local.MatchStarted || ConnectedPlayers >= capacity)
+                if (message.kind != "hello" || message.code != roomCode || MatchStarted || ConnectedPlayers >= capacity)
                 { peer.wire.Dispose(); return; }
+                // A closed connection no longer holds its seat, so a replacement can take it straight away.
                 for (int slot = 1; slot < capacity; slot++)
-                    if (!peers.Exists(other => other.slot == slot)) { peer.slot = slot; break; }
+                    if (!peers.Exists(other => other != peer && other.slot == slot && !other.wire.Closed)) { peer.slot = slot; break; }
+                // Never send an invalid seat; a guest without one is turned away instead.
+                if (peer.slot < 1) { peer.wire.Dispose(); return; }
                 Send(peer.wire, new LanMessage { kind = "lobby", player = peer.slot, count = ConnectedPlayers, value = capacity });
                 return;
             }
             if (message.kind == "ping") return;
             if (message.kind != "command" || message.sequence <= peer.sequence) return;
             peer.sequence = message.sequence;
-            Execute(peer.slot, message);
+            if (onlineMode != null)
+            {
+                if (MatchStarted) onlineMode.ReceiveInput(peer.slot, message.modeState);
+            }
+            else Execute(peer.slot, message);
         }
 
         //Clients only apply host results. Lost connections stop the match instead of changing authority.
@@ -273,7 +450,15 @@ namespace Escape4Now.Multiplayer
                 LanMessage message = JsonUtility.FromJson<LanMessage>(json);
                 if (message == null || message.version != LanMessage.Version) { Fail("This build does not match the host."); return; }
                 lastServerMessage = Time.realtimeSinceStartup;
-                if (message.kind == "lobby")
+                // A guest back in the lobby can still receive the previous match's last updates while the
+                // host is on the results screen. Until this guest has a seat, those are not for it.
+                if ((message.kind == "mode-state" || message.kind == "state") && localPlayer < 1) return;
+                if (message.kind == "mode-state" && onlineMode != null)
+                {
+                    if (!onlineMode.Apply(capacity, message.modeState))
+                        Fail("The host sent invalid match data.");
+                }
+                else if (message.kind == "lobby")
                 {
                     if (message.player < 1 || message.player > 3 || message.value < 2 || message.value > 4
                         || message.player >= message.value) { Fail("Invalid lobby data."); return; }
@@ -291,7 +476,7 @@ namespace Escape4Now.Multiplayer
                 }
             });
             if (failed) return;
-            if (server.Closed || Time.realtimeSinceStartup - lastServerMessage > 15f)
+            if (server.Closed || Time.realtimeSinceStartup - lastServerMessage > peerTimeout)
             {
                 if (!MatchFinished) Fail("Disconnected from the host. Start a new match.");
                 return;
@@ -301,11 +486,22 @@ namespace Escape4Now.Multiplayer
                 nextPing = Time.realtimeSinceStartup + 1f;
                 Send(server, new LanMessage { kind = "ping" });
             }
+            // Ask again until seated: after a rematch reload the host may still be on its results screen.
+            if (localPlayer < 0 && Time.realtimeSinceStartup >= nextHello)
+            {
+                nextHello = Time.realtimeSinceStartup + 1f;
+                Send(server, new LanMessage { kind = "hello", code = roomCode });
+            }
         }
 
         //Binds every request to the turn visible when the button was pressed.
         public void Submit(string action, int x = 0, int y = 0, int value = 0)
         {
+            if (onlineMode != null)
+            {
+                onlineMode.SubmitTurnAction(this, action);
+                return;
+            }
             bool pauseAction = action == "pause" || action == "resume";
             if (!pauseAction && !IsMyTurn) return;
             var message = new LanMessage { kind = "command", action = action, x = x, y = y, value = value,
@@ -314,10 +510,10 @@ namespace Escape4Now.Multiplayer
             else Send(server, message);
         }
 
-        //Checks ownership, turn, bounds, and busy state before calling the existing game rules.
+        // Shared pause commands are handled here. Race commands go to the Race input and rules bridge.
         private void Execute(int slot, LanMessage message)
         {
-            if (!local.MatchStarted || failed || slot < 0 || slot >= local.Participants.Count) return;
+            if (!MatchStarted || failed || slot < 0 || slot >= local.Participants.Count) return;
             if (message.action == "pause")
             {
                 MatchPaused = true;
@@ -335,131 +531,23 @@ namespace Escape4Now.Multiplayer
                 return;
             }
             if (MatchPaused || Time.timeScale <= 0f || latest == null) return;
-            TurnSystemController turns = FindFirstObjectByType<TurnSystemController>();
-            PlayerCharacter player = local.Participants[slot];
-            if (turns.CurrentPlayerIndex != slot || message.turn != slot || message.round != turns.TurnNumber
-                || player.HasReachedExit || player.IsMoving) return;
-            var battle = FindFirstObjectByType<Escape4Now.GameModes.Race_Gamemode>();
-            if (message.action == "battleClose")
-            {
-                battle?.FinishNetworkBattle(player);
-                nextPublish = 0f;
-                return;
-            }
-            if (player.IsInMenu() || player.IsUsingItem()) return;
-            switch (message.action)
-            {
-                case "roll": player.RollDice(); break;
-                case "move":
-                    if (message.x >= 0 && message.y >= 0 && message.x < SchoolMapLayout.Size && message.y < SchoolMapLayout.Size)
-                        player.MoveToGridPosition(new Vector2Int(message.x, message.y));
-                    break;
-                case "end": turns.AdvanceTurn(); break;
-                case "battle":
-                    if (message.value >= 0 && message.value < local.Participants.Count)
-                        battle?.TryNetworkBattle(player, local.Participants[message.value]);
-                    break;
-                case "item":
-                    if (!player.CanUseItem() || player.Inventory.Items.Count == 0) break;
-                    Item item = player.Inventory.Items[0];
-                    if (item is CustomDiceItem)
-                    {
-                        if (message.value < 1 || message.value > 6) break;
-                        player.SetMovesFromItem(message.value);
-                        player.Inventory.RemoveItem(item);
-                    }
-                    else if (item is DoubleDiceItem || item is KeyStealerItem) item.Use(player.Inventory);
-                    break;
-                case "take":
-                    foreach (ObstacleStorage storage in FindObjectsByType<ObstacleStorage>(FindObjectsSortMode.None))
-                    {
-                        if (storage.GridPosition == new Vector2Int(message.x, message.y))
-                        { storage.TakeNetworkItem(player); break; }
-                    }
-                    break;
-            }
-            nextPublish = 0f;
+            if (RaceActions.Execute(local, slot, message)) nextPublish = 0f;
         }
 
-        //Uses the same action bindings, plus mouse clicks on map tiles.
-        private void ReadInput()
-        {
-            if (!IsMyTurn) { choosingNumber = false; return; }
-            if (MatchPaused || Time.timeScale <= 0f || latest.players[localPlayer].moving) return;
-            var bindings = LocalMultiplayerSession.InputBindings;
-            if (bindings == null) return;
-            bool confirm = bindings.KeyBattle?.WasPressedThisFrame() == true;
-            if (!string.IsNullOrEmpty(latest.battleMessage))
-            {
-                if (confirm) Submit("battleClose");
-                return;
-            }
-            if (confirm)
-            {
-                LanPlayerState challenger = latest.players[localPlayer];
-                for (int i = 0; i < latest.players.Length; i++)
-                {
-                    LanPlayerState target = latest.players[i];
-                    if (i != localPlayer && !challenger.hasKey && target.hasKey && !target.protectedFromPlayers
-                        && target.x == challenger.x && target.y == challenger.y)
-                    { Submit("battle", value: i); return; }
-                }
-            }
-            if (bindings.RollDice?.WasPressedThisFrame() == true) Submit("roll");
-            if (bindings.UseItem?.WasPressedThisFrame() == true) UseItem();
-            if (bindings.Interact?.WasPressedThisFrame() == true) TakeNearbyItem();
-            InputAction move = bindings.Move;
-            if (!choosingNumber && move != null && move.WasPressedThisFrame())
-            {
-                Vector2 input = move.ReadValue<Vector2>();
-                Vector2Int direction = Mathf.Abs(input.y) >= Mathf.Abs(input.x)
-                    ? new Vector2Int(0, Math.Sign(input.y)) : new Vector2Int(Math.Sign(input.x), 0);
-                LanPlayerState player = latest.players[localPlayer];
-                Submit("move", player.x + direction.x, player.y + direction.y);
-            }
-            if (bindings.Click?.WasPressedThisFrame() != true || bindings.Point == null || Camera.main == null) return;
-            Vector2 position = bindings.Point.ReadValue<Vector2>();
-            if (Escape4Now.UI.UiPointer.IsOverUI(position) || choosingNumber) return;
-            IsometricMapTemplate map = FindFirstObjectByType<IsometricMapTemplate>();
-            if (map.TryGetGridPosition(Camera.main.ScreenToWorldPoint(position), out Vector2Int cell))
-            {
-                foreach (LanObjectState item in latest.objects)
-                    if ((item.kind == 1 || item.kind == 3) && item.x == cell.x && item.y == cell.y) { Submit("take", cell.x, cell.y); return; }
-                Submit("move", cell.x, cell.y);
-            }
-        }
-
-        //Custom Dice keeps the player's choice, while the host checks its valid range.
-        public void UseItem()
-        {
-            if (!IsMyTurn || MatchPaused || latest.players[localPlayer].rolled) return;
-            if (latest.players[localPlayer].item == 2) choosingNumber = true;
-            else Submit("item");
-        }
-
-        //The host also checks adjacency, so remote coordinates cannot take distant items.
-        public void TakeNearbyItem()
-        {
-            if (!IsMyTurn || MatchPaused) return;
-            LanPlayerState player = latest.players[localPlayer];
-            foreach (LanObjectState item in latest.objects)
-                if ((item.kind == 1 || item.kind == 3) && item.interactable && Math.Abs(item.x - player.x) + Math.Abs(item.y - player.y) == 1)
-                { Submit("take", item.x, item.y); return; }
-        }
-
+        // These methods are used by the existing Race HUD and saved Unity button events.
+        public void UseItem() => RaceActions.UseItem();
+        public void TakeNearbyItem() => RaceActions.TakeNearbyItem();
+        public void CancelDiceNumber() => RaceActions.CancelDiceNumber();
+        public void StepDiceNumber(int direction) => RaceActions.StepDiceNumber(direction);
+        public void ChooseRaceOpponent(int index) => RaceActions.ChooseRaceOpponent(index);
+        public void ChooseNumber(int value) => RaceActions.ChooseNumber(value);
         public bool Failed => failed;
+        public bool IsActive => active;
         public bool IsHost => host;
         public int Capacity => capacity;
-        public bool ChoosingNumber => choosingNumber;
+        public bool ChoosingNumber => RaceActions.ChoosingNumber;
 
-        public void ChooseNumber(int value)
-        {
-            if (!choosingNumber || !IsMyTurn || MatchPaused || value < 1 || value > 6) return;
-            Submit("item", value: value);
-            choosingNumber = false;
-        }
-
-        private static void Send(LanConnection wire, LanMessage message) => wire.Send(LanMessageCodec.Serialize(message));
+        private static void Send(IMatchMessageConnection wire, LanMessage message) => wire.Send(LanMessageCodec.Serialize(message));
 
         //Keeps all controls stopped after a disconnect until the player leaves the match.
         private void Fail(string message)
@@ -472,7 +560,8 @@ namespace Escape4Now.Multiplayer
             listener = null;
             server?.Dispose();
             foreach (Peer peer in peers) peer.wire.Dispose();
-            if (local.MatchStarted) Time.timeScale = 0f;
+            if (onlineMode != null) onlineMode.ConnectionLost(message);
+            else if (MatchStarted) Time.timeScale = 0f;
         }
 
         //Releases connections when cancelling, leaving, or closing the game.
@@ -490,13 +579,15 @@ namespace Escape4Now.Multiplayer
             connectTask = null;
             foreach (Peer peer in peers) peer.wire.Dispose();
             peers.Clear();
-            active = host = failed = choosingNumber = false;
+            active = host = failed = false;
+            raceActions?.ResetSelection();
             localPlayer = lobbyCount = sequence = 0;
             latest = null;
             status = "";
             Application.runInBackground = previousBackground;
         }
 
+        // Close owned connections and release the shared session reference.
         private void OnDestroy()
         {
             Disconnect();

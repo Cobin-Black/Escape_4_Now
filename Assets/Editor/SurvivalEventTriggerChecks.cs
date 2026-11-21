@@ -18,6 +18,7 @@ using Object = UnityEngine.Object;
 
 public static class SurvivalEventTriggerChecks
 {
+    // Verify environmental events affect gameplay through their intended surfaces, schedules and player interactions.
     public static IEnumerator Check(SurvivalModeController mode, LocalMultiplayerSession session)
     {
         var map = (SurvivalMap)mode.GridMap;
@@ -149,8 +150,22 @@ public static class SurvivalEventTriggerChecks
         {
             var sound = map.GetComponentsInChildren<SurvivalAmbientEffect>().First(effect => effect.name.StartsWith("Car Alarm"));
             Require(sound.GetComponentInParent<SurvivalPropVisual>().Kind == OutdoorPropKind.Car && sound.GetComponent<AudioSource>().clip != null,
-                "Alarm flashes and sounds on the actual car, without controlling a monster");
+                "Alarm flashes and sounds on the actual car");
             Require(sound.GetComponent<AudioSource>().volume<=.06f,"Car alarm uses the saved quieter volume");
+            Require(events.CurrentMessage.Contains("Car Alarm"), "Car Alarm tells players what it does");
+            var monster = Object.FindFirstObjectByType<MonsterCharacter>();
+            var car = environment.CarAlarm.CarCell;
+            if (monster != null && FootprintDistance(monster.GridPosition, car) > 1)
+            {
+                Require(monster.FollowingCarAlarm(out var lure) && lure == car, "Car Alarm lures the Monster toward the sounding car");
+                var path = (List<Vector2Int>)typeof(MonsterCharacter).GetMethod("FindPathToCells", BindingFlags.Instance | BindingFlags.NonPublic)
+                    .Invoke(monster, new object[] { new List<Vector2Int> { car } });
+                Require(path.Count > 0 && FootprintDistance(path[path.Count - 1], car) < FootprintDistance(monster.GridPosition, car),
+                    "The lured Monster has a real route that brings it closer to the car");
+                Expire(environment, settings);
+                Require(environment.CarAlarm == null && !monster.FollowingCarAlarm(out _), "The lure ends when the alarm stops");
+            }
+            else Debug.Log("NOTE: no Monster far enough from the car to check the Car Alarm lure");
         }
         Require(!events.TryActivateRule(Rule(settings, SurvivalEventType.OpenGate)), "Escape gates cannot be opened by an unrelated event");
         Require(events.TryActivateRule(Rule(settings, SurvivalEventType.Blackout)) && events.BlackoutTurns > 0, "Blackout activates globally without stepping on a tile");
@@ -220,6 +235,9 @@ public static class SurvivalEventTriggerChecks
         Debug.Log("SURVIVAL EVENT TRIGGER CHECKS PASSED: " + mode.ActiveSurvivors.Count + " survivors, terrain safety, costs, pickups, area mechanics, globals, schedules, audio, pause and expiry.");
     }
     private static SurvivalEventRule Rule(SurvivalEventSettings settings, SurvivalEventType type) => Array.Find(settings.events, rule => rule.type == type);
+    // Tiles between a cell and the Monster's 2x2 footprint anchored at the given cell.
+    private static int FootprintDistance(Vector2Int anchor, Vector2Int cell) =>
+        Math.Max(0, Math.Max(anchor.x - cell.x, cell.x - (anchor.x + 1))) + Math.Max(0, Math.Max(anchor.y - cell.y, cell.y - (anchor.y + 1)));
     private static string Fingerprint(SurvivalEnvironmentController environment, SurvivalMap map)
     {
         return string.Join(";", environment.ActiveEffects.SelectMany(effect => effect.Cells.Select(cell => effect.Type + ":" + cell)).OrderBy(value => value))
@@ -233,6 +251,7 @@ public static class SurvivalEventTriggerChecks
         System.IO.Directory.CreateDirectory("Logs/SurvivalEnvironmentPreviews");
         ScreenCapture.CaptureScreenshot("Logs/SurvivalEnvironmentPreviews/" + name + ".png");
     }
+    // Capture the tested environmental detail so its generated presentation can be inspected.
     private static IEnumerator CaptureDetail(Vector3 center, string name)
     {
         var camera = Camera.main;

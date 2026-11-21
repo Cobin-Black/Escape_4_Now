@@ -41,6 +41,7 @@ namespace Escape4Now.UI
             left = sources; right = targets; cables = new PuzzleWireGraphic[connections.Length];
             for (int i = 0; i < connections.Length; i++) cables[i] = connections[i].GetComponentInChildren<PuzzleWireGraphic>(true);
         }
+        // Rebuild matching feedback from completed pairs and the current selection or drag.
         public void Refresh(PuzzleSession attempt,float width)
         {
             if (puzzle != attempt) { ClearSelection(); puzzle = attempt; }
@@ -69,6 +70,7 @@ namespace Escape4Now.UI
             }
             DrawPreview();
         }
+        // Remove the temporary endpoint selection and cable preview.
         public void ClearSelection()
         {
             chosenSide = chosenIndex = hoverSide = hoverIndex = -1; dragging = false;
@@ -83,6 +85,7 @@ namespace Escape4Now.UI
             if (chosenSide == side && chosenIndex == index) { ClearSelection(); return; }
             chosenSide = side; chosenIndex = index;
         }
+        // Remember the chosen endpoint before drawing a moving connection.
         public bool BeginDrag(int side,int index,Vector2 screen,Camera camera)
         {
             if (!Usable || !IsWires || !Available(side,index)) return false;
@@ -90,11 +93,13 @@ namespace Escape4Now.UI
         }
         public void MoveDrag(Vector2 screen) { pointerPosition = screen; }
         public void EndDrag() { ClearSelection(); }
+        // Track the endpoint under the pointer so the preview can show a possible connection.
         public void Hover(int side,int index,bool entered)
         {
             if (entered) { hoverSide = side; hoverIndex = index; }
             else if (hoverSide == side && hoverIndex == index) { hoverSide = hoverIndex = -1; }
         }
+        // Submit the chosen pair through the puzzle's shared matching rules.
         public void Match(int sourceSide,int source,int targetSide,int target)
         {
             if (!Usable || sourceSide == targetSide || !Available(sourceSide,source) || !Available(targetSide,target)) return;
@@ -103,12 +108,14 @@ namespace Escape4Now.UI
         }
         private int Key(int side,int index) => side == 0 ? puzzle.Left[index] : puzzle.Right[index];
         private bool SameKey(int aSide,int a,int bSide,int b) => Key(aSide,a) == Key(bSide,b);
+        // Allow only endpoints that still belong to an unfinished match.
         private bool Available(int side,int index)
         {
             if (!Supports(puzzle) || side < 0 || side > 1 || index < 0 || index >= puzzle.Left.Length) return false;
             int source = side == 0 ? index : System.Array.IndexOf(puzzle.Left,puzzle.Right[index]);
             return source >= 0 && !puzzle.Matched[source];
         }
+        // Draw a live cable from the chosen endpoint to the pointer or hovered socket.
         private void DrawPreview()
         {
             bool visible = Usable && IsWires && chosenSide >= 0 && (dragging || HasOppositeHover);

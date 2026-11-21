@@ -23,6 +23,7 @@ namespace Escape4Now.Arena
             shade.material = material;
         }
 
+        // Fade blackout shading with the active event, freezing the fade while paused.
         private void LateUpdate()
         {
             if (events == null || events.Pool == null || events.Pool.visuals == null)
@@ -39,6 +40,7 @@ namespace Escape4Now.Arena
             shade.color = color;
         }
 
+        // Remove the generated lighting overlay with this component.
         private void OnDestroy()
         {
             if (material != null)

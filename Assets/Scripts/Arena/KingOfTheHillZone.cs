@@ -26,7 +26,7 @@ namespace Escape4Now.Arena
         public float Radius => radius;
 
         // Create the visible hill boundary.
-        public void Initialize(ArenaMap arenaMap)
+        public void Initialize(ArenaMap arenaMap, Vector2? hostCenter = null)
         {
             map = arenaMap;
 
@@ -65,7 +65,15 @@ namespace Escape4Now.Arena
             fillRenderer.material = fillMaterial;
             fillRenderer.sortingOrder = -851;
 
-            Relocate();
+            if (hostCenter.HasValue) SetOnlineCenter(hostCenter.Value);
+            else Relocate();
+        }
+
+        // Draw the hill at the host's chosen location instead of choosing another one.
+        public void SetOnlineCenter(Vector2 position)
+        {
+            center = position;
+            DrawCircle();
         }
 
         // Find a random clear location on the basketball court.

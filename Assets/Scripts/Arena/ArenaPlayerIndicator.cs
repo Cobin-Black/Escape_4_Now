@@ -30,6 +30,7 @@ namespace Escape4Now.Arena
             player = GetComponent<ArenaParticipant>();
         }
 
+        // Build a player-colored floor ring to keep each character easy to identify.
         private LineRenderer Create(string label)
         {
             var line = new GameObject(label).AddComponent<LineRenderer>();
@@ -42,6 +43,7 @@ namespace Escape4Now.Arena
             return line;
         }
 
+        // Follow the player and refresh the marker for their current state.
         private void LateUpdate()
         {
             if (player.Match == null || !player.Alive)
@@ -61,6 +63,7 @@ namespace Escape4Now.Arena
                 Draw(holder, radius * holderRadiusMultiplier * (1 + Mathf.Sin(clock * pulseSpeed) * pulseStrength), holderColor);
         }
 
+        // Draw the marker in the same isometric floor space as the map.
         private void Draw(LineRenderer line, float size, Color color)
         {
             line.startColor = line.endColor = color;

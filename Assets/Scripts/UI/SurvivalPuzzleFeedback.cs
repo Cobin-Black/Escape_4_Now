@@ -46,6 +46,7 @@ namespace Escape4Now.UI
         public void CircuitChanged() { circuitElapsed = 0; }
         public bool PowerReached(int distance) => distance >= 0 && circuitElapsed >= distance*circuitStepSeconds;
 
+        // Refresh progress, lights and result feedback from the current puzzle attempt.
         public void Present(PuzzleSession current)
         {
             if (attempt != current)

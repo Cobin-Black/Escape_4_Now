@@ -118,7 +118,13 @@ namespace Escape4Now.Player
         private void Update()
         {
             if (realTimeMovement) return;
-            if (Escape4Now.Multiplayer.LanMultiplayerSession.Active) return;
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.Active)
+            {
+                //Online, input arrives as network commands, but the host still ends a stranded turn,
+                //because nobody can press anything to end it.
+                if (!Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) EndStrandedTurn();
+                return;
+            }
             if (Time.timeScale <= 0f || Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused) return;
             if (isBotControlled) return;
             if (!CanReadTurnInput) return;
@@ -133,12 +139,7 @@ namespace Escape4Now.Player
 
             HandleDiceRollInput();
             if (IsRollAnimating) return;
-            if (hasRolled && !IsMoving && gameMode != null && gameMode.AutoEndStrandedTurn
-                && gameMode.FinishMovementTurn(this) && !HasAffordableStep())
-            {
-                turnSystem.AdvanceTurn();
-                return;
-            }
+            if (EndStrandedTurn()) return;
 
             Vector2Int direction = ReadDirectionPressedThisFrame();
             if (direction != Vector2Int.zero)
@@ -201,6 +202,7 @@ namespace Escape4Now.Player
             bool bonus = eventState.HasRollBonus;
             int second = lucky || bad ? Random.Range(1, 7) : first;
             lastRoll = lucky ? Mathf.Max(first, second) : bad ? Mathf.Min(first, second) : first;
+            firstDie = lastRoll;
             secondDie = 0;
             movesRemaining = eventState.UseRoll(first, second);
             if (gameMode != null) movesRemaining = gameMode.AdjustRollMovement(this, movesRemaining);
@@ -258,6 +260,20 @@ namespace Escape4Now.Player
             return MoveToGridPosition(gridPosition + direction);
         }
 
+        //Ends a person's turn when they have rolled but no step they can afford is left, in modes that allow it.
+        //Bots end their own turns, so they are skipped here.
+        private bool EndStrandedTurn()
+        {
+            if (isBotControlled || turnSystem == null || gameMode == null || !gameMode.AutoEndStrandedTurn
+                || Time.timeScale <= 0f || Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused
+                || !CanReadTurnInput || hasReachedExit || isUsingItem || isInMenu
+                || !hasRolled || IsMoving || IsRollAnimating
+                || !gameMode.FinishMovementTurn(this) || HasAffordableStep()) return false;
+            turnSystem.AdvanceTurn();
+            return true;
+        }
+
+        // Check for at least one legal neighboring move within the player's remaining movement.
         private bool HasAffordableStep()
         {
             foreach (var step in new[] { Vector2Int.right, Vector2Int.up, Vector2Int.left, Vector2Int.down })
@@ -320,6 +336,9 @@ namespace Escape4Now.Player
             if (appearance != null && previousPosition != gridPosition && MovementMap != null)
                 appearance.FaceToward(MovementMap.GridToWorld(gridPosition) - MovementMap.GridToWorld(previousPosition));
             lastRoll = state.roll;
+            firstDie = state.firstDie;
+            secondDie = state.secondDie;
+            rollAnimStart = state.rolling ? Time.realtimeSinceStartup : -1f;
             movesRemaining = state.moves;
             hasRolled = state.rolled;
             hasReachedExit = state.won;
@@ -437,6 +456,7 @@ namespace Escape4Now.Player
             return true;
         }
 
+        // Refresh occupied player cells so movement and spawn checks use their current positions.
         private static void RebuildMapOccupants(IPlayerGridMap map)
         {
             var occupied = new List<Vector2Int>();
@@ -507,6 +527,7 @@ namespace Escape4Now.Player
             return true;
         }
 
+        // Attach the player marker to this character's current identity and map position.
         private void SetupMarker()
         {
             spriteRenderer = GetComponent<SpriteRenderer>();
@@ -824,6 +845,7 @@ namespace Escape4Now.Player
             }
 
             lastRoll = moveAmount;
+            firstDie = moveAmount;
             secondDie = 0;
             movesRemaining = moveAmount;
             hasRolled = true;
@@ -877,6 +899,8 @@ namespace Escape4Now.Player
 
         // Gets the player's current health.
         public int Health => health;
+
+        internal void ApplyReplicatedHealth(int value) => health = Mathf.Max(0, value);
 
         // Removes one heart and eliminates the player when health reaches zero.
         public void TakeDamage()

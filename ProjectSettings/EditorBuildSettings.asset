@@ -26,6 +26,18 @@ EditorBuildSettings:
   - enabled: 1
     path: Assets/Scenes/HotPotato.unity
     guid: 42412020125d13249816998987d923b8
+  - enabled: 1
+    path: Assets/Scenes/OnlineRace.unity
+    guid: cb4de426a47a4ed4f923541e5d43499a
+  - enabled: 1
+    path: Assets/Scenes/OnlineSurvival.unity
+    guid: 5ca331f5e56aa1e4d871cd90c13c3ecc
+  - enabled: 1
+    path: Assets/Scenes/OnlineFreeForAll.unity
+    guid: 60f36d5b7c540ef45a6f19cdf9a1889b
+  - enabled: 1
+    path: Assets/Scenes/OnlineHotPotato.unity
+    guid: 767aa3e1b3bcb174f8ecd6131b63f822
   m_configObjects:
     com.unity.dt.app-ui: {fileID: 11400000, guid: 1b1c20d82303e4b5781c3ef50ac1449f, type: 2}
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 2bcd2660ca9b64942af0de543d8d7100, type: 3}

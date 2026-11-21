@@ -16,6 +16,7 @@ namespace Escape4Now.UI
         public void Present(PuzzleSession attempt,PuzzleTokenUI[] pieces){puzzle=attempt;cells=pieces;Draw();}
         private void OnEnable(){Canvas.willRenderCanvases+=Draw;}
         private void OnDisable(){Canvas.willRenderCanvases-=Draw;}
+        // Show the target slots behind the number tiles so their required order is clear.
         private void Draw()
         {
             if(puzzle==null || !isActiveAndEnabled)return;

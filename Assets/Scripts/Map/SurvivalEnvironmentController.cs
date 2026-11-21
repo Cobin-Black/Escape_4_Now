@@ -1,6 +1,7 @@
 // Places outdoor effects in suitable areas, applies their movement costs and removes temporary effects when they end.
 
 using System.Collections.Generic;
+using System.Linq;
 using Escape4Now.GameModes;
 using Escape4Now.Items;
 using Escape4Now.Obstacles;
@@ -14,6 +15,8 @@ namespace Escape4Now.Map
         public SurvivalEventType Type { get; internal set; }
         public HashSet<Vector2Int> Cells { get; } = new HashSet<Vector2Int>();
         internal int turns, amount;
+        internal Vector2Int carCell;
+        public Vector2Int CarCell => carCell;
         internal readonly List<GameObject> visuals = new List<GameObject>();
     }
 
@@ -33,6 +36,63 @@ namespace Escape4Now.Map
         public IReadOnlyList<SurvivalEnvironmentalArea> ActiveEffects => active.AsReadOnly();
         public IEnumerable<Vector2Int> TrackBoostCells => boostCells;
         public IEnumerable<Vector2Int> PoolSlipCells => wetPoolCells;
+
+        // The sounding Car Alarm, or null. The computer-controlled Monster is drawn to its car.
+        public SurvivalEnvironmentalArea CarAlarm => active.Find(effect => effect.Type == SurvivalEventType.CarAlarm);
+
+        [System.Serializable]
+        public sealed class OnlineArea
+        {
+            public SurvivalEventType type;
+            public Vector2Int[] cells;
+            public Vector2Int carCell;
+        }
+
+        public OnlineArea[] CaptureOnlineAreas() => active.Select(effect => new OnlineArea
+        {
+            type = effect.Type, cells = effect.Cells.ToArray(), carCell = effect.carCell
+        }).ToArray();
+        public Vector2Int[] CaptureOnlinePickups() => pickups.Where(p => p.Value != null && p.Value.IsAtPosition(p.Key))
+            .Select(p => p.Key).ToArray();
+
+        // The host decides which regions and pickups still exist. Guests reuse their presentation prefabs.
+        public void ApplyOnlineAreas(OnlineArea[] areas, Vector2Int[] remainingPickups)
+        {
+            if (areas == null || remainingPickups == null) return;
+            foreach (var pickup in pickups)
+                if (pickup.Value != null && !remainingPickups.Contains(pickup.Key)) Destroy(pickup.Value.gameObject);
+            foreach (var effect in active.ToArray())
+            {
+                if (areas.Any(area => SameArea(effect, area))) continue;
+                foreach (var visual in effect.visuals) if (visual != null) Destroy(visual);
+                active.Remove(effect);
+            }
+            foreach (var area in areas)
+            {
+                if (area?.cells == null || area.cells.Length > map.Width * map.Height || active.Any(effect => SameArea(effect, area))) continue;
+                var rule = Rule(area.type);
+                if (rule == null) continue;
+                var effect = new SurvivalEnvironmentalArea { Type = area.type, carCell = area.carCell };
+                effect.Cells.UnionWith(area.cells);
+                if (area.type == SurvivalEventType.CarAlarm)
+                {
+                    if (settings.carAlarmEffectPrefab != null && map.GetComponent<SurvivalObstacleSpawner>()
+                        .TryGetSpawnedProp(area.carCell, out var car))
+                        effect.visuals.Add(Instantiate(settings.carAlarmEffectPrefab, car.transform.position, Quaternion.identity, car.transform).gameObject);
+                }
+                else if (effect.Cells.Count > 0 && rule.prefab != null)
+                {
+                    SpawnAreaVisuals(effect, rule.prefab);
+                    if (area.type == SurvivalEventType.FallenBranch
+                        && effect.visuals[0].TryGetComponent<SurvivalBranchFall>(out var falling))
+                        falling.Configure(() => true, null);
+                }
+                active.Add(effect);
+            }
+        }
+
+        private static bool SameArea(SurvivalEnvironmentalArea effect, OnlineArea area) =>
+            area?.cells != null && effect.Type == area.type && effect.carCell == area.carCell && effect.Cells.SetEquals(area.cells);
 
         // Create the match's allowed outdoor hazards and pickups from generated area data.
         public void Initialize(SurvivalEventController owner, SurvivalModeController game, SurvivalMap campus, SurvivalEventSettings configuration, SurvivalMatchEventPlan matchPlan)
@@ -101,12 +161,14 @@ namespace Escape4Now.Map
             }
         }
 
+        // Look up an event only when it is enabled and selected for this match.
         private SurvivalEventRule Rule(SurvivalEventType type)
         {
             foreach (var rule in settings.events)
                 if (rule != null && rule.type == type && rule.enabled && rule.Supported && rule.weight > 0 && plan.IsSelected(type)) return rule;
             return null;
         }
+        // Check whether this cell belongs to the generated environmental setup.
         public bool IsEnvironmentalCell(Vector2Int cell)
         {
             if (boostCells.Contains(cell) || wetPoolCells.Contains(cell) || pickups.TryGetValue(cell, out var item) && item != null && item.IsAtPosition(cell)) return true;
@@ -151,6 +213,7 @@ namespace Escape4Now.Map
             }
             return null;
         }
+        // Keep track boosts separated instead of placing overlapping sections.
         private bool NearBoostSection(Vector2Int cell)
         {
             foreach (var existing in boostCells)
@@ -210,13 +273,14 @@ namespace Escape4Now.Map
                 if (!rule.Allows(OutdoorAreaKind.Parking)) return false;
                 foreach (var current in active) if (current.Type == SurvivalEventType.CarAlarm) return false;
                 if (settings.carAlarmEffectPrefab == null) return false;
-                var cars = new List<SurvivalPropVisual>();
+                var cars = new List<Vector2Int>();
                 var spawner = map.GetComponent<SurvivalObstacleSpawner>();
                 foreach (var prop in map.Layout.Props)
                     if (prop.Kind == OutdoorPropKind.Car && map.Layout.GetArea(prop.X, prop.Y) == OutdoorAreaKind.Parking
-                        && spawner.TryGetSpawnedProp(new Vector2Int(prop.X, prop.Y), out var visual)) cars.Add(visual);
+                        && spawner.TryGetSpawnedProp(new Vector2Int(prop.X, prop.Y), out _)) cars.Add(new Vector2Int(prop.X, prop.Y));
                 if (cars.Count == 0) return false;
-                var car = cars[random.Next(cars.Count)];
+                effect.carCell = cars[random.Next(cars.Count)];
+                if (!spawner.TryGetSpawnedProp(effect.carCell, out var car)) return false;
                 var alarm = Instantiate(settings.carAlarmEffectPrefab, car.transform.position, Quaternion.identity, car.transform);
                 effect.visuals.Add(alarm.gameObject);
             }
@@ -278,22 +342,7 @@ namespace Escape4Now.Map
                     if (effect.Cells.Count == 0) return false;
                 }
                 else return false;
-                if(rule.type==SurvivalEventType.Mud||rule.type==SurvivalEventType.Sprinklers)
-                {
-                    effect.visuals.Add(SpawnRegion(rule.prefab,effect.Cells).gameObject);
-                    if(rule.type==SurvivalEventType.Sprinklers)
-                    {
-                        var heads=new List<Vector2Int>();
-                        foreach(var cell in effect.Cells)
-                        {
-                            if(heads.Count==0){heads.Add(cell);continue;}
-                            if(heads.Count>=settings.maximumSprinklerHeads)break;
-                            if(heads.Exists(head=>SurvivalObjectiveLayout.Distance(head,cell)<settings.sprinklerHeadSpacing))continue;
-                            effect.visuals.Add(Spawn(rule.prefab,cell).gameObject);heads.Add(cell);
-                        }
-                    }
-                }
-                else foreach (var cell in effect.Cells) effect.visuals.Add(Spawn(rule.prefab, cell).gameObject);
+                SpawnAreaVisuals(effect, rule.prefab);
                 if (rule.type == SurvivalEventType.FallenBranch && effect.visuals[0].TryGetComponent<SurvivalBranchFall>(out var falling))
                 {
                     foreach (var cell in effect.Cells)
@@ -313,6 +362,26 @@ namespace Escape4Now.Map
             events.ShowEffectMessage(null, rule.type, string.IsNullOrWhiteSpace(rule.feedback) ? rule.title
                 : string.Format(rule.feedback, rule.amount, rule.durationTurns, 0));
             return true;
+        }
+
+        // Use a connected surface for ground effects and spaced heads for sprinkler spray.
+        private void SpawnAreaVisuals(SurvivalEnvironmentalArea effect, SurvivalWorldMarker prefab)
+        {
+            if (effect.Type != SurvivalEventType.Mud && effect.Type != SurvivalEventType.Sprinklers)
+            {
+                foreach (var cell in effect.Cells) effect.visuals.Add(Spawn(prefab, cell).gameObject);
+                return;
+            }
+            effect.visuals.Add(SpawnRegion(prefab, effect.Cells).gameObject);
+            if (effect.Type != SurvivalEventType.Sprinklers) return;
+            var heads = new List<Vector2Int> { effect.Cells.First() };
+            foreach (var cell in effect.Cells)
+            {
+                if (heads.Count >= settings.maximumSprinklerHeads) break;
+                if (heads.Contains(cell) || heads.Exists(head => SurvivalObjectiveLayout.Distance(head, cell) < settings.sprinklerHeadSpacing)) continue;
+                effect.visuals.Add(Spawn(prefab, cell).gameObject);
+                heads.Add(cell);
+            }
         }
 
         // Track boosts and pool slips react to crossing their real outdoor surfaces.

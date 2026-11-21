@@ -44,6 +44,7 @@ public static class SurvivalMonsterSpawnChecks
         }
         catch(Exception error) { Debug.LogException(error); EditorApplication.Exit(1); }
     }
+    // Verify monster spawning uses connected walkable space and the configured survivor clearance.
     public static void Check(SurvivalMapLayout map,SurvivalObjectiveLayout plan,SurvivalRulesSettings rules)
     {
         Require(plan.HasMonsterSpawn,"A valid procedural spawn was selected");
@@ -65,6 +66,7 @@ public static class SurvivalMonsterSpawnChecks
         }
         Require(plan.ValidateConnectivity(occupied,false),"An occupied monster footprint leaves all important routes reachable");
     }
+    // Set up the map terrain used by the spawn-validation fixture.
     private static string Terrain(SurvivalMapLayout map)
     {
         var values=new System.Text.StringBuilder();

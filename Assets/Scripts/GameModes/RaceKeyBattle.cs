@@ -18,6 +18,11 @@ namespace Escape4Now.GameModes
         [Header("Bot Result Timing")]
         [SerializeField, Min(0f), Tooltip("Seconds before a bot closes its battle result automatically.")]
         private float botResultDisplaySeconds = 2f;
+        [Header("Dice Roll")]
+        [SerializeField, Min(0f), Tooltip("Seconds the two dice tumble above the players before they land.")]
+        private float diceRollSeconds = 1.4f;
+        [SerializeField, Min(0f), Tooltip("Seconds the landed dice stay up before the result screen opens.")]
+        private float diceHoldSeconds = 0.7f;
         [Header("Result Copy")]
         [SerializeField, TextArea] private string challengerWinFormat = "{0} wins!\nRolls: {1} - {2}\nThe key has been stolen!";
         [SerializeField, TextArea] private string defenderWinFormat = "{0} wins!\nRolls: {1} - {2}\nThe challenger loses!";
@@ -42,22 +47,39 @@ namespace Escape4Now.GameModes
         private int opponentRoll;
         private bool challengerLost;
         private float botResultCloseTime;
+        private float resultShowTime;
+        private int battleNumber;
 
         public bool IsBattleActive => state != BattleState.None;
+        //The rolls are decided when the battle starts; the dice above the players just reveal them.
+        public bool IsRollingDice => state == BattleState.Result && Time.time < resultShowTime;
+        public float DiceRollSeconds => diceRollSeconds;
+        public float DiceHoldSeconds => diceHoldSeconds;
+        public int BattleNumber => battleNumber;
+        public PlayerCharacter Challenger => state == BattleState.Result ? challenger : null;
+        public PlayerCharacter Opponent => state == BattleState.Result ? opponent : null;
+        public int ChallengerRoll => challengerRoll;
+        public int OpponentRoll => opponentRoll;
         public bool IsChoosingOpponent => state == BattleState.ChooseOpponent;
         public IReadOnlyList<PlayerCharacter> EligibleOpponents => eligibleOpponents;
         public string NetworkMessage => state == BattleState.Result ? battleMessage : "";
         // Checks for input to start a battle or close the results.
         private void Update()
         {
-            if (Escape4Now.Multiplayer.LanMultiplayerSession.Active || Time.timeScale <= 0f
+            //Online, only the host's bots are handled here; people battle and close results through network commands.
+            bool online = Escape4Now.Multiplayer.LanMultiplayerSession.Active;
+            if ((online && !Escape4Now.Multiplayer.LanMultiplayerSession.RunsOnlineBots) || Time.timeScale <= 0f
                 || Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused) return;
             var bindings = mode != null ? mode.InputBindings : null;
             InputAction battleAction = bindings != null ? bindings.KeyBattle : null;
-            bool pressed = battleAction != null && battleAction.WasPressedThisFrame();
+            bool pressed = !online && battleAction != null && battleAction.WasPressedThisFrame();
 
             if (state == BattleState.Result)
             {
+                //The result can't be closed before anyone has seen the dice land.
+                if (IsRollingDice)
+                    return;
+
                 BotController bot = challenger != null
                     ? challenger.GetComponent<BotController>()
                     : null;
@@ -74,6 +96,9 @@ namespace Escape4Now.GameModes
 
                 return;
             }
+
+            if (online)
+                return;
 
             if (state != BattleState.None)
                 return;
@@ -213,17 +238,19 @@ namespace Escape4Now.GameModes
 
             challenger.SetInMenu(true);
             state = BattleState.Result;
+            battleNumber++;
+            resultShowTime = Time.time + diceRollSeconds + diceHoldSeconds;
 
             BotController bot = challenger.GetComponent<BotController>();
 
             if (bot != null && bot.enabled)
-                botResultCloseTime = Time.time + botResultDisplaySeconds;
+                botResultCloseTime = resultShowTime + botResultDisplaySeconds;
         }
 
         // Allows a bot to challenge a key carrier on the same tile.
         public bool TryBotBattle(PlayerCharacter bot, PlayerCharacter target)
         {
-            if (LanMultiplayerSession.Active
+            if (LanMultiplayerSession.IsClient
                 || state != BattleState.None
                 || bot == null
                 || target == null
@@ -261,7 +288,7 @@ namespace Escape4Now.GameModes
         public bool FinishNetworkBattle(PlayerCharacter player)
         {
             if (Time.timeScale <= 0f || LocalMultiplayerSession.GameplayPaused
-                || LanMultiplayerSession.IsClient || state != BattleState.Result
+                || LanMultiplayerSession.IsClient || state != BattleState.Result || IsRollingDice
                 || player == null || player != challenger) return false;
             CloseBattle();
             return true;

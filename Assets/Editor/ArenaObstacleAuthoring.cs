@@ -9,6 +9,7 @@ using Part = ArenaVisualAuthoring.Part;
 // Saves themed obstacle patterns. Every piece and offset can be edited in the resulting Unity assets.
 public static class ArenaObstacleAuthoring
 {
+    // Create the themed obstacle groups used by the generated gym and auditorium.
     [MenuItem("Tools/Escape 4 Now/Configure Arena Obstacle Groups")]
     public static void Apply()
     {
@@ -81,6 +82,7 @@ public static class ArenaObstacleAuthoring
         clearance = clearance,
         pieces = pieces
     };
+    // Save the obstacle patterns so the room settings can reuse them.
     private static ArenaObstacleSettings Save(string name, ArenaObstaclePattern[] patterns)
     {
         string path = "Assets/Settings/Arena/" + name + ".asset";

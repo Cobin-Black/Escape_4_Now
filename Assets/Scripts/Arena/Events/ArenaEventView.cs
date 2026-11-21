@@ -14,6 +14,7 @@ namespace Escape4Now.Arena
         private Mesh lightMesh;
         private MeshRenderer lightRenderer;
         private readonly List<LineRenderer> outlines = new List<LineRenderer>();
+        // Build the event's warning, area outlines and light drawing from the shared visual settings.
         public static ArenaEventView Create(ArenaEventDirector owner, ArenaEventState state)
         {
             var view = new GameObject(state.Rule.label + " event visuals").AddComponent<ArenaEventView>();
@@ -55,6 +56,7 @@ namespace Escape4Now.Arena
             return view;
         }
 
+        // Create one event line with the configured material, width and draw order.
         private LineRenderer Line(string label)
         {
             var line = new GameObject(label).AddComponent<LineRenderer>();
@@ -66,6 +68,7 @@ namespace Escape4Now.Arena
             return line;
         }
 
+        // Project a floor-space radius into the isometric world for warnings and effects.
         private void Circle(LineRenderer line, Vector2 center, float radius)
         {
             line.loop = true;
@@ -142,6 +145,7 @@ namespace Escape4Now.Arena
                 DrawLight(center, radius, color);
         }
 
+        // Build a soft light cone and fading floor pool around the current target.
         private void DrawLight(Vector2 center, float radius, Color color)
         {
             int count = settings.circleSegments;
@@ -177,6 +181,7 @@ namespace Escape4Now.Arena
             lightMesh.RecalculateBounds();
         }
 
+        // Show the event's physical floor treatment or sound-blast speaker when its warning ends.
         internal void ActivateGround()
         {
             GameObject prefab = state.Rule.kind == ArenaEventKind.SlipperyFloor ? settings.wetFloorPrefab : state.Rule.kind == ArenaEventKind.HazardZone ? settings.hazardFloorPrefab : null;
@@ -191,6 +196,7 @@ namespace Escape4Now.Arena
                 SpawnObstacle(settings.speakerPrefab, state.sourceCell);
         }
 
+        // Create the assigned event prop at the affected floor position.
         internal GameObject SpawnObstacle(GameObject prefab, Vector2 center)
         {
             var item = Instantiate(prefab, transform);
@@ -200,6 +206,7 @@ namespace Escape4Now.Arena
             return item;
         }
 
+        // Create the configured basketball visual used by the active barrage.
         internal GameObject SpawnBall()
         {
             var item = Instantiate(settings.basketballPrefab, transform);

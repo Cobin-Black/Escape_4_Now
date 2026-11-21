@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using Escape4Now.Items;
 using Escape4Now.Player;
 using Escape4Now.Multiplayer;
+using Escape4Now.Map;
 using UnityEngine;
 using UnityEngine.UI;
 using UnityEngine.InputSystem;
@@ -31,13 +32,22 @@ namespace Escape4Now.UI
         private readonly List<string> bindingLabels = new List<string>();
         private readonly Dictionary<PlayerCharacter, List<Item>> lastItems = new Dictionary<PlayerCharacter, List<Item>>();
         private float popupUntil;
+        private int[] lastNetworkItems;
+        private ItemSpawner networkSpawner;
         public Rect PanelRect => panel != null && panel.gameObject.activeInHierarchy
             ? MatchUIContext.ScreenRect(panel) : default;
         public Rect NoticeRect => popup != null && popup.gameObject.activeInHierarchy
             ? MatchUIContext.ScreenRect(popup.rectTransform) : default;
 
+        // Refresh the inventory display from the local player or the host's replicated inventory.
         private void LateUpdate()
         {
+            var lan = LanMultiplayerSession.Instance;
+            if (LanMultiplayerSession.Active && lan.HasOnlineRaceInventory)
+            {
+                DrawOnlineInventory(lan);
+                return;
+            }
             var player = context.ActivePlayer;
             bool network = LanMultiplayerSession.Active;
             var items = player != null && player.Inventory != null ? player.Inventory.Items : null;
@@ -50,6 +60,44 @@ namespace Escape4Now.UI
             popup.gameObject.SetActive(context.Playing && !context.Finished && Time.unscaledTime < popupUntil);
             if (!show) return;
             var item = items != null && items.Count > 0 ? items[0] : null;
+            DrawItem(item, player);
+        }
+
+        // Build the same item slots from host data when this computer is a guest.
+        private void DrawOnlineInventory(LanMultiplayerSession lan)
+        {
+            var players = lan.LatestState?.players;
+            bool visible = context.Playing && !context.Finished && players != null
+                && lan.LocalPlayerIndex >= 0 && lan.LocalPlayerIndex < players.Length;
+            if (visible && networkSpawner == null)
+                networkSpawner = (context.Session.Mode.GridMap as IsometricMapTemplate)?.GetComponent<ItemSpawner>();
+            if (!visible || networkSpawner == null)
+            {
+                panel.gameObject.SetActive(false);
+                popup.gameObject.SetActive(false);
+                return;
+            }
+            lastNetworkItems ??= new int[players.Length];
+            for (int slot = 0; slot < players.Length; slot++)
+            {
+                int previous = lastNetworkItems[slot];
+                int current = players[slot].item;
+                if (previous == current) continue;
+                var itemPrefab = networkSpawner.GetNetworkPrefab(current > 0 ? current : previous);
+                if (itemPrefab != null)
+                    ShowPopup(string.Format(current > 0 ? pickupFormat : usedFormat,
+                        context.Session.GetPlayerName(slot), itemPrefab.ItemName));
+                lastNetworkItems[slot] = current;
+            }
+            popup.gameObject.SetActive(Time.unscaledTime < popupUntil);
+            var item = networkSpawner.GetNetworkPrefab(players[lan.LocalPlayerIndex].item);
+            panel.gameObject.SetActive(!hideWhenEmpty || item != null);
+            if (panel.gameObject.activeSelf) DrawItem(item, context.Session.Participants[lan.LocalPlayerIndex]);
+        }
+
+        // Show one item's icon, name and available interaction in its inventory slot.
+        private void DrawItem(Item item, PlayerCharacter player)
+        {
             itemName.text = item != null ? item.ItemName : emptyText;
             var look = item != null ? item.GetComponentInChildren<SpriteRenderer>(true) : null;
             icon.enabled = item != null;

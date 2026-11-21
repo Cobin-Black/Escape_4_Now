@@ -79,6 +79,12 @@ namespace Escape4Now.Player
             return true;
         }
 
+        //Frees a player's skin, for example when that player leaves an online room.
+        public void Release(int playerIndex)
+        {
+            if (playerIndex >= 0 && playerIndex < chosen.Length) chosen[playerIndex] = NoSkin;
+        }
+
         //Gives any player slot without a skin the first skin nobody is using.
         //Keeps the match startable if the player count is raised after picking.
         public void FillMissing()

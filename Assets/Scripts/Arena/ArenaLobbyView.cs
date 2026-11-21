@@ -2,6 +2,8 @@ using System.Collections.Generic;
 using Escape4Now.Multiplayer;
 using Escape4Now.UI;
 using UnityEngine;
+using UnityEngine.EventSystems;
+using UnityEngine.InputSystem;
 using UnityEngine.UI;
 
 namespace Escape4Now.Arena
@@ -13,8 +15,23 @@ namespace Escape4Now.Arena
         private ArenaInterfaceStyle style;
         [SerializeField]
         private Text title, instructions, error;
+        [SerializeField, Tooltip("Bottom help line. It hides while a setup error is showing.")]
+        private Text hint;
         [SerializeField]
         private Button[] playerCounts;
+        [SerializeField] private Button[] openSlots, previousSkins, nextSkins;
+        [SerializeField] private Text[] skinLabels;
+        [SerializeField] private Text playerSummary;
+        [SerializeField] private Button back;
+        [SerializeField, Tooltip("Saved controller panel built by the lobby editor script. Replaces the runtime panel when set.")]
+        private LobbyControllerPanel controllerPanel;
+        [SerializeField] private Color selectedCountColor = new Color(.212f, .945f, .804f);
+        [SerializeField, Tooltip("PLAYER half of each card's PLAYER / BOT switch.")]
+        private Button[] humanRoles;
+        [SerializeField, Tooltip("BOT half of each card's PLAYER / BOT switch. Player 1 is always a person.")]
+        private Button[] botRoles;
+        [SerializeField, Tooltip("Badge at the top of each card. Reads PLAYER or BOT.")]
+        private Text[] roleBadges;
         [SerializeField]
         private GameObject[] rows;
         [SerializeField]
@@ -53,11 +70,15 @@ namespace Escape4Now.Arena
         [Header("Controller Panel (built beside the setup panel at runtime)")]
         [SerializeField]
         private bool showControllerPanel = true;
+        [SerializeField, Tooltip("Open controller options over the lobby so the arcade cards keep their normal size.")]
+        private bool controllerPanelInOverlay = true;
         [SerializeField, Min(120)]
         private float controllerPanelWidth = 210;
         [SerializeField, Min(0)]
         private float controllerPanelGap = 16;
         private ArenaMatch match;
+        // Which slots the computer plays. ArenaBotController drives these players during the match.
+        private readonly bool[] botSlots = new bool[ControllerHandling.MaxSlots];
         private readonly GameObject[] padRows = new GameObject[ControllerHandling.MaxSlots];
         private readonly Text[] padNames = new Text[ControllerHandling.MaxSlots];
         private readonly Button[] padButtons = new Button[ControllerHandling.MaxSlots];
@@ -65,10 +86,14 @@ namespace Escape4Now.Arena
         private readonly Button[] changeButtons = new Button[ControllerHandling.MaxSlots];
         private readonly Text[] changeLabels = new Text[ControllerHandling.MaxSlots];
         private Text padFooter;
+        private RectTransform controllerOverlay;
+        private Button controllerButton;
+        private InputAction controllerCancel;
         public int PlayerCount => playerCount;
+        public ArenaInterfaceStyle Style => style;
 
         // Connect saved Unity widgets to the existing local setup options.
-        public void Initialize(ArenaMatch owner)
+        public void Initialize(ArenaMatch owner, System.Action goBack)
         {
             match = owner;
             title.text = match.Title;
@@ -76,16 +101,13 @@ namespace Escape4Now.Arena
             for (int i = 0; i < playerCounts.Length; i++)
             {
                 int count = i + 2;
-                playerCounts[i].onClick.AddListener(() =>
-                {
-                    playerCount = count;
-                    Refresh();
-                });
+                playerCounts[i].onClick.AddListener(() => SetCount(count));
             }
 
             for (int i = 0; i < rows.Length; i++)
             {
                 int slot = i;
+                rows[i].GetComponent<PlayerColorView>()?.SetColor(match.GetPlayerColor(i));
                 var skinOptions = new List<string>
                 {
                     defaultSkinLabel
@@ -96,19 +118,61 @@ namespace Escape4Now.Arena
                 skins[i].ClearOptions();
                 skins[i].AddOptions(skinOptions);
                 skins[i].onValueChanged.AddListener(value => RefreshPortrait(slot));
-                // Let players choose between human controls and a bot.
-                controls[i].interactable = true;
-                controls[i].onValueChanged.AddListener(value => Refresh());
-                identityStrips[i].color = match.GetPlayerColor(i);
+                if (openSlots != null && i < openSlots.Length && openSlots[i] != null)
+                    openSlots[i].onClick.AddListener(() => SetCount(slot + 1));
+                if (previousSkins != null && i < previousSkins.Length)
+                {
+                    previousSkins[i].onClick.AddListener(() => StepSkin(slot, -1));
+                    nextSkins[i].onClick.AddListener(() => StepSkin(slot, 1));
+                }
+                // Controls are no longer chosen here: ControllerHandling gives each slot its controller,
+                // so the old dropdown just shows what this player will use.
+                controls[i].interactable = false;
+                if (humanRoles != null && i < humanRoles.Length && humanRoles[i] != null)
+                {
+                    humanRoles[i].onClick.AddListener(() => SetBot(slot, false));
+                    botRoles[i].onClick.AddListener(() => SetBot(slot, true));
+                }
+                if (identityStrips[i] != null) identityStrips[i].color = match.GetPlayerColor(i);
                 RefreshPortrait(i);
             }
 
             start.onClick.AddListener(StartMatch);
-            AccountLinkUI.Create(gameObject, names, null);
+            if (back != null) back.onClick.AddListener(() => goBack());
+            // Bots never link an account.
+            AccountLinkUI.Create(gameObject, names, slot => !IsBot(slot), match.GetPlayerColor);
             ControllerHandling.AssignmentsChanged += Refresh;
             if (showControllerPanel)
                 BuildControllerPanel();
+            // The saved CONTROLLERS / VIBRATE panel beside WHO'S PLAYING, the same as Cobin's Race panel.
+            if (controllerPanel != null)
+                controllerPanel.BindLocal(slot => slot < playerCount, match.GetPlayerColor, IsBot);
             Refresh();
+        }
+
+        private void SetCount(int count)
+        {
+            playerCount = Mathf.Clamp(count, 2, rows.Length);
+            Refresh();
+        }
+
+        private bool IsBot(int slot) => slot > 0 && slot < botSlots.Length && botSlots[slot];
+
+        // Player 1 stays a person so there is always someone at the keyboard or controller.
+        private void SetBot(int slot, bool bot)
+        {
+            if (slot <= 0 || slot >= botSlots.Length || botSlots[slot] == bot) return;
+            botSlots[slot] = bot;
+            names[slot].text = bot ? "BOT " + (slot + 1) : "Player " + (slot + 1);
+            names[slot].interactable = !bot;
+            Refresh();
+        }
+
+        private void StepSkin(int slot, int direction)
+        {
+            var selector = skins[slot];
+            int count = selector.options.Count;
+            if (count > 1) selector.value = (selector.value + direction + count) % count;
         }
 
         // ---------- Controller / Vibrate panel ----------
@@ -121,17 +185,38 @@ namespace Escape4Now.Arena
             float pad = style != null ? style.padding : 18;
             float gap = style != null ? style.gap : 10;
 
-            var panel = NewRect("Controller Panel", lobbyRect);
+            if (controllerPanelInOverlay && back != null)
+            {
+                controllerOverlay = NewRect("Controller Overlay", lobbyRect);
+                controllerOverlay.anchorMin = Vector2.zero;
+                controllerOverlay.anchorMax = Vector2.one;
+                controllerOverlay.offsetMin = controllerOverlay.offsetMax = Vector2.zero;
+                AddImage(controllerOverlay, null, new Color(0, 0, 0, .7f));
+                // Copy the project's Cancel action so keyboard and gamepad can both close the panel.
+                controllerCancel = match.GamepadActions?.FindAction("UI/Cancel")?.Clone();
+                controllerCancel?.Enable();
+            }
+            var panel = NewRect("Controller Panel", controllerOverlay != null ? controllerOverlay : lobbyRect);
             panel.gameObject.AddComponent<LayoutElement>().ignoreLayout = true;
             panel.anchorMin = panel.anchorMax = new Vector2(1, 1);
             panel.pivot = new Vector2(0, 1);
             panel.anchoredPosition = new Vector2(controllerPanelGap, 0);
             panel.sizeDelta = new Vector2(controllerPanelWidth, 0);
-            AddImage(panel, sprite, StyleColor(s => s.panel, new Color(.025f, .075f, .12f, .98f)));
+            if (controllerOverlay != null)
+            {
+                panel.anchorMin = panel.anchorMax = panel.pivot = new Vector2(.5f, .5f);
+                panel.anchoredPosition = Vector2.zero;
+            }
+            // Same look as the Race and Survival controller popup: navy panel, white border, dark block shadow.
+            sprite = null;
+            AddImage(panel, sprite, Escape4Now.Menus.ArcadeLobbyScreen.PanelNavy);
             var outline = panel.gameObject.AddComponent<Outline>();
-            Color accent = StyleColor(s => s.accent, new Color(.08f, .72f, .94f, 1));
-            outline.effectColor = new Color(accent.r, accent.g, accent.b, .8f);
-            outline.effectDistance = new Vector2(1.5f, -1.5f);
+            outline.effectColor = Color.white;
+            outline.effectDistance = new Vector2(4f, -4f);
+            var shadow = panel.gameObject.AddComponent<Shadow>();
+            shadow.effectColor = Escape4Now.Menus.ArcadeLobbyScreen.CardNavy;
+            shadow.effectDistance = new Vector2(10f, -10f);
+            Color accent = Escape4Now.Menus.ArcadeLobbyScreen.EdgeBlue;
             var layout = panel.gameObject.AddComponent<VerticalLayoutGroup>();
             layout.padding = new RectOffset((int)pad, (int)pad, (int)pad, (int)pad);
             layout.spacing = gap;
@@ -140,14 +225,14 @@ namespace Escape4Now.Arena
             panel.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
 
             AddText(panel, "Title", "CONTROLLERS", style != null ? style.headingSize : 18, true, StyleColor(s => s.text, Color.white), 28);
-            AddText(panel, "Subtitle", "Press VIBRATE to find which controller is yours.", style != null ? style.smallSize : 12, false, StyleColor(s => s.secondary, Color.gray), 34);
+            AddText(panel, "Subtitle", "Press VIBRATE to find which controller is yours.", style != null ? style.smallSize : 12, false, Escape4Now.Menus.ArcadeLobbyScreen.SoftBlue, 34);
 
             for (int i = 0; i < ControllerHandling.MaxSlots; i++)
             {
                 int slot = i;
                 var row = NewRect("Player " + (i + 1), panel);
                 row.gameObject.AddComponent<LayoutElement>().preferredHeight = 76;
-                AddImage(row, sprite, StyleColor(s => s.card, new Color(.055f, .14f, .2f, 1)));
+                AddImage(row, sprite, Escape4Now.Menus.ArcadeLobbyScreen.CardNavy);
 
                 var strip = NewRect("Identity", row);
                 strip.anchorMin = new Vector2(0, 0);
@@ -158,7 +243,7 @@ namespace Escape4Now.Arena
 
                 var label = AddText(row, "Player", "P" + (i + 1), style != null ? style.bodySize : 14, true, match.GetPlayerColor(i), 0);
                 Place(label.rectTransform, new Vector2(14, -6), new Vector2(40, 24));
-                padNames[i] = AddText(row, "Device", "", style != null ? style.smallSize : 12, false, StyleColor(s => s.secondary, Color.gray), 0);
+                padNames[i] = AddText(row, "Device", "", style != null ? style.smallSize : 12, false, Escape4Now.Menus.ArcadeLobbyScreen.SoftBlue, 0);
                 Place(padNames[i].rectTransform, new Vector2(52, -6), new Vector2(controllerPanelWidth - pad * 2 - 58, 24));
 
                 // Left: VIBRATE (USE KEYS while waiting). Right: CHANGE (CANCEL while waiting).
@@ -167,7 +252,7 @@ namespace Escape4Now.Arena
                     if (ControllerHandling.ListeningSlot == slot) ControllerHandling.ClearSlot(slot);
                     else ControllerHandling.Vibrate(slot);
                 });
-                changeButtons[i] = RowButton(row, sprite, StyleColor(s => s.input, new Color(.09f, .2f, .28f, 1)), new Vector2(.55f, 1), new Vector2(4, -8), out changeLabels[i], () =>
+                changeButtons[i] = RowButton(row, sprite, Escape4Now.Menus.ArcadeLobbyScreen.DeepNavy, new Vector2(.55f, 1), new Vector2(4, -8), out changeLabels[i], () =>
                 {
                     if (ControllerHandling.ListeningSlot == slot) ControllerHandling.CancelAssign();
                     else ControllerHandling.BeginAssign(slot);
@@ -175,14 +260,46 @@ namespace Escape4Now.Arena
                 padRows[i] = row.gameObject;
             }
 
-            padFooter = AddText(panel, "Connected", "", style != null ? style.smallSize : 12, false, StyleColor(s => s.secondary, Color.gray), 22);
+            padFooter = AddText(panel, "Connected", "", style != null ? style.smallSize : 12, false, Escape4Now.Menus.ArcadeLobbyScreen.Tape, 22);
+
+            if (controllerOverlay != null)
+            {
+                var close = AddText(panel, "Close", "CLOSE", style != null ? style.bodySize : 14, true, Color.white, 32);
+                close.alignment = TextAnchor.MiddleCenter;
+                close.raycastTarget = true;
+                close.gameObject.AddComponent<Button>().onClick.AddListener(() => ShowControllerPanel(false));
+                // Reuse the existing navigation button so its font, border and label padding match.
+                controllerButton = Instantiate(back, lobbyRect);
+                controllerButton.name = "Controller Settings";
+                controllerButton.onClick = new Button.ButtonClickedEvent();
+                var opener = (RectTransform)controllerButton.transform;
+                var backRect = (RectTransform)back.transform;
+                opener.anchorMin = backRect.anchorMin;
+                opener.anchorMax = backRect.anchorMax;
+                opener.pivot = backRect.pivot;
+                opener.sizeDelta = backRect.sizeDelta;
+                opener.anchoredPosition = backRect.anchoredPosition - Vector2.right * (backRect.rect.width + controllerPanelGap);
+                controllerButton.GetComponentInChildren<Text>().text = "CONTROLLERS";
+                controllerButton.onClick.AddListener(() => ShowControllerPanel(true));
+                ShowControllerPanel(false);
+            }
 
             // Keep both panels on screen: the setup panel shrinks a little when the window is narrow.
             var responsive = GetComponent<ResponsivePanel>();
-            if (responsive != null)
+            if (responsive != null && controllerOverlay == null)
                 responsive.ReservedRightWidth = (controllerPanelWidth + controllerPanelGap) * 2;
         }
 
+        // Open or close controller setup without leaving the player-selection screen.
+        private void ShowControllerPanel(bool visible)
+        {
+            controllerOverlay.gameObject.SetActive(visible);
+            if (visible) controllerOverlay.SetAsLastSibling();
+            else ControllerHandling.CancelAssign();
+            EventSystem.current?.SetSelectedGameObject(visible ? changeButtons[0].gameObject : controllerButton.gameObject);
+        }
+
+        // Refresh controller feedback and let Cancel close assignment or the controller panel.
         private void Update()
         {
             if (padFooter == null)
@@ -190,10 +307,11 @@ namespace Escape4Now.Arena
             for (int i = 0; i < padButtons.Length; i++)
                 if (padButtonLabels[i] != null && padButtons[i].interactable && ControllerHandling.ListeningSlot != i)
                     padButtonLabels[i].text = ControllerHandling.IsVibrating(i) ? "BZZZ!" : "VIBRATE";
-            // Escape stops a reassignment that is waiting for a button press.
-            if (ControllerHandling.ListeningSlot >= 0 && UnityEngine.InputSystem.Keyboard.current != null
-                && UnityEngine.InputSystem.Keyboard.current.escapeKey.wasPressedThisFrame)
-                ControllerHandling.CancelAssign();
+            if (controllerCancel?.WasPressedThisFrame() == true)
+            {
+                if (ControllerHandling.ListeningSlot >= 0) ControllerHandling.CancelAssign();
+                else if (controllerOverlay != null && controllerOverlay.gameObject.activeSelf) ShowControllerPanel(false);
+            }
         }
 
         private void RefreshControllerPanel()
@@ -271,9 +389,10 @@ namespace Escape4Now.Arena
             if (height > 0)
                 rect.gameObject.AddComponent<LayoutElement>().preferredHeight = height;
             var text = rect.gameObject.AddComponent<Text>();
-            text.font = style != null && style.font != null ? style.font : title.font;
+            // Lobby fonts: Bungee for headings and buttons, Space Mono for everything else.
+            text.font = bold ? Escape4Now.Menus.ArcadeMenuKit.Bungee : Escape4Now.Menus.ArcadeMenuKit.MonoFont;
             text.fontSize = size;
-            text.fontStyle = bold ? FontStyle.Bold : FontStyle.Normal;
+            text.fontStyle = FontStyle.Normal;
             text.color = color;
             text.alignment = TextAnchor.MiddleLeft;
             text.horizontalOverflow = HorizontalWrapMode.Wrap;
@@ -290,30 +409,30 @@ namespace Escape4Now.Arena
             rect.sizeDelta = size;
         }
 
-        private void OnDestroy() => ControllerHandling.AssignmentsChanged -= Refresh;
+        private void OnDestroy()
+        {
+            ControllerHandling.AssignmentsChanged -= Refresh;
+            controllerCancel?.Dispose();
+        }
 
         // Show "Controller 1" or the keyboard layout this slot will get with the current controllers.
-        // Show the assigned controls and allow the player to select a bot.
         private void RefreshControls()
         {
             int[] layouts = ControllerHandling.GetKeyboardLayouts(playerCount);
-
             for (int i = 0; i < controls.Length; i++)
             {
-                bool isBot = controls[i].value == 1;
-
                 string label;
-
                 if (i >= layouts.Length)
                     label = "";
+                else if (IsBot(i))
+                    label = "Computer";
                 else if (layouts[i] < 0)
                     label = string.Format(gamepadFormat, i + 1);
                 else
                     label = string.Format(keyboardFormat, KeyboardKeys(layouts[i]));
-
                 controls[i].ClearOptions();
-                controls[i].AddOptions(new List<string> { label, "Bot" });
-                controls[i].SetValueWithoutNotify(isBot ? 1 : 0);
+                controls[i].AddOptions(new List<string> { label });
+                controls[i].SetValueWithoutNotify(0);
                 controls[i].RefreshShownValue();
             }
         }
@@ -349,13 +468,49 @@ namespace Escape4Now.Arena
             RefreshControls();
             RefreshControllerPanel();
             for (int i = 0; i < rows.Length; i++)
-                rows[i].SetActive(i < playerCount);
-            for (int i = 0; i < playerCounts.Length; i++)
             {
-                bool selected = i + 2 == playerCount;
-                playerCounts[i].image.color = selected ? style.accent : style.input;
-                playerCounts[i].GetComponentInChildren<Text>().color = selected ? style.panel : style.text;
+                rows[i].SetActive(i < playerCount);
+                if (openSlots != null && i < openSlots.Length && openSlots[i] != null)
+                    openSlots[i].gameObject.SetActive(i >= playerCount);
             }
+            int bots = 0;
+            for (int i = 0; i < playerCount; i++)
+                if (IsBot(i)) bots++;
+            if (playerSummary != null)
+                playerSummary.text = (playerCount - bots) + (playerCount - bots == 1 ? " PLAYER" : " PLAYERS")
+                    + (bots > 0 ? " · " + bots + (bots == 1 ? " BOT" : " BOTS") : "");
+            RefreshRoles();
+            for (int i = 0; i < playerCounts.Length; i++)
+                ArcadeChip.Paint(playerCounts[i].transform, i + 2 == playerCount, selectedCountColor);
+        }
+
+        // Light the chosen half of each PLAYER / BOT switch in the player's color, like the Race lobby.
+        private void RefreshRoles()
+        {
+            if (humanRoles == null || botRoles == null)
+                return;
+            for (int i = 0; i < humanRoles.Length && i < botRoles.Length; i++)
+            {
+                if (humanRoles[i] == null || botRoles[i] == null) continue;
+                bool bot = IsBot(i);
+                Color color = match.GetPlayerColor(i);
+                PaintRole(humanRoles[i], !bot, color, true);
+                PaintRole(botRoles[i], bot, color, i > 0);
+                botRoles[i].interactable = i > 0;
+                if (roleBadges != null && i < roleBadges.Length && roleBadges[i] != null)
+                    roleBadges[i].text = bot ? "BOT" : "PLAYER";
+            }
+        }
+
+        // Use the player color to show which role is selected, and dim unavailable choices.
+        private static void PaintRole(Button half, bool selected, Color color, bool enabled)
+        {
+            var face = half.targetGraphic as Image;
+            if (face != null) face.color = selected ? color : Escape4Now.Menus.ArcadeLobbyScreen.DeepNavy;
+            var label = half.GetComponentInChildren<Text>();
+            if (label == null) return;
+            Color off = Escape4Now.Menus.ArcadeLobbyScreen.OffText;
+            label.color = selected ? Escape4Now.Menus.ArcadeMenuKit.Ink : enabled ? off : new Color(off.r, off.g, off.b, .35f);
         }
 
         // Preview the selected existing skin without changing the match skin assignments.
@@ -365,26 +520,30 @@ namespace Escape4Now.Arena
             var skin = match.Skins != null ? match.Skins.GetSkin(chosen >= 0 ? chosen : slot) : null;
             portraits[slot].sprite = skin != null ? skin.front : null;
             portraits[slot].enabled = portraits[slot].sprite != null;
+            if (skinLabels != null && slot < skinLabels.Length)
+                skinLabels[slot].text = chosen < 0 ? defaultSkinLabel.ToUpperInvariant()
+                    : "SKIN " + (chosen + 1) + " / " + match.Skins.Count;
         }
 
-        // Start the match using the selected human players and bots.
         public void StartMatch()
         {
             var labels = new string[playerCount];
             var looks = new int[playerCount];
             var bots = new bool[playerCount];
-
             for (int i = 0; i < playerCount; i++)
             {
+                bots[i] = IsBot(i);
                 labels[i] = names[i].text;
                 looks[i] = skins[i].value - 1;
-                bots[i] = controls[i].value == 1;
             }
+            // Bots get a random name from Bot Names, never one a player is using.
+            labels = Escape4Now.Player.BotNameList.Assign(bots, labels);
 
             match.StartMatch(playerCount, labels, looks, bots);
-
+            bool failed = !string.IsNullOrEmpty(match.Error);
             error.text = match.Error;
-            error.gameObject.SetActive(!string.IsNullOrEmpty(match.Error));
+            error.gameObject.SetActive(failed);
+            if (hint != null) hint.gameObject.SetActive(!failed);
         }
     }
 }

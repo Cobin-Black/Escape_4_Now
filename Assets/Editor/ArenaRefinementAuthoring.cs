@@ -6,6 +6,7 @@ using UnityEngine;
 // Apply this presentation pass to the two existing arena scenes; never rebuild their match systems.
 public static class ArenaRefinementAuthoring
 {
+    // Update the saved arena presentation and prop placement settings without rebuilding mode rules.
     public static void Apply()
     {
         try

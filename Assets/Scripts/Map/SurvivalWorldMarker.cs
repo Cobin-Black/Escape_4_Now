@@ -55,6 +55,7 @@ namespace Escape4Now.Map
             SetState(false, locked);
         }
 
+        // Update the marker's available, active or completed appearance.
         public void SetState(bool complete, bool locked = false)
         {
             Color color = complete ? completedColor : locked ? lockedColor : availableColor;
@@ -64,6 +65,7 @@ namespace Escape4Now.Map
                 caption.color = useCaptionColor ? captionColor : color;
         }
 
+        // Resize and center the caption background around the current text bounds.
         private void LateUpdate()
         {
             if (caption == null || captionBackground == null) return;

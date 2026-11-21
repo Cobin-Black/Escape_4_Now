@@ -31,6 +31,7 @@ public static class ArenaVisualAuthoring
     private static Color Wood => new Color(.58f, .35f, .15f);
     private static Color Red => new Color(.43f, .035f, .08f);
 
+    // Create and assign the reusable themed room props and their scene settings.
     [MenuItem("Tools/Escape 4 Now/Polish Compact Arena Rooms")]
     public static void Apply()
     {
@@ -129,6 +130,7 @@ public static class ArenaVisualAuthoring
         }
     }
 
+    // Build a reusable room model from its visual parts.
     internal static SurvivalPropVisual Model(string name, params Part[] parts)
     {
         var root = new GameObject(name);
@@ -154,6 +156,7 @@ public static class ArenaVisualAuthoring
         return saved;
     }
 
+    // Build the gym bleachers with the configured seating colors.
     private static SurvivalPropVisual BlueBleachers()
     {
         var root = Object.Instantiate(AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Survival/Bleachers.prefab"));
@@ -170,6 +173,7 @@ public static class ArenaVisualAuthoring
         return saved;
     }
 
+    // Assign themed event props so arena effects match the surrounding room.
     private static void ImproveEventVisuals(ArenaRoomVisualSettings style)
     {
         ReplaceFallingModel("Seat Barrier", style.auditoriumSeat.gameObject);
@@ -197,6 +201,7 @@ public static class ArenaVisualAuthoring
         }
     }
 
+    // Update the falling-event model while keeping its existing event behavior.
     private static void ReplaceFallingModel(string name, GameObject prefab)
     {
         string path = "Assets/Prefabs/Arena/Events/" + name + ".prefab";
@@ -218,6 +223,7 @@ public static class ArenaVisualAuthoring
         }
     }
 
+    // Apply the shared HUD presentation to the already saved arena scenes.
     private static void PolishSavedHUDs()
     {
         foreach (string stem in new[]

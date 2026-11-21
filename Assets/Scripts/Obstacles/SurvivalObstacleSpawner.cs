@@ -48,6 +48,7 @@ namespace Escape4Now.Obstacles
 
         private void OnEnable() { InitializeAreaSections(); previewDirty = true; }
         private void OnValidate() { previewDirty = true; }
+        // Refresh generated prop presentation when its map or preview needs an update.
         private void Update()
         {
             if (Application.isPlaying || !previewDirty) return;
@@ -96,6 +97,7 @@ namespace Escape4Now.Obstacles
             areaSectionsInitialized = true;
         }
 
+        // Read the prefab list assigned to this campus area.
         private SurvivalPropVisual[] GetSection(OutdoorAreaKind area)
         {
             switch (area)
@@ -111,6 +113,7 @@ namespace Escape4Now.Obstacles
             }
         }
 
+        // Replace one campus area's prefab choices without rebuilding unrelated sections.
         private void SetSection(OutdoorAreaKind area, SurvivalPropVisual[] prefabs)
         {
             switch (area)
@@ -132,6 +135,7 @@ namespace Escape4Now.Obstacles
             return GetSection(area) ?? Array.Empty<SurvivalPropVisual>();
         }
 
+        // Collect the configured prop templates used for validation and scene spawning.
         public IEnumerable<SurvivalPropVisual> GetAllPrefabs()
         {
             InitializeAreaSections();
@@ -144,6 +148,7 @@ namespace Escape4Now.Obstacles
                     if (prefab != null && seen.Add(prefab)) yield return prefab;
         }
 
+        // Find the prefab choices for the requested generated prop kind.
         private SurvivalPropVisual[] Choices(OutdoorPropKind kind, OutdoorAreaKind area)
         {
             InitializeAreaSections();
@@ -153,6 +158,7 @@ namespace Escape4Now.Obstacles
                 ?? Array.Empty<SurvivalPropVisual>(), prefab => prefab != null && prefab.Kind == kind);
         }
 
+        // Require usable templates for the prop kinds present in the generated campus.
         internal void ValidateForLayout(SurvivalMapLayout layout)
         {
             if (Choices(OutdoorPropKind.Fence, OutdoorAreaKind.None).Length == 0)
@@ -185,6 +191,7 @@ namespace Escape4Now.Obstacles
             HasSpawnedObstacles = true;
         }
 
+        // Create the chosen campus prop at its accepted cell using the layout's facing.
         private void Spawn(OutdoorPropKind kind, OutdoorAreaKind area, int x, int y, int width, int height,
             System.Random random, Vector2 tileSize, Material material, int quarterTurns = -1)
         {
@@ -205,6 +212,7 @@ namespace Escape4Now.Obstacles
                 fence.gameObject.SetActive(false);
         }
 
+        // Remove the previous generated props before spawning the current layout again.
         [ContextMenu("Regenerate Map and Obstacles")]
         public void Regenerate()
         {
@@ -212,6 +220,7 @@ namespace Escape4Now.Obstacles
             if (map != null) map.Generate();
         }
 
+        // Delete owned generated props and clear the lookup used by environmental effects.
         public void ClearSpawnedObstacles()
         {
             fences.Clear();

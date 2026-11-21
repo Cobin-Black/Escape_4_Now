@@ -5,15 +5,20 @@ using static Escape4Now.Menus.ArcadeMenuKit;
 
 namespace Escape4Now.Menus
 {
-    //The main menu: game mode, tutorial, settings, leaderboard, account and quit.
+    //The main menu keeps online rooms separate from the existing local game modes.
     //Use the mouse, or Up/Down to pick a section, Left/Right to pick a game mode, Enter to start and Esc to go back.
     public sealed class MainMenuScreen : MonoBehaviour
     {
-        private enum Section { GameMode, Tutorial, Settings, Leaderboard, Account, Quit }
+        private enum Section { Online, GameMode, Tutorial, Settings, Leaderboard, Account, Quit }
+        private const int SectionCount = (int)Section.Quit + 1;
 
         [Header("Scenes")]
         [SerializeField] private string startScreenScene = "StartScreen";
         [SerializeField] private string tutorialScene = "Tutorial";
+        [SerializeField] private string onlineRaceScene = "OnlineRace";
+        [SerializeField] private string onlineSurvivalScene = "OnlineSurvival";
+        [SerializeField] private string onlineFreeForAllScene = "OnlineFreeForAll";
+        [SerializeField] private string onlineHotPotatoScene = "OnlineHotPotato";
         [Tooltip("Scenes in order: Race, Survival, King of the Hill, Hot Potato.")]
         [SerializeField] private string[] modeScenes = { "Race_Gamemode", "SurvivalMode", "FreeForAll", "HotPotato" };
 
@@ -23,8 +28,18 @@ namespace Escape4Now.Menus
         [SerializeField] private Color accent = new Color(0.212f, 0.945f, 0.804f);
         [SerializeField] private Color headingColor = new Color(0.561f, 0.816f, 1f);
 
-        private static readonly string[] MenuTitles = { "GAME MODE", "START TUTORIAL", "SETTINGS", "LEADERBOARD", "ACCOUNT", "QUIT" };
-        private static readonly string[] MenuSubtitles = { "Pick how you want to play", "New here? Start with this", "Sound, screen, controls", "Wins and fastest times", "Match history and log out", "Close the game" };
+        [Header("Menu Navigation — Input System")]
+        [SerializeField] private InputActionReference navigate;
+        [SerializeField] private InputActionReference submit;
+        [SerializeField] private InputActionReference cancel;
+        [SerializeField, Range(.1f, .9f)] private float navigationThreshold = .5f;
+        [Header("Sidebar Layout")]
+        [SerializeField, Min(60f)] private float menuRowHeight = 66f;
+        [SerializeField, Min(4f)] private float menuRowGap = 12f;
+        [SerializeField] private string[] MenuTitles = { "ONLINE MODE", "GAME MODE", "START TUTORIAL", "SETTINGS", "LEADERBOARD", "ACCOUNT", "QUIT" };
+        [SerializeField] private string[] MenuSubtitles = { "Play together over the internet", "Pick how you want to play", "New here? Start with this", "Sound, screen, controls", "Wins and fastest times", "Match history and log out", "Close the game" };
+        [Header("Online Mode Copy")]
+        [SerializeField] private string onlineHeading = "ONLINE MODE";
         [Header("Game Mode Cards (same order as Scenes)")]
         [SerializeField] private string[] ModeNames = { "RACE", "SURVIVAL", "KING OF THE HILL", "HOT POTATO" };
         [SerializeField] private string[] ModePlayers = { "2–4 PLAYERS", "2–4 PLAYERS", "2–4 PLAYERS", "2–4 PLAYERS" };
@@ -32,10 +47,10 @@ namespace Escape4Now.Menus
         {
             "One key is hidden in a locker. Find it, battle other players for it on the same tile, and carry it out.",
             "Something is loose in the school. Stay alive together until the clock runs out.",
-            "Free movement in the gym. Combat rules are still being developed.",
+            "Fight for control of a moving hill in the gym.",
             "Chase, tag and pass the potato before it explodes."
         };
-        [SerializeField] private string[] ModeWin = { "Carry the key through the EXIT first", "Survive until time is up or complete the tasks to escape", "Be the last player standing", "Be the last player standing" };
+        [SerializeField] private string[] ModeWin = { "Carry the key through the EXIT first", "Survive until time is up or complete the tasks to escape", "Reach the hill score target first", "Be the last player standing" };
         private static readonly Color AvatarColor = new Color(1f, 0.835f, 0f);
         private static readonly int[] Barcode = { 3, 1, 2, 1, 4, 1, 1, 3, 2, 1, 1, 2, 4, 1, 2, 1, 3, 1, 1, 2, 1, 4, 2, 1, 1, 3, 1, 2, 1, 1, 4, 1, 2, 3, 1, 1, 2, 1, 3, 1 };
 
@@ -46,6 +61,7 @@ namespace Escape4Now.Menus
         private readonly MatchHistoryPanel history = new MatchHistoryPanel();
         private Section section = Section.GameMode;
         private int mode;
+        private int onlineMode;
 
         private int infoMode = -1;
 
@@ -53,7 +69,30 @@ namespace Escape4Now.Menus
         private int sfx = 6;
         private string toast = "";
         private float toastUntil;
-        private GUIStyle h2, menuTitle, menuSub, body, small, smallBold, button, cardName, tagStyle, logoShade, logoNow, idStyle, passTitle, stamp, keyName;
+        private GUIStyle h2, menuTitle, menuSub, body, small, smallBold, button, tagStyle, logoShade, logoNow, idStyle, passTitle, stamp, keyName;
+        private InputAction navigateAction, submitAction, cancelAction;
+        private Vector2 previousNavigation;
+
+        private void OnEnable()
+        {
+            // Own copies so leaving this menu cannot disable another screen's UI actions.
+            navigateAction = navigate != null && navigate.action != null ? navigate.action.Clone() : null;
+            submitAction = submit != null && submit.action != null ? submit.action.Clone() : null;
+            cancelAction = cancel != null && cancel.action != null ? cancel.action.Clone() : null;
+            navigateAction?.Enable();
+            submitAction?.Enable();
+            cancelAction?.Enable();
+            previousNavigation = Vector2.zero;
+        }
+
+        // Release menu callbacks and input actions when this screen stops being active.
+        private void OnDisable()
+        {
+            navigateAction?.Dispose();
+            submitAction?.Dispose();
+            cancelAction?.Dispose();
+            navigateAction = submitAction = cancelAction = null;
+        }
 
         private void Start()
         {
@@ -64,21 +103,41 @@ namespace Escape4Now.Menus
 
         private void Update()
         {
-            Keyboard k = Keyboard.current;
-            if (k == null) return;
-            if (k.escapeKey.wasPressedThisFrame)
+            Vector2 navigation = navigateAction != null ? navigateAction.ReadValue<Vector2>() : Vector2.zero;
+            Vector2 previous = previousNavigation;
+            previousNavigation = navigation;
+            if (cancelAction?.WasPressedThisFrame() == true)
             {
-                Back();
+                if (infoMode >= 0) infoMode = -1;
+                else Back();
                 return;
             }
-            if (k.upArrowKey.wasPressedThisFrame || k.wKey.wasPressedThisFrame) section = (Section)(((int)section + 5) % 6);
-            if (k.downArrowKey.wasPressedThisFrame || k.sKey.wasPressedThisFrame) section = (Section)(((int)section + 1) % 6);
-            if (section == Section.GameMode)
+            // One step per key/stick press, using the actual number of menu sections.
+            if (navigation.y > navigationThreshold && previous.y <= navigationThreshold)
+                SetSection((Section)(((int)section + SectionCount - 1) % SectionCount));
+            if (navigation.y < -navigationThreshold && previous.y >= -navigationThreshold)
+                SetSection((Section)(((int)section + 1) % SectionCount));
+            if (section == Section.GameMode) NavigateMode(ref mode, navigation.x, previous.x);
+            if (section == Section.Online) NavigateMode(ref onlineMode, navigation.x, previous.x);
+            if (submitAction?.WasPressedThisFrame() == true)
             {
-                if (k.leftArrowKey.wasPressedThisFrame || k.aKey.wasPressedThisFrame) mode = (mode + ModeNames.Length - 1) % ModeNames.Length;
-                if (k.rightArrowKey.wasPressedThisFrame || k.dKey.wasPressedThisFrame) mode = (mode + 1) % ModeNames.Length;
+                if (infoMode >= 0) infoMode = -1;
+                else Activate();
             }
-            if (k.enterKey.wasPressedThisFrame || k.numpadEnterKey.wasPressedThisFrame) Activate();
+        }
+
+        private void SetSection(Section next)
+        {
+            if (section != next) infoMode = -1;
+            section = next;
+        }
+
+        // Move the selection through the available modes without starting a match.
+        private void NavigateMode(ref int selection, float current, float previous)
+        {
+            int count = ModeNames.Length;
+            if (current < -navigationThreshold && previous >= -navigationThreshold) selection = (selection + count - 1) % count;
+            if (current > navigationThreshold && previous <= navigationThreshold) selection = (selection + 1) % count;
         }
 
         //The big button of the open section.
@@ -86,6 +145,7 @@ namespace Escape4Now.Menus
         {
             switch (section)
             {
+                case Section.Online: StartOnlineMode(); break;
                 case Section.GameMode: StartMode(); break;
                 case Section.Tutorial: OpenScene(tutorialScene, "The tutorial scene"); break;
                 case Section.Quit: QuitGame(); break;
@@ -134,7 +194,6 @@ namespace Escape4Now.Menus
             small = Text(MonoFont, 13, TextAnchor.UpperLeft, true);
             smallBold = Text(MonoBoldFont, 13);
             button = Text(Bungee, 26, TextAnchor.MiddleCenter);
-            cardName = Text(Bungee, 24, TextAnchor.UpperLeft, true);
             tagStyle = Text(MonoBoldFont, 11, TextAnchor.MiddleCenter);
             logoShade = Text(BungeeShade, 40);
             logoNow = Text(Bungee, 32);
@@ -166,7 +225,8 @@ namespace Escape4Now.Menus
             Rect inner = new Rect(panel.x + 32f, panel.y + 26f, panel.width - 64f, panel.height - 52f);
             switch (section)
             {
-                case Section.GameMode: DrawGameMode(inner); break;
+                case Section.Online: DrawModeSelection(inner, true); break;
+                case Section.GameMode: DrawModeSelection(inner, false); break;
                 case Section.Tutorial: DrawTutorial(inner); break;
                 case Section.Settings: DrawSettings(inner); break;
                 case Section.Leaderboard: leaderboard.Draw(inner, h2, headingColor, accent); break;
@@ -208,37 +268,57 @@ namespace Escape4Now.Menus
 
         private void DrawMenu(float ox, float t)
         {
-            for (int i = 0; i < 6; i++)
+            for (int i = 0; i < SectionCount; i++)
             {
                 bool on = (int)section == i;
-                Rect r = new Rect(ox + 56f + (on ? 8f : 0f), 118f + i * 82f, 400f, 72f);
+                Rect r = new Rect(ox + 56f + (on ? 8f : 0f), 118f + i * (menuRowHeight + menuRowGap), 400f, menuRowHeight);
                 if (on) Block(r, accent, Ink, 4f, Red, 6f);
                 else Block(r, Ink, Hover(r) ? Hex("#55556a") : Hex("#2e2e38"), 4f, Color.clear, 0f);
                 Color text = on ? Ink : Color.white;
-                DrawIcon(i, new Rect(r.x + 20f, r.y + 21f, 30f, 30f), text);
+                DrawIcon(i == 0 ? 6 : i - 1, new Rect(r.x + 20f, r.y + 18f, 30f, 30f), text);
                 Label(new Rect(r.x + 64f, r.y + 12f, 300f, 28f), MenuTitles[i], menuTitle, text);
                 Label(new Rect(r.x + 64f, r.y + 42f, 300f, 16f), MenuSubtitles[i], menuSub, WithAlpha(text, 0.75f));
                 if (on) TriangleRight(new Rect(r.xMax - 40f + Mathf.Sin(t * 7f) * 3f, r.center.y - 9f, 16f, 18f), Ink);
-                if (Hit(r)) section = (Section)i;
+                if (Hit(r)) SetSection((Section)i);
             }
         }
 
-        private void DrawGameMode(Rect inner)
+        // Open the selected online scene, checking account access before leaving the menu.
+        private void StartOnlineMode()
         {
-   if (infoMode >= 0)
-   {
-       DrawModeInfo(inner);
-       return;
-   }
+            if (!AccountService.IsSignedIn)
+            {
+                AccountService.LoginRequested = true;
+                Back();
+                return;
+            }
+            string destination = onlineMode switch
+            {
+                0 => onlineRaceScene,
+                1 => onlineSurvivalScene,
+                2 => onlineFreeForAllScene,
+                _ => onlineHotPotatoScene
+            };
+            OpenScene(destination, "Online Mode");
+        }
 
-            Label(new Rect(inner.x, inner.y, 480f, 44f), "CHOOSE GAME MODE", h2, headingColor);
-            Label(new Rect(inner.xMax - 200f, inner.y + 10f, 200f, 24f), ModeNames[mode] + " SELECTED", Text(MonoFont, 13, TextAnchor.MiddleRight), Muted);
+        private void DrawModeSelection(Rect inner, bool online)
+        {
+            if (infoMode >= 0)
+            {
+                DrawModeInfo(inner);
+                return;
+            }
+
+            ref int selected = ref (online ? ref onlineMode : ref mode);
+            Label(new Rect(inner.x, inner.y, 480f, 44f), online ? onlineHeading : "CHOOSE GAME MODE", h2, headingColor);
+            Label(new Rect(inner.xMax - 200f, inner.y + 10f, 200f, 24f), ModeNames[selected] + " SELECTED", Text(MonoFont, 13, TextAnchor.MiddleRight), Muted);
 
             int count = ModeNames.Length;
             float cw = (inner.width - 14f) / 2;
             for (int i = 0; i < count; i++)
             {
-                bool on = mode == i;
+                bool on = selected == i;
                 Rect c = new Rect(inner.x + (i % 2) * (cw + 14f), inner.y + 62f + (i / 2) * 172f, cw, 158f);
                 if (on) Block(c, accent, Ink, 4f, Red, 6f);
                 else Block(c, Ink, Hover(c) ? Hex("#55556a") : Hex("#2e2e38"), 4f, Color.clear, 0f);
@@ -255,23 +335,29 @@ namespace Escape4Now.Menus
                 else Outline(tagRect, 2f, Hex("#44444f"));
                 Label(tagRect, ModePlayers[i], tagStyle, on ? accent : Hex("#bdbdbd"));
 
-                Label(new Rect(c.x + 55f, c.y + 14f, cw - 175f, 30f), ModeNames[i], Text(MonoFont, 18, TextAnchor.MiddleLeft, true), text);
+                Label(new Rect(c.x + 55f, c.y + 14f, cw - 175f, 30f), ModeNames[i], Text(MonoFont, i == 2 ? 14 : 18, TextAnchor.MiddleLeft, true), text);
                 Label(new Rect(c.x + 18f, c.y + 54f, cw - 36f, 55f), ModeText[i], small, text);
                 Fill(new Rect(c.x + 18f, c.yMax - 42f, cw - 36f, 2f), on ? WithAlpha(Ink, 0.35f) : Hex("#2e2e38"));
                 Label(new Rect(c.x + 18f, c.yMax - 34f, cw - 36f, 30f), "WIN: " + ModeWin[i], Text(MonoFont, 11, TextAnchor.UpperLeft, true), text);
         
-                if (Hit(c)) mode = i;
+                if (Hit(c)) selected = i;
             }
 
         
-   float bw = BigButton(new Rect(inner.x, inner.yMax - 64f, 0f, 64f), "START " + ModeNames[mode], true, out bool startClicked);
-   if (startClicked) StartMode();
-   Rect info = new Rect(inner.x + bw + 18f, inner.yMax - 64f, 64f, 64f);
-   Rect infoDrawn = info;
-   if (Hover(info)) { infoDrawn.x -= 3f; infoDrawn.y -= 3f; }
-   Block(infoDrawn, Ink, Color.white, 4f, Red, 6f);
-   Label(infoDrawn, "i", Text(Bungee, 30, TextAnchor.MiddleCenter), Color.white);
-   if (Hit(info)) infoMode = mode;
+            string buttonLabel = online && !AccountService.IsSignedIn
+                ? "LOG IN TO PLAY" : (online ? "PLAY " : "START ") + ModeNames[selected];
+            float width = BigButton(new Rect(inner.x, inner.yMax - 64f, 0f, 64f), buttonLabel, true, out bool startClicked);
+            if (startClicked)
+            {
+                if (online) StartOnlineMode();
+                else StartMode();
+            }
+            Rect info = new Rect(inner.x + width + 18f, inner.yMax - 64f, 64f, 64f);
+            Rect infoDrawn = info;
+            if (Hover(info)) { infoDrawn.x -= 3f; infoDrawn.y -= 3f; }
+            Block(infoDrawn, Ink, Color.white, 4f, Red, 6f);
+            Label(infoDrawn, "i", Text(Bungee, 30, TextAnchor.MiddleCenter), Color.white);
+            if (Hit(info)) infoMode = selected;
         }
         
           
@@ -279,7 +365,7 @@ namespace Escape4Now.Menus
    {
        "GOAL\nBe the first player to carry the key through the EXIT.\n\nHOW IT WORKS\nOne key is hidden in a locker somewhere in the school. Find it, then carry it to the EXIT. If you are on the same tile as another player, you can battle them for the key.\n\nPLAYERS\nUp to 4 players.",
        "GOAL\nSurvive until time runs out, or complete the task to escape.\n\nHOW IT WORKS\nSomething is loose in the school. Work together as a team and solve puzzles to unlock the exits. Each survivor escapes on their own, so don't get caught.\n\nTHE MONSTER\nOne player can be the Monster. If nobody takes that role, the computer plays it.\n\nPLAYERS\nUp to 4 players.",
-       "GOAL\nBe the last player standing.\n\nHOW IT WORKS\nEveryone moves freely around the gym and fights to be the last one left. Combat rules are still being developed, so details may change.\n\nPLAYERS\nUp to 4 players.",
+       "GOAL\nReach the score target first.\n\nHOW IT WORKS\nControl the moving hill to earn points. Collect items and return to the fight after getting knocked out.\n\nPLAYERS\nUp to 4 players.",
        "GOAL\nBe the last player standing.\n\nHOW IT WORKS\nOne player starts with the potato. Chase, tag and pass it to someone else before it explodes. Whoever is holding it when it explodes is out.\n\nPLAYERS\nUp to 4 players."
    };
 
@@ -440,12 +526,18 @@ namespace Escape4Now.Menus
             Back();
         }
 
-        //Simple shape icons for the menu: 0 play, 1 tutorial, 2 settings, 3 trophy, 4 account, 5 quit.
+        //Simple shape icons; the online entry uses a small connected-computers symbol.
         private static void DrawIcon(int kind, Rect r, Color c)
         {
             float u = r.width / 30f;
             switch (kind)
             {
+                case 6:
+                    Outline(new Rect(r.x + 1f * u, r.y + 2f * u, 15f * u, 11f * u), 2f * u, c);
+                    Outline(new Rect(r.x + 15f * u, r.y + 18f * u, 14f * u, 10f * u), 2f * u, c);
+                    Fill(new Rect(r.x + 7f * u, r.y + 13f * u, 2f * u, 10f * u), c);
+                    Fill(new Rect(r.x + 7f * u, r.y + 22f * u, 8f * u, 2f * u), c);
+                    break;
                 case 0:
                     TriangleRight(new Rect(r.x + 6f * u, r.y + 3f * u, 20f * u, 24f * u), c);
                     break;

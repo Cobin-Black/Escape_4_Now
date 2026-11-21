@@ -34,7 +34,7 @@ namespace Escape4Now.Bots
 
         private void Update()
         {
-            if (Escape4Now.Multiplayer.LanMultiplayerSession.Active)
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.Active && !Escape4Now.Multiplayer.LanMultiplayerSession.RunsOnlineBots)
                 return;
 
             if (turnRoutine != null || player == null || map == null)

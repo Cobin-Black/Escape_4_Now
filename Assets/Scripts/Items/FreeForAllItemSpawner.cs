@@ -1,5 +1,6 @@
 
 using System.Collections.Generic;
+using System.Linq;
 using Escape4Now.Arena;
 using UnityEngine;
 
@@ -20,6 +21,45 @@ namespace Escape4Now.Items
         private readonly List<float> spawnTimers = new();
         private KingOfTheHillController match;
         private float replacementTimer;
+        private readonly Dictionary<int, FreeForAllItem> replicas = new();
+        public T FindPrefab<T>() where T : FreeForAllItem => itemPrefabs?.OfType<T>().FirstOrDefault();
+
+        [System.Serializable]
+        public sealed class OnlinePickup
+        {
+            public int id;
+            public FreeForAllItemType type;
+            public Vector3 position;
+        }
+
+        public OnlinePickup[] CaptureOnlinePickups() => floorItems.Where(item =>
+            item != null && item.GetComponent<FreeForAllItemPickup>()?.Collected != true)
+            .Select(item => new OnlinePickup { id = item.GetInstanceID(), type = item.ItemType, position = item.transform.position }).ToArray();
+
+        // Match the visible floor pickups to the host's list without spawning independent guest items.
+        public void ApplyOnlinePickups(OnlinePickup[] pickups)
+        {
+            if (pickups == null || itemPrefabs == null) return;
+            var visible = new HashSet<int>(pickups.Select(pickup => pickup.id));
+            foreach (int id in replicas.Keys.ToArray())
+            {
+                if (visible.Contains(id)) continue;
+                if (replicas[id] != null) Destroy(replicas[id].gameObject);
+                replicas.Remove(id);
+            }
+            foreach (var pickup in pickups)
+            {
+                if (replicas.ContainsKey(pickup.id)) continue;
+                var prefab = System.Array.Find(itemPrefabs, item => item != null && item.ItemType == pickup.type);
+                if (prefab == null) continue;
+                var replica = Instantiate(prefab, pickup.position, Quaternion.identity, transform);
+                var input = replica.GetComponent<FreeForAllItemPickup>();
+                if (input != null) input.enabled = false;
+                var collider = replica.GetComponent<Collider2D>();
+                if (collider != null) collider.enabled = false;
+                replicas.Add(pickup.id, replica);
+            }
+        }
 
         // Start with randomly placed items.
         public void SpawnItems(KingOfTheHillController controller)

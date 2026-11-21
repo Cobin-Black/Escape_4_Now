@@ -9,7 +9,7 @@ using System.Text;
 namespace Escape4Now.Multiplayer
 {
     //Sends complete, size-limited messages over TCP without waiting on the game thread.
-    public sealed class LanConnection : IDisposable
+    public sealed class LanConnection : IMatchMessageConnection
     {
         public const int MaxMessageBytes = 65536;
         private readonly Socket socket;

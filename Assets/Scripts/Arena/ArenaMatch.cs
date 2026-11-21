@@ -31,7 +31,8 @@ namespace Escape4Now.Arena
         private InputActionReference pause;
         [Header("Player Identity")]
         [SerializeField]
-        private Color[] playerColors =
+        private PlayerColorPalette playerPalette;
+        [SerializeField, HideInInspector] private Color[] playerColors =
         {
             new Color(.15f, .7f, 1),
             new Color(1, .3f, .28f),
@@ -50,6 +51,16 @@ namespace Escape4Now.Arena
         [SerializeField]
         private UnityEvent onMatchStarted, onMatchEnded;
         private bool ownsPause;
+        public bool Online { get; private set; }
+        public bool Replica { get; private set; }
+        public event System.Action<bool> OnlinePauseRequested;
+
+        // Choose whether this match runs the rules or only displays the host's state.
+        public void ConfigureOnline(bool replica)
+        {
+            Online = true;
+            Replica = replica;
+        }
         public ArenaMap Map => map;
         public InputActionAsset InputActions => inputActions;
         public InputActionAsset GamepadActions => gamepadActions != null ? gamepadActions : InputSystem.actions;
@@ -60,11 +71,15 @@ namespace Escape4Now.Arena
         public string Title => modeTitle;
         public string Instructions => instructions;
 
-        public Color GetPlayerColor(int slot) => playerColors.Length > 0 ? playerColors[Mathf.Clamp(slot, 0, playerColors.Length - 1)] : Color.white;
+        public Color GetPlayerColor(int slot) => playerPalette != null ? playerPalette.GetColor(slot) : playerColors.Length > 0 ? playerColors[Mathf.Clamp(slot, 0, playerColors.Length - 1)] : Color.white;
         public readonly List<ArenaParticipant> Players = new List<ArenaParticipant>();
         public bool Playing { get; protected set; }
         public bool Paused { get; private set; }
         public string Result { get; private set; } = "";
+        //Lobby slot of the last match's winner, or -1 when nobody won. Online guests get it from the host.
+        public int WinnerSlot { get; private set; } = -1;
+        //The leaderboard this mode's results are saved to.
+        public string StatMode => Type == GameModeType.HotPotato ? AccountStats.HotPotato : AccountStats.FreeForAll;
         public string Error { get; private set; } = "";
         public string Notice { get; private set; } = "";
 
@@ -84,6 +99,7 @@ namespace Escape4Now.Arena
         public virtual string MatchInfo => "";
         public abstract string Objective { get; }
 
+        // Enable Pause if needed and listen for changes to assigned controllers.
         protected virtual void OnEnable()
         {
             if (pause != null && !pause.action.enabled)
@@ -94,6 +110,7 @@ namespace Escape4Now.Arena
             ControllerHandling.AssignmentsChanged += ControllersChanged;
         }
 
+        // Remove controller callbacks and release Pause only if this component enabled it.
         protected virtual void OnDisable()
         {
             ControllerHandling.AssignmentsChanged -= ControllersChanged;
@@ -102,11 +119,12 @@ namespace Escape4Now.Arena
             ownsPause = false;
         }
 
+        // Handle Pause and notices, then run mode rules only on the authoritative match.
         protected virtual void Update()
         {
             if (Playing && pause != null && pause.action.WasPressedThisFrame())
                 SetPaused(!Paused);
-            if (!Playing || Paused)
+            if (!Playing || Paused || Replica)
                 return;
             if (noticeRemaining > 0)
             {
@@ -118,83 +136,43 @@ namespace Escape4Now.Arena
             Tick(Time.deltaTime);
         }
 
-
-        // Start a match using the controllers assigned in the lobby.
+        // Controllers come from ControllerHandling: each player slot uses its own controller,
+        // and anyone without one gets a shared-keyboard layout.
+        // bots marks the slots the computer plays. Bots never take a keyboard layout or controller.
         public bool StartMatch(int count, string[] names, int[] skinIndices, bool[] bots = null)
         {
-            var pads = new Gamepad[Mathf.Max(0, count)];
-
+            var pads = new Gamepad[Mathf.Clamp(count, 0, ControllerHandling.MaxSlots)];
             for (int i = 0; i < pads.Length; i++)
-            {
-                if (!IsBotSlot(i, bots))
-                    pads[i] = ControllerHandling.GetGamepad(i);
-            }
-
-            bool started = StartMatch(count, names, pads, skinIndices, bots);
+                pads[i] = IsBotSlot(bots, i) ? null : ControllerHandling.GetGamepad(i);
+            bool started = StartMatch(count, names, pads, skinIndices, null, bots);
             autoAssignedInput = started;
             return started;
         }
 
-        // Start a match using explicitly selected gamepads.
-        public bool StartMatch(int count, string[] names, int[] gamepads, int[] skinIndices, bool[] bots = null)
+        // Explicit assignment (used by editor checks): gamepads index Gamepad.all, -1 means keyboard.
+        public bool StartMatch(int count, string[] names, int[] gamepads, int[] skinIndices, int? hostSeed = null, bool[] bots = null)
         {
             var pads = new Gamepad[Mathf.Max(0, count)];
-
             for (int i = 0; i < pads.Length && gamepads != null && i < gamepads.Length; i++)
             {
-                if (IsBotSlot(i, bots))
-                    continue;
-
                 if (gamepads[i] >= Gamepad.all.Count)
                 {
                     Error = "Connect the selected gamepad or choose Keyboard.";
                     return false;
                 }
-
                 pads[i] = gamepads[i] >= 0 ? Gamepad.all[gamepads[i]] : null;
             }
-
             autoAssignedInput = false;
-            return StartMatch(count, names, pads, skinIndices, bots);
+            return StartMatch(count, names, pads, skinIndices, hostSeed, bots);
         }
 
-        // Check whether a player slot belongs to a bot.
-        private static bool IsBotSlot(int slot, bool[] bots)
-        {
-            return bots != null && slot < bots.Length && bots[slot];
-        }
+        // Validate the saved references, create participants, then let the selected mode start its rules.
+        private static bool IsBotSlot(bool[] bots, int slot) => bots != null && slot < bots.Length && bots[slot];
 
-        // Calculate keyboard layouts without assigning controls to bots.
-        private static int[] KeyboardLayouts(Gamepad[] pads, int count, bool[] bots)
-        {
-            var availablePads = new Gamepad[count];
-
-            for (int i = 0; i < count; i++)
-            {
-                availablePads[i] = IsBotSlot(i, bots)
-                    ? null
-                    : pads[i];
-            }
-
-            int[] layouts = ControllerHandling.KeyboardLayoutsFor(availablePads, count);
-
-            // Bots do not use keyboard layouts.
-            for (int i = 0; i < count; i++)
-            {
-                if (IsBotSlot(i, bots))
-                    layouts[i] = -1;
-            }
-
-            return layouts;
-        }
-
-        // Validate the match and create human players and bots.
-        private bool StartMatch(int count, string[] names, Gamepad[] pads, int[] skinIndices, bool[] bots)
+        private bool StartMatch(int count, string[] names, Gamepad[] pads, int[] skinIndices, int? hostSeed = null, bool[] bots = null)
         {
             Error = "";
-
-            if (map == null || map.Settings == null || map.Settings.material == null ||
-                playerPrefab == null || inputActions == null || pause == null)
+            if (map == null || map.Settings == null || map.Settings.material == null || playerPrefab == null || inputActions == null || pause == null)
             {
                 Error = "Assign the map settings, material, player prefab, input actions and Pause action.";
                 return false;
@@ -208,13 +186,10 @@ namespace Escape4Now.Arena
 
             var used = new HashSet<Gamepad>();
             int[] layouts = KeyboardLayouts(pads, count, bots);
-
             for (int i = 0; i < count; i++)
             {
-                // Bots do not require keyboard or controller input.
-                if (IsBotSlot(i, bots))
+                if (IsBotSlot(bots, i))
                     continue;
-
                 if (pads[i] != null && !used.Add(pads[i]))
                 {
                     Error = "Give each gamepad to one player only.";
@@ -222,9 +197,7 @@ namespace Escape4Now.Arena
                 }
 
                 bool primary = pads[i] != null || layouts[i] == 0;
-
-                if (primary && (GamepadActions == null ||
-                                GamepadActions.FindActionMap("Player") == null))
+                if (primary && (GamepadActions == null || GamepadActions.FindActionMap("Player") == null))
                 {
                     Error = "Player 1 and controller players need the Input System's Player action map.";
                     return false;
@@ -237,10 +210,10 @@ namespace Escape4Now.Arena
                 }
             }
 
+            // Remove old event reservations before generating a replacement room.
             events?.Stop();
             ClearPlayers();
-
-            if (!map.Generate(count, out var spawns))
+            if (!map.Generate(count, out var spawns, hostSeed))
             {
                 Error = "No safe connected layout with separated spawns. Check Map Settings.";
                 return false;
@@ -248,94 +221,70 @@ namespace Escape4Now.Arena
 
             skins?.ResetToDefaults();
             skins?.ClearAll();
-
             for (int i = 0; i < count; i++)
             {
                 var player = Instantiate(playerPrefab, transform);
-                bool isBot = IsBotSlot(i, bots);
-
-                player.Initialize(this, i, names[i], playerColors[i], spawns[i]);
-
-                if (isBot)
+                bool bot = IsBotSlot(bots, i);
+                player.Initialize(this, i, names[i], GetPlayerColor(i), spawns[i], bot);
+                // Only the game that runs the rules (local play or the online host) drives bots.
+                if (bot && !Replica)
                     player.gameObject.AddComponent<ArenaBotController>();
-
                 player.Eliminated += ParticipantEliminated;
                 Players.Add(player);
-
                 if (skins != null && skinIndices[i] >= 0)
                     skins.TryAssign(i, skinIndices[i]);
             }
 
-            ApplyInputs(pads);
-
+            // Online participants receive checked input from their room slot.
+            if (!Online) ApplyInputs(pads);
             skins?.FillMissing();
-
             for (int i = 0; i < Players.Count; i++)
                 skins?.ApplyTo(Players[i].Character, i);
-
             Playing = true;
             Paused = false;
             Result = "";
+            WinnerSlot = -1;
             Notice = "";
-
             events?.Begin(this);
-            BeginRules();
+            if (!Replica) BeginRules();
             onMatchStarted?.Invoke();
-
             return true;
         }
 
-        // Configure human inputs while keeping bots under AI control.
+        // Keyboard players keep their own slot's layout: Player 1 uses the Input System's keyboard bindings,
+        // Players 2-4 use the backup Player2..Player4 maps. -1 means that slot has a controller.
+        private static int[] KeyboardLayouts(Gamepad[] pads, int count, bool[] bots)
+        {
+            int[] layouts = ControllerHandling.KeyboardLayoutsFor(pads, count);
+            // Bots do not use keys, so their layouts must not take keys away from a human.
+            for (int i = 0; i < layouts.Length; i++)
+                if (IsBotSlot(bots, i)) layouts[i] = -1;
+            return layouts;
+        }
+
         private void ApplyInputs(Gamepad[] pads)
         {
             var bots = new bool[Players.Count];
-
-            for (int i = 0; i < Players.Count; i++)
-                bots[i] = Players[i] != null &&
-                          Players[i].GetComponent<ArenaBotController>() != null;
-
+            for (int i = 0; i < bots.Length; i++) bots[i] = Players[i] != null && Players[i].IsBot;
             int[] layouts = KeyboardLayouts(pads, Players.Count, bots);
-
+            // Keys used by the other keyboard players are switched off in Player 1's copy so nobody shares a key.
             var reserved = new HashSet<string>();
-
             for (int i = 1; i < layouts.Length; i++)
-            {
                 if (layouts[i] >= 0)
                     ArenaLocalInput.CollectLayoutKeys(inputActions, layouts[i], reserved);
-            }
-
             for (int i = 0; i < Players.Count; i++)
-            {
-                if (Players[i] == null)
-                    continue;
-
-                if (bots[i])
-                {
-                    // Do not reset bot inputs when controllers change.
-                    if (!Players[i].Input.IsBot)
-                        Players[i].Input.ConfigureBot();
-
-                    continue;
-                }
-
-                Players[i].ConfigureInput(pads[i], layouts[i], reserved);
-            }
+                if (Players[i] != null && !Players[i].IsBot)
+                    Players[i].ConfigureInput(pads[i], layouts[i], reserved);
         }
 
-        // Reassign human controllers when devices connect or disconnect.
+        // A controller was plugged in or unplugged: move each player to their current controller or keyboard layout.
         private void ControllersChanged()
         {
             if (!autoAssignedInput || Players.Count == 0)
                 return;
-
             var pads = new Gamepad[Players.Count];
-
             for (int i = 0; i < pads.Length; i++)
-            {
-                if (Players[i].GetComponent<ArenaBotController>() == null)
-                    pads[i] = ControllerHandling.GetGamepad(Players[i].Slot);
-            }
-
+                pads[i] = Players[i].IsBot ? null : ControllerHandling.GetGamepad(Players[i].Slot);
             ApplyInputs(pads);
         }
 
@@ -357,6 +306,7 @@ namespace Escape4Now.Arena
             CheckLastPlayer();
         }
 
+        // Finish the match when only one player, or no players, remain.
         protected bool CheckLastPlayer()
         {
             if (Remaining > 1)
@@ -381,7 +331,9 @@ namespace Escape4Now.Arena
                 return;
 
             Result = result;
-            ReportStats(winner);
+            WinnerSlot = winner != null ? winner.Slot : -1;
+            //Online, each player's own game saves their result through the room instead.
+            if (!Online) ReportStats(winner);
             Playing = false;
             Paused = false;
             events?.Stop();
@@ -390,10 +342,11 @@ namespace Escape4Now.Arena
 
         private void ReportStats(ArenaParticipant winner)
         {
-            string mode = Type == GameModeType.HotPotato ? AccountStats.HotPotato : AccountStats.KingOfTheHill;
             var stats = new List<MatchStat>();
+            //Bots count toward the player total but never save stats, the same as Race.
             foreach (var p in Players)
-                stats.Add(new MatchStat(p.Slot, mode, p == winner, Players.Count));
+                if (!p.IsBot)
+                    stats.Add(new MatchStat(p.Slot, StatMode, p == winner, Players.Count));
             AccountStats.Report(stats);
         }
 
@@ -403,11 +356,27 @@ namespace Escape4Now.Arena
             noticeRemaining = duration;
         }
 
+        // Route an online pause request through the room; local matches can change pause directly.
         public void SetPaused(bool value)
         {
             if (Playing)
-                Paused = value;
+            {
+                if (Online) OnlinePauseRequested?.Invoke(value);
+                else Paused = value;
+            }
         }
+
+        // Display the host's play, pause, result and notice values without deciding rules again.
+        public void ApplyOnlineState(bool playing, bool paused, string result, string notice)
+        {
+            Playing = playing;
+            Paused = paused;
+            Result = result ?? "";
+            Notice = notice ?? "";
+        }
+
+        //Guests don't run the rules, so the host tells them who won.
+        public void ApplyOnlineWinner(int slot) => WinnerSlot = slot;
 
         // Clear event changes before removing players or starting another room.
         public void ReturnToSetup()
@@ -415,10 +384,12 @@ namespace Escape4Now.Arena
             Playing = false;
             Paused = false;
             Result = "";
+            WinnerSlot = -1;
             events?.Stop();
             ClearPlayers();
         }
 
+        // Remove old participants and their elimination callbacks before another match.
         private void ClearPlayers()
         {
             foreach (var p in Players)

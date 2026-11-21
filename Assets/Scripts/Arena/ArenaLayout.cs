@@ -116,6 +116,7 @@ namespace Escape4Now.Arena
             ArenaObstaclePlan.Apply(this, settings.obstacleGroups, random);
         }
 
+        // Accept a fixture only if the remaining floor stays connected.
         private void Fixture(Vector2Int cell, int kind)
         {
             if (!ClearSquare(cell, 1))
@@ -141,6 +142,7 @@ namespace Escape4Now.Arena
             return true;
         }
 
+        // Collect the open floor cells used by placement and event selection.
         public List<Vector2Int> Cells()
         {
             var result = new List<Vector2Int>();
@@ -221,6 +223,7 @@ namespace Escape4Now.Arena
             return true;
         }
 
+        // Shuffle with the supplied random generator so a saved seed can reproduce the same choices.
         public static void Shuffle<T>(IList<T> list, System.Random random)
         {
             for (int i = list.Count - 1; i > 0; i--)

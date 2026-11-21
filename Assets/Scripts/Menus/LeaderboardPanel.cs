@@ -5,15 +5,19 @@ using static Escape4Now.Menus.ArcadeMenuKit;
 
 namespace Escape4Now.Menus
 {
-    //The main menu's leaderboard: one tab per mode, showing wins, losses, win rate and fastest time.
+    //The main menu's leaderboard: one tab per mode, showing wins, losses, win rate, fastest time,
+    //and finally how many of the wins were online. Online games already count in the wins, losses and win rate.
     public sealed class LeaderboardPanel
     {
         private const int Rows = 10;
         private const float RowHeight = 36f;
-        private static readonly string[] Boards = { AccountStats.Race, AccountStats.KingOfTheHill, AccountStats.HotPotato, AccountStats.MonsterRole, AccountStats.Survivor };
-        private static readonly string[] Tabs = { "RACE", "KING OF THE HILL", "HOT POTATO", "AS MONSTER", "AS SURVIVOR" };
-        //Column positions from the left of the panel.
-        private static readonly float[] Columns = { 0f, 44f, 290f, 360f, 430f, 530f };
+        private static readonly string[] Boards = { AccountStats.Race, AccountStats.FreeForAll, AccountStats.HotPotato, AccountStats.MonsterRole, AccountStats.Survivor };
+        private static readonly string[] Tabs = { "RACE", AccountStats.ModeName(AccountStats.FreeForAll), "HOT POTATO", "AS MONSTER", "AS SURVIVOR" };
+        //Column positions from the left of the panel: #, PLAYER, WINS, LOSSES, WIN RATE, FASTEST, ONLINE WINS.
+        private static readonly float[] Columns = { 0f, 40f, 240f, 305f, 390f, 475f, 560f };
+        private const int FastestColumn = 5;
+        private const int OnlineColumn = 6;
+        private const string OnlineNote = "Wins, losses and win rate include online games.";
 
         private int board;
         private bool requested;
@@ -22,7 +26,7 @@ namespace Escape4Now.Menus
         private List<BoardEntry> entries;
 
         //Only Race and Monster matches have a timer.
-        private bool ShowsFastest => Boards[board] != AccountStats.KingOfTheHill && Boards[board] != AccountStats.HotPotato;
+        private bool ShowsFastest => Boards[board] != AccountStats.FreeForAll && Boards[board] != AccountStats.HotPotato;
 
         public void Draw(Rect inner, GUIStyle title, Color heading, Color accent)
         {
@@ -53,10 +57,10 @@ namespace Escape4Now.Menus
         private void DrawTable(Rect inner, Color accent)
         {
             float y = inner.y + 100f;
-            string[] headers = { "#", "PLAYER", "WINS", "LOSSES", "WIN RATE", "FASTEST" };
+            string[] headers = { "#", "PLAYER", "WINS", "LOSSES", "WIN RATE", "FASTEST", "ONLINE WINS" };
             GUIStyle headerStyle = Text(MonoBoldFont, 12);
             for (int i = 0; i < headers.Length; i++)
-                if (i < 5 || ShowsFastest) Label(new Rect(inner.x + Columns[i], y, 120f, 20f), headers[i], headerStyle, Muted);
+                if (i != FastestColumn || ShowsFastest) Label(new Rect(inner.x + ColumnX(i), y, 120f, 20f), headers[i], headerStyle, Muted);
 
             GUIStyle rowStyle = Text(MonoFont, 15);
             for (int i = 0; i < entries.Count; i++)
@@ -70,12 +74,20 @@ namespace Escape4Now.Menus
                 {
                     entry.Rank.ToString(), entry.Name, entry.Wins.ToString(), entry.Losses.ToString(),
                     played > 0 ? Mathf.RoundToInt(entry.Wins * 100f / played) + "%" : "--",
-                    entry.Fastest > 0f ? FormatTime(entry.Fastest) : "--"
+                    entry.Fastest > 0f ? FormatTime(entry.Fastest) : "--",
+                    //"5 of 12" shows online wins are part of the wins total, not extra wins.
+                    entry.OnlineWins + " of " + entry.Wins
                 };
                 for (int c = 0; c < cells.Length; c++)
-                    if (c < 5 || ShowsFastest) Label(new Rect(row.x + Columns[c] + 6f, row.y, 120f, row.height), cells[c], rowStyle, Color.white);
+                    if (c != FastestColumn || ShowsFastest) Label(new Rect(row.x + ColumnX(c) + 6f, row.y, 120f, row.height), cells[c], rowStyle, Color.white);
             }
+            //Answers "does online change the ratio?" right under the table.
+            float noteY = y + 24f + entries.Count * RowHeight;
+            Label(new Rect(inner.x, noteY, inner.width, 18f), OnlineNote, Text(MonoFont, 11), Muted);
         }
+
+        //Online wins move into the fastest-time position on tabs without a timer, so there is no gap.
+        private float ColumnX(int column) => column == OnlineColumn && !ShowsFastest ? Columns[FastestColumn] : Columns[column];
 
         private static void Message(Rect inner, string text)
         {

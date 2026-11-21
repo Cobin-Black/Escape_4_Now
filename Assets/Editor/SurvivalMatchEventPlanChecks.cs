@@ -10,6 +10,7 @@ public static class SurvivalMatchEventPlanChecks
 {
     private static readonly HashSet<string> catalogs = new HashSet<string>();
     private static readonly Dictionary<SurvivalEventType, int> frequencies = new Dictionary<SurvivalEventType, int>();
+    // Verify a generated match respects its event subset, occurrence limits and placement budget.
     public static void Check(SurvivalMapLayout map, SurvivalObjectiveLayout objectives, SurvivalEventSettings settings,
         SurvivalMatchEventPlan plan, SurvivalEventLayout layout)
     {
@@ -39,6 +40,7 @@ public static class SurvivalMatchEventPlanChecks
         Require(layout.Tiles.Count == repeatedLayout.Tiles.Count && layout.Tiles.All(pair => repeatedLayout.Tiles.TryGetValue(pair.Key, out var rule) && rule.type == pair.Value.type), "Fixed seed placements");
     }
     public static string Catalog(SurvivalMatchEventPlan plan) => string.Join(";", plan.SelectedRules.Select(rule => rule.type + ":" + plan.Limit(rule.type)));
+    // Compare generated event plans to check that different seeds can produce different subsets.
     public static void VerifyVariety()
     {
         Require(catalogs.Count > 100, "Enabled event pool produces varied matches");

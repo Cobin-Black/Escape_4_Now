@@ -1,5 +1,11 @@
 # Free For All and Hot Potato
 
+Arena bots use the same `ArenaBotController` in local play and on the online host. Guests receive bot movement, items and results through the normal match updates, together with each slot's human/bot identity. They never run a second bot controller. Each online computer uses its own first local keyboard/controller slot for its human player, regardless of that player's room slot.
+
+King of the Hill keeps main's filled ruler swing, sprite-facing attacks and invincibility blinking. Online guests use the same swing prefab and receive the host's protection timer. Ruler fill, fade and outline settings remain on the effect prefab; blink speed and opacity remain on the Arena Participant component.
+
+Bots do not reserve keyboard keys. Connecting or unplugging a controller only updates human inputs, so bots keep moving with their AI controls. The game still uses separate mode controllers for King of the Hill and Hot Potato, with shared input, movement and networking components.
+
 Open `Assets/Scenes/FreeForAll.unity` or `Assets/Scenes/HotPotato.unity`, or select the mode in Main Menu. Both support 2–4 local players. The room is generated after Start Match; it does not generate while editing or in the lobby.
 
 ## Controls

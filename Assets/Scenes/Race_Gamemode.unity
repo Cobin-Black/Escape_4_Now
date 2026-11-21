@@ -166,7 +166,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5f7201a12d95ffc409449d95f23cf332, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Text
   m_Material: {fileID: 0}
   m_Color: {r: 1, g: 1, b: 1, a: 1}
@@ -249,8 +249,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a79441f348de89743a2939f4d699eac1, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   m_RenderShadows: 1
   m_RequiresDepthTextureOption: 2
   m_RequiresOpaqueTextureOption: 2
@@ -404,8 +404,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 073797afb82c5a1438f328866b10b3f0, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   m_ComponentVersion: 3
   m_LightType: 4
   m_BlendStyleIndex: 0
@@ -630,7 +630,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9085046f02f69544eb97fd06b6048fe2, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Toggle
   m_Navigation:
     m_Mode: 3
@@ -678,7 +678,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 0.15, g: 0.18, b: 0.16, a: 1}
@@ -825,7 +825,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 01614664b831546d2ae94a42149d80ac, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Unity.InputSystem::UnityEngine.InputSystem.UI.InputSystemUIInputModule
   m_SendPointerHoverToParent: 1
   m_MoveRepeatDelay: 0.5
@@ -856,7 +856,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 76c392e42b5098c458856cdf6ecaaaa1, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.EventSystems.EventSystem
   m_FirstSelected: {fileID: 0}
   m_sendNavigationEvents: 1
@@ -921,8 +921,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 6a78ef7b6a144d5a953d5396cf211c05, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   width: 25
   height: 25
   tileWidth: 1.2
@@ -994,7 +994,7 @@ MonoBehaviour:
     - room: 1
       rowsWeight: 3
       perimeterWeight: 4
-      groupsWeight: 1
+      groupsWeight: 0
       centerAisleWeight: 2
       rowSpacing: 2
       aisleWidth: 1
@@ -1005,7 +1005,7 @@ MonoBehaviour:
     - room: 2
       rowsWeight: 4
       perimeterWeight: 3
-      groupsWeight: 2
+      groupsWeight: 0
       centerAisleWeight: 2
       rowSpacing: 2
       aisleWidth: 1
@@ -1016,7 +1016,7 @@ MonoBehaviour:
     - room: 3
       rowsWeight: 4
       perimeterWeight: 0
-      groupsWeight: 3
+      groupsWeight: 0
       centerAisleWeight: 3
       rowSpacing: 2
       aisleWidth: 2
@@ -1027,7 +1027,7 @@ MonoBehaviour:
     - room: 4
       rowsWeight: 4
       perimeterWeight: 1
-      groupsWeight: 3
+      groupsWeight: 0
       centerAisleWeight: 2
       rowSpacing: 2
       aisleWidth: 1
@@ -1063,8 +1063,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4d3b166849ad4ff785f3b43179135ef8, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   eventPrefabs:
   - {fileID: 11400000, guid: c5ab702d344b49a7b05f1f81aae29f00, type: 3}
   - {fileID: 11400000, guid: c5ab702d344b49a7b05f1f81aae29f01, type: 3}
@@ -1117,7 +1117,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 5bc2680b88b39443f92f2edcf8c205b0, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Items.ItemSpawner
   map: {fileID: 1200000002}
   raceItems:
@@ -1154,7 +1154,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 19be0689ebb54df98789351881dfe27e, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Obstacles.ObstacleSpawner
   map: {fileID: 1200000002}
   computerLabPrefabs:
@@ -1329,8 +1329,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ec1d52d99628405ab1371d06266ade13, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   mapTemplate: {fileID: 1200000002}
   gameMode: {fileID: 1200000052}
   turnSystem: {fileID: 1200000022}
@@ -1340,9 +1340,11 @@ MonoBehaviour:
   moveSpeed: 4
   inventory: {fileID: 1200000014}
   health: 5
+  realTimeMovement: 0
   diceRollAnimationDuration: 0.9
   sharedTileHorizontalOffset: 0.14
   sharedTileVerticalOffset: 0.08
+  isBotControlled: 0
 --- !u!114 &1200000014
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1353,7 +1355,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 738b1edee6be34ec49fbd04565807b5d, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Items.PlayerInventory
   player: {fileID: 1200000013}
 --- !u!114 &1200000015
@@ -1366,7 +1368,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9afcf4476d57a2749bab22dfcd2244c7, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Player.PlayerAppearance
   player: {fileID: 1200000013}
   body: {fileID: 1200000012}
@@ -1392,7 +1394,7 @@ MonoBehaviour:
   m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ddfd6ac5b599a45279b635f5d9ae48eb, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Bots.BotController
 --- !u!1 &1200000020
 GameObject:
@@ -1440,8 +1442,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 00f9e917cf6d409690e616e4a482f71c, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   players:
   - {fileID: 1200000013}
   gameMode: {fileID: 1200000052}
@@ -1463,8 +1465,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ac2a116f896944e34bc802ba9ba43da6, type: 3}
-  m_Name:
-  m_EditorClassIdentifier:
+  m_Name: 
+  m_EditorClassIdentifier: 
   timeLimit: 300
   gameMode: {fileID: 1200000052}
 --- !u!114 &1200000024
@@ -1477,12 +1479,13 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d6fea78d96bf47f8a7be5592f7a41a95, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Multiplayer.LocalMultiplayerSession
   showTemporaryUI: 1
   setupTitle: Race Mode
   gameMode: {fileID: 1200000052}
   showDisplayOptions: 1
+  playerPalette: {fileID: 11400000, guid: 224f47b3a4ab437393d6610c81073a7c, type: 2}
   playerColors:
   - {r: 0.15, g: 0.7, b: 1, a: 1}
   - {r: 1, g: 0.35, b: 0.3, a: 1}
@@ -1509,8 +1512,11 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 8611365c4b1f08245a3e10c5b961a257, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Multiplayer.LanMultiplayerSession
+  snapshotInterval: 0.1
+  peerTimeout: 15
+  handshakeTimeout: 5
 --- !u!1 &1200000050
 GameObject:
   m_ObjectHideFlags: 0
@@ -1554,7 +1560,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 19c7456a438a73444b5016b39cebbbfa, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.GameModes.Race_Gamemode
   turns: {fileID: 1200000022}
   timer: {fileID: 1200000023}
@@ -1600,10 +1606,12 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: d311a228bfdbe484cbebcc66a246064b, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.GameModes.RaceKeyBattle
   mode: {fileID: 1200000052}
   botResultDisplaySeconds: 2
+  diceRollSeconds: 1.4
+  diceHoldSeconds: 0.7
   challengerWinFormat: '{0} wins!
 
     Rolls: {1} - {2}
@@ -1625,7 +1633,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: b75a98a5181a477cb6739556ef501e21, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Player.Skin_Handler
   skins:
   - skinName: Skin 1
@@ -1673,7 +1681,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0b5a2c1d7aee403419b476e0f3a6a1f8, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Input.GameplayInputContext
   bindings: {fileID: 11400000, guid: f1c12d1fa3574dd0a240b165789cb007, type: 2}
   mode: {fileID: 1200000052}
@@ -1912,7 +1920,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 8349619573398432096, guid: 84ace4841a9b7114eb28ad861be2e3dc, type: 3}
       propertyPath: singlePlayer
-      value:
+      value: 
       objectReference: {fileID: 853649873}
     - target: {fileID: 8487113556004763422, guid: 84ace4841a9b7114eb28ad861be2e3dc, type: 3}
       propertyPath: m_Name
@@ -2000,23 +2008,23 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 9142338912037470105, guid: 84ace4841a9b7114eb28ad861be2e3dc, type: 3}
       propertyPath: timer
-      value:
+      value: 
       objectReference: {fileID: 1200000023}
     - target: {fileID: 9142338912037470105, guid: 84ace4841a9b7114eb28ad861be2e3dc, type: 3}
       propertyPath: turns
-      value:
+      value: 
       objectReference: {fileID: 1200000022}
     - target: {fileID: 9142338912037470105, guid: 84ace4841a9b7114eb28ad861be2e3dc, type: 3}
       propertyPath: session
-      value:
+      value: 
       objectReference: {fileID: 1200000024}
     - target: {fileID: 9142338912037470105, guid: 84ace4841a9b7114eb28ad861be2e3dc, type: 3}
       propertyPath: mapEvents
-      value:
+      value: 
       objectReference: {fileID: 1200000003}
     - target: {fileID: 9142338912037470105, guid: 84ace4841a9b7114eb28ad861be2e3dc, type: 3}
       propertyPath: worldCamera
-      value:
+      value: 
       objectReference: {fileID: 519420031}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -2040,7 +2048,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 2fafe2cfe61f6974895a912c3755e8f1, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.ToggleGroup
 --- !u!114 &1642972825
 MonoBehaviour:
@@ -2099,7 +2107,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: dc42784cf147c0c48a680349fa168899, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.GraphicRaycaster
   m_IgnoreReversedGraphics: 1
   m_BlockingObjects: 0
@@ -2116,7 +2124,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 0cd44c1031e13a943bb63640046fad76, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.CanvasScaler
   m_UiScaleMode: 0
   m_ReferencePixelsPerUnit: 100
@@ -2309,7 +2317,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: fe87c0e1cc204ed48ad3b37840f39efc, type: 3}
-  m_Name:
+  m_Name: 
   m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Image
   m_Material: {fileID: 0}
   m_Color: {r: 0.36, g: 0.7, b: 0.48, a: 1}

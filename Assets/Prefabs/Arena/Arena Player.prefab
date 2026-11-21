@@ -206,8 +206,8 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ec1d52d99628405ab1371d06266ade13, type: 3}
-  m_Name: 
-  m_EditorClassIdentifier: 
+  m_Name:
+  m_EditorClassIdentifier:
   mapTemplate: {fileID: 0}
   gameMode: {fileID: 0}
   turnSystem: {fileID: 0}
@@ -232,7 +232,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 738b1edee6be34ec49fbd04565807b5d, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Items.PlayerInventory
   player: {fileID: 5720856340886971392}
 --- !u!114 &1624637813476983374
@@ -245,7 +245,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 9afcf4476d57a2749bab22dfcd2244c7, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Player.PlayerAppearance
   player: {fileID: 5720856340886971392}
   body: {fileID: 8282300350483091915}
@@ -271,7 +271,7 @@ MonoBehaviour:
   m_Enabled: 0
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: ddfd6ac5b599a45279b635f5d9ae48eb, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Bots.BotController
 --- !u!114 &8852396708925672960
 MonoBehaviour:
@@ -283,7 +283,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 63511f907052fa24db47f9c776c02fad, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Arena.ArenaLocalInput
 --- !u!114 &3672517954068740952
 MonoBehaviour:
@@ -295,7 +295,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: cffb85addfd02fd4da40857711d06e1a, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Arena.ArenaParticipant
   speed: 2.2
   collisionStep: 0.08
@@ -324,7 +324,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: a866050440e46b248a354fb03c01cb46, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Arena.ArenaPlayerIndicator
   radius: 0.38
   width: 0.035
@@ -343,7 +343,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 661f0e9051a74f37912fa13927c12a65, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Arena.ArenaLocomotionView
   strideCyclesPerUnit: 0.9
   stepHeight: 0.025
@@ -361,7 +361,7 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e5409ab56f62841558695e7d8e5a8882, type: 3}
-  m_Name: 
+  m_Name:
   m_EditorClassIdentifier: Assembly-CSharp::Escape4Now.Items.EraserShieldVisual
   eraserSprite: {fileID: 5593030405192582669, guid: fc023447d03b14df597f99ff137e4936, type: 3}
   orbitRadius: 0.7
@@ -457,7 +457,7 @@ TextMesh:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 2406494221715502464}
-  m_Text: 
+  m_Text:
   m_OffsetZ: 0
   m_CharacterSize: 0.08
   m_LineSpacing: 1
@@ -743,7 +743,7 @@ TextMesh:
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 8037048726208796380}
-  m_Text: 
+  m_Text:
   m_OffsetZ: 0
   m_CharacterSize: 0.06
   m_LineSpacing: 1

@@ -27,6 +27,7 @@ public static class TutorialGameplayChecks
     private static InputSettings.BackgroundBehavior background;
     private static InputSettings.EditorInputBehaviorInPlayMode editorInput;
 
+    // Resume the registered checks after Unity enters Play Mode.
     static TutorialGameplayChecks()
     {
         EditorApplication.playModeStateChanged += state =>
@@ -44,6 +45,7 @@ public static class TutorialGameplayChecks
         };
     }
 
+    // Start the saved-scene checks for the tutorial's real movement and interaction flow.
     public static void Run()
     {
         EditorSceneManager.OpenScene("Assets/Scenes/Tutorial.unity");
@@ -56,6 +58,7 @@ public static class TutorialGameplayChecks
         EditorApplication.isPlaying = true;
     }
 
+    // Advance the tutorial check and stop it when the expected result or deadline is reached.
     private static void Tick()
     {
         try
@@ -82,6 +85,7 @@ public static class TutorialGameplayChecks
         catch (Exception error) { Debug.LogException(error); Finish(1); }
     }
 
+    // Run the tutorial check and return a clear success or failure to the editor runner.
     private static IEnumerator Execute(Tutorial_Functionality tutorial)
     {
         var stack = new Stack<IEnumerator>();
@@ -101,6 +105,7 @@ public static class TutorialGameplayChecks
         }
     }
 
+    // Exercise the tutorial's real movement and interaction flow using the saved scene objects.
     private static IEnumerator Check(Tutorial_Functionality tutorial)
     {
         yield return null; yield return null;
@@ -217,6 +222,7 @@ public static class TutorialGameplayChecks
         yield return Press(Key.Enter);
     }
 
+    // Use the test player's remaining movement to reach the next tutorial state.
     private static IEnumerator SpendMoves(PlayerCharacter player)
     {
         int safety = 0;
@@ -228,6 +234,7 @@ public static class TutorialGameplayChecks
         Require(!player.HasRolled, "Real movement consumes the lesson's full roll budget");
     }
 
+    // Send a real Input System key press for the tutorial check.
     private static IEnumerator Press(Key key)
     {
         InputSystem.QueueStateEvent(keyboard, new KeyboardState(key));
@@ -245,12 +252,14 @@ public static class TutorialGameplayChecks
         for (int frame = 0; frame < 4; frame++) yield return null;
     }
 
+    // Stop this check with a clear message when a required behavior is missing.
     private static void Require(bool condition, string message)
     {
         if (!condition) throw new Exception("FAIL: " + message);
         Debug.Log("PASS: " + message);
     }
 
+    // Clean up the check and return its result code to the batch runner.
     private static void Finish(int code)
     {
         SessionState.SetBool(Running, false);

@@ -14,6 +14,7 @@ namespace Escape4Now.UI
         private bool previewInEditMode;
 
         private void OnEnable() => Refresh();
+        // Request an editor refresh so the preview visibility updates after an Inspector edit.
         private void OnValidate()
         {
 #if UNITY_EDITOR
@@ -22,6 +23,7 @@ namespace Escape4Now.UI
         }
         private void Update() => Refresh();
 
+        // Keep the Canvas visible during play, or in edit mode only when preview is enabled.
         private void Refresh()
         {
             if (matchCanvas == null) matchCanvas = GetComponent<Canvas>();

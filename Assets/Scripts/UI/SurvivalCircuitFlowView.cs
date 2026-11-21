@@ -26,6 +26,7 @@ namespace Escape4Now.UI
         private void OnEnable(){Canvas.willRenderCanvases+=Draw;}
         private void OnDisable(){Canvas.willRenderCanvases-=Draw;}
         private void Update(){if(!Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused) elapsed+=Time.deltaTime;}
+        // Draw power only along the circuit pieces currently connected to the input source.
         private void Draw()
         {
             if(puzzle==null || cells==null || !isActiveAndEnabled) return;

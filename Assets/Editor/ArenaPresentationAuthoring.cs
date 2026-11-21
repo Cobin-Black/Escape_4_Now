@@ -76,6 +76,7 @@ public static class ArenaPresentationAuthoring
         }
     }
 
+    // Update the saved arena presentation using the shared UI style.
     [MenuItem("Tools/Escape 4 Now/Polish Arena Interface")]
     public static void Apply()
     {
@@ -91,10 +92,7 @@ public static class ArenaPresentationAuthoring
             {
                 EditorSceneManager.OpenScene("Assets/Scenes/" + stem + ".unity");
                 var mode = Object.FindFirstObjectByType<ArenaMatch>();
-                var data = new SerializedObject(mode);
-                data.FindProperty("instructions").stringValue = stem == "FreeForAll" ? "Move freely, use cover and survive the gym's events.\nLast player standing wins. Attacks are not enabled yet." : "Chase and tag to pass the potato before time runs out.\nEach explosion eliminates its holder. Last player standing wins.";
-                data.ApplyModifiedPropertiesWithoutUndo();
-                BuildSceneUI(mode, AssetDatabase.LoadAssetAtPath<InputActionAsset>("Assets/Settings/InputSystem_Actions.inputactions"));
+                ApplyArcadeUI(mode);
                 EditorSceneManager.SaveScene(EditorSceneManager.GetActiveScene());
             }
 
@@ -114,6 +112,102 @@ public static class ArenaPresentationAuthoring
             Debug.LogException(error);
             if (Application.isBatchMode)
                 EditorApplication.Exit(1);
+        }
+    }
+
+    // Replace the old setup panel with the shared arcade lobby while keeping the mode's gameplay UI.
+    private static void ApplyArcadeUI(ArenaMatch match)
+    {
+        LoadStyle();
+        var ui = Object.FindFirstObjectByType<ArenaUI>(FindObjectsInactive.Include);
+        if (ui == null)
+        {
+            BuildSceneUI(match, AssetDatabase.LoadAssetAtPath<InputActionAsset>("Assets/Settings/InputSystem_Actions.inputactions"));
+            return;
+        }
+
+        var previous = ui.transform.Find("Match Setup");
+        int order = previous != null ? previous.GetSiblingIndex() : -1;
+        if (previous != null) Object.DestroyImmediate(previous.gameObject);
+        var setup = OnlineLobbyAuthoring.BuildSameDeviceLobby((RectTransform)ui.transform, match, style);
+        if (order >= 0) setup.transform.SetSiblingIndex(order);
+        Set(ui, "setup", setup, "lobby", setup.gameObject);
+        ApplyMatchStyle(ui);
+    }
+
+    // Rebuilds every lobby screen so they all match the Race and Survival lobby.
+    [MenuItem("Tools/Escape 4 Now/Rebuild All Lobby Screens")]
+    public static void RebuildAllLobbies()
+    {
+        if (!Application.isBatchMode && !EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo()) return;
+        try
+        {
+            foreach (string scene in new[] { "FreeForAll", "HotPotato", "OnlineRace", "OnlineSurvival", "OnlineFreeForAll", "OnlineHotPotato" })
+            {
+                EditorSceneManager.OpenScene("Assets/Scenes/" + scene + ".unity");
+                var arena = Object.FindFirstObjectByType<ArenaMatch>();
+                if (arena != null) ApplyArcadeUI(arena);
+                if (scene.StartsWith("Online", StringComparison.Ordinal)) OnlineLobbyAuthoring.ApplyToCurrentScene();
+                else EditorSceneManager.SaveScene(EditorSceneManager.GetActiveScene());
+            }
+            AssetDatabase.SaveAssets();
+            Debug.Log("ALL LOBBY SCREENS REBUILT: Free For All, Hot Potato and the four online rooms.");
+            if (Application.isBatchMode) EditorApplication.Exit(0);
+        }
+        catch (Exception error)
+        {
+            Debug.LogException(error);
+            if (Application.isBatchMode) EditorApplication.Exit(1);
+        }
+    }
+
+    // Apply matching presentation to the local and online arena scenes.
+    public static void ApplySameDeviceAndOnline()
+    {
+        foreach (string scene in new[] { "FreeForAll", "HotPotato", "OnlineFreeForAll", "OnlineHotPotato" })
+        {
+            EditorSceneManager.OpenScene("Assets/Scenes/" + scene + ".unity");
+            ApplyArcadeUI(Object.FindFirstObjectByType<ArenaMatch>());
+            if (scene.StartsWith("Online", StringComparison.Ordinal)) OnlineLobbyAuthoring.ApplyToCurrentScene();
+            else EditorSceneManager.SaveScene(EditorSceneManager.GetActiveScene());
+        }
+        RelayFoundationChecks.Run();
+    }
+
+    private static void ApplyMatchStyle(ArenaUI ui)
+    {
+        // Preserve the saved HUD widgets, including the hill inventory and Hot Potato timer.
+        var hud = ui.transform.Find("Match HUD");
+        if (hud == null) return;
+        hud.GetComponent<Image>().color = new Color(.025f, .071f, .114f, .98f);
+        var objective = hud.Find("Objective");
+        if (objective != null && hud.Find("Objective Heading") == null)
+        {
+            var divider = Panel(hud, "Objective Divider", style.hudWidth - 2 * style.hudPadding,
+                new Color(.61f, .75f, .84f, .4f));
+            Height(divider, 1);
+            divider.SetSiblingIndex(objective.GetSiblingIndex());
+            var heading = Text(hud, "Objective Heading", "OBJECTIVE", style.smallSize, true, 14);
+            heading.color = style.holder;
+            heading.transform.SetSiblingIndex(objective.GetSiblingIndex());
+        }
+        var pause = ui.transform.Find("PAUSE");
+        if (pause != null)
+        {
+            pause.GetComponent<Image>().color = new Color(.15f, .19f, .17f);
+            pause.GetComponentInChildren<Text>(true).text = "Pause";
+        }
+        foreach (string path in new[] { "Pause Menu", "Match Result" })
+        {
+            var menu = ui.transform.Find(path);
+            if (menu == null) continue;
+            menu.GetComponent<Image>().color = Escape4Now.Menus.ArcadeLobbyScreen.PanelNavy;
+            var label = menu.Find(path == "Pause Menu" ? "Title" : "Winner")?.GetComponent<Text>();
+            if (label != null) label.font = Resources.Load<Font>("Fonts/Bungee-Regular");
+            var button = menu.Find(path == "Pause Menu" ? "RESUME" : "PLAY AGAIN")?.GetComponent<Button>();
+            if (button == null) continue;
+            button.image.color = new Color(.212f, .945f, .804f);
+            button.GetComponentInChildren<Text>(true).color = new Color(.067f, .067f, .067f);
         }
     }
 
@@ -151,70 +245,8 @@ public static class ArenaPresentationAuthoring
         if (root.GetComponent<Escape4Now.UI.MatchCanvasVisibility>() == null)
             root.AddComponent<Escape4Now.UI.MatchCanvasVisibility>();
         EnsureInputSystem(actions);
-        var lobby = Panel(root.transform, "Match Setup", style.setupWidth, style.panel, true);
-        Vertical(lobby, style.padding, style.gap);
-        var responsive = lobby.gameObject.AddComponent<Escape4Now.UI.ResponsivePanel>();
-        Set(responsive, "viewport", root.transform, "content", lobby);
-        var setup = lobby.gameObject.AddComponent<ArenaLobbyView>();
-        Set(setup, "style", style);
-        var title = Text(lobby, "Setup Title", mode.Title, style.setupTitleSize, true, 48);
-        title.alignment = TextAnchor.MiddleCenter;
-        var instructions = Text(lobby, "Instructions", mode.Instructions, style.bodySize, false, 44);
-        instructions.alignment = TextAnchor.MiddleCenter;
-        instructions.color = style.secondary;
-        var selection = Group(lobby, "Player Count");
-        Vertical(selection, 0, 8);
-        Text(selection, "Count Heading", "PLAYER COUNT", style.smallSize, true, 16).color = style.secondary;
-        var countRow = Group(selection, "Count Buttons");
-        Horizontal(countRow, 8);
-        Height(countRow, style.countButtonHeight);
-        var countButtons = new Button[3];
-        for (int i = 0; i < 3; i++)
-        {
-            countButtons[i] = Button(countRow, (i + 2) + " PLAYERS", style.countButtonHeight, style.input);
-            Flex(countButtons[i].transform);
-        }
-
-        float contentWidth = style.setupWidth - style.padding * 2;
-        var header = Group(lobby, "Player Columns");
-        Height(header, 18);
-        Header(header, "PLAYER", contentWidth, -contentWidth * .5f + 12, 164);
-        Header(header, "CONTROLS", contentWidth, -contentWidth * .5f + 184, 220);
-        Header(header, "SKIN", contentWidth, -contentWidth * .5f + 412, contentWidth - 424);
-        var rowsParent = Group(lobby, "Player Rows");
-        Vertical(rowsParent, 0, 8);
-        var rows = new GameObject[4];
-        var names = new InputField[4];
-        var controls = new Dropdown[4];
-        var skins = new Dropdown[4];
-        var portraits = new Image[4];
-        var strips = new Image[4];
-        for (int i = 0; i < 4; i++)
-        {
-            var row = Panel(rowsParent, "Player " + (i + 1), contentWidth, style.card);
-            Height(row, style.playerRowHeight);
-            rows[i] = row.gameObject;
-            strips[i] = Picture(row, "Identity", new Vector2(3, style.playerRowHeight - 16), new Vector2(-contentWidth * .5f + 3, 0), style.accent);
-            portraits[i] = Picture(row, "Skin Portrait", new Vector2(28, 44), new Vector2(-contentWidth * .5f + 26, 0), Color.white);
-            portraits[i].preserveAspect = true;
-            names[i] = NameField(row, "Player " + (i + 1), new Vector2(128, 38), new Vector2(-contentWidth * .5f + 112, 0));
-            controls[i] = Dropdown(row, "Controls", new Vector2(220, 38), new Vector2(-contentWidth * .5f + 294, 0));
-            skins[i] = Dropdown(row, "Skin", new Vector2(contentWidth - 424, 38), new Vector2(212, 0));
-        }
-
-        var start = Button(lobby, "START MATCH", style.startButtonHeight, style.start);
-        start.GetComponentInChildren<Text>().fontSize = 18;
-        var error = Text(lobby, "Setup Error", "", style.smallSize, false, 30);
-        error.color = new Color(1, .55f, .4f);
-        error.gameObject.SetActive(false);
-        Set(setup, "title", title, "instructions", instructions, "error", error, "start", start);
-        Array(setup, "playerCounts", countButtons);
-        Array(setup, "rows", rows);
-        Array(setup, "names", names);
-        Array(setup, "controls", controls);
-        Array(setup, "skins", skins);
-        Array(setup, "portraits", portraits);
-        Array(setup, "identityStrips", strips);
+        var setup = OnlineLobbyAuthoring.BuildSameDeviceLobby((RectTransform)root.transform, mode, style);
+        var lobby = setup.transform;
         var hud = Panel(root.transform, "Match HUD", style.hudWidth, style.panel, true);
         Vertical(hud, style.hudPadding, style.hudGap);
         hud.localScale = Vector3.one * style.hudScale;
@@ -248,6 +280,9 @@ public static class ArenaPresentationAuthoring
         var divider = Panel(hud, "Health Divider", style.hudWidth - style.hudPadding * 2, new Color(style.accent.r, style.accent.g, style.accent.b, .35f));
         Height(divider, 1);
         var health = Group(hud, "Player Health");
+        bool showHealth = !(mode is HotPotatoController);
+        divider.gameObject.SetActive(showHealth);
+        health.gameObject.SetActive(showHealth);
         var grid = health.gameObject.AddComponent<GridLayoutGroup>();
         grid.constraint = GridLayoutGroup.Constraint.FixedColumnCount;
         grid.constraintCount = 2;
@@ -288,8 +323,10 @@ public static class ArenaPresentationAuthoring
         hud.gameObject.SetActive(false);
         paused.gameObject.SetActive(false);
         finished.gameObject.SetActive(false);
+        ApplyMatchStyle(ui);
     }
 
+    // Build one participant's health and item row with saved references for runtime updates.
     private static ArenaHealthRow HealthRow(Transform parent, Vector2 size, int index)
     {
         var root = Panel(parent, "Health " + (index + 1), size.x, style.card);
@@ -315,6 +352,7 @@ public static class ArenaPresentationAuthoring
         return row;
     }
 
+    // Load the shared fonts and interface style used by the generated arena UI.
     private static void LoadStyle()
     {
         const string path = "Assets/Settings/Arena/Interface Style.asset";
@@ -339,6 +377,7 @@ public static class ArenaPresentationAuthoring
         return r;
     }
 
+    // Build a reusable UI panel using the configured shared style.
     private static RectTransform Panel(Transform parent, string name, float width, Color color, bool border = false)
     {
         var r = Group(parent, name);
@@ -367,15 +406,6 @@ public static class ArenaPresentationAuthoring
         root.gameObject.AddComponent<ContentSizeFitter>().verticalFit = ContentSizeFitter.FitMode.PreferredSize;
     }
 
-    private static void Horizontal(RectTransform root, float gap)
-    {
-        var group = root.gameObject.AddComponent<HorizontalLayoutGroup>();
-        group.spacing = gap;
-        group.childControlWidth = group.childControlHeight = true;
-        group.childForceExpandWidth = true;
-        group.childForceExpandHeight = true;
-    }
-
     private static Text Text(Transform parent, string name, string content, int size, bool bold, float height)
     {
         var text = FixedText(parent, name, content, Vector2.zero, Vector2.zero, size, bold);
@@ -383,6 +413,7 @@ public static class ArenaPresentationAuthoring
         return text;
     }
 
+    // Create a text element with a fixed layout size for consistent alignment.
     private static Text FixedText(Transform parent, string name, string content, Vector2 size, Vector2 position, int fontSize, bool bold)
     {
         var r = Group(parent, name);
@@ -399,6 +430,7 @@ public static class ArenaPresentationAuthoring
         return text;
     }
 
+    // Create a non-interactive image so decoration does not block UI input.
     private static Image Picture(Transform parent, string name, Vector2 size, Vector2 position, Color color)
     {
         var r = Group(parent, name);
@@ -410,6 +442,7 @@ public static class ArenaPresentationAuthoring
         return image;
     }
 
+    // Build a styled button and keep its label connected to its saved UI object.
     private static Button Button(Transform parent, string caption, float height, Color color)
     {
         var r = Panel(parent, caption, 0, color);
@@ -422,66 +455,12 @@ public static class ArenaPresentationAuthoring
         return button;
     }
 
-    private static InputField NameField(Transform parent, string value, Vector2 size, Vector2 position)
-    {
-        var r = Panel(parent, "Player Name", size.x, style.input);
-        r.sizeDelta = size;
-        r.anchoredPosition = position;
-        var input = r.gameObject.AddComponent<InputField>();
-        var text = FixedText(r, "Text", value, size - new Vector2(12, 0), Vector2.zero, style.bodySize, false);
-        input.textComponent = text;
-        input.text = value;
-        input.characterLimit = 16;
-        return input;
-    }
-
-    private static Dropdown Dropdown(Transform parent, string name, Vector2 size, Vector2 position)
-    {
-        var resources = new DefaultControls.Resources
-        {
-            standard = rounded,
-            background = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Background.psd"),
-            dropdown = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/DropdownArrow.psd"),
-            checkmark = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Checkmark.psd")
-        };
-        var root = DefaultControls.CreateDropdown(resources);
-        root.name = name;
-        root.transform.SetParent(parent, false);
-        var r = (RectTransform)root.transform;
-        r.sizeDelta = size;
-        r.anchoredPosition = position;
-        foreach (var text in root.GetComponentsInChildren<Text>(true))
-        {
-            text.font = style.font;
-            text.fontSize = style.smallSize;
-            text.color = style.text;
-        }
-
-        foreach (var image in root.GetComponentsInChildren<Image>(true))
-            image.color = image.name == "Arrow" || image.name == "Item Checkmark" ? style.secondary : style.input;
-        return root.GetComponent<Dropdown>();
-    }
-
-    private static void Header(Transform parent, string text, float rowWidth, float left, float width)
-    {
-        var label = FixedText(parent, text, text, new Vector2(width, 18), new Vector2(left + width * .5f, 0), style.smallSize, true);
-        label.color = style.secondary;
-    }
-
     private static void Height(Transform target, float height)
     {
         var layout = target.GetComponent<LayoutElement>();
         if (layout == null)
             layout = target.gameObject.AddComponent<LayoutElement>();
         layout.minHeight = layout.preferredHeight = height;
-    }
-
-    private static void Flex(Transform target)
-    {
-        var layout = target.GetComponent<LayoutElement>();
-        if (layout == null)
-            layout = target.gameObject.AddComponent<LayoutElement>();
-        layout.flexibleWidth = 1;
     }
 
     private static void Stretch(RectTransform rect, float padding)
@@ -492,6 +471,7 @@ public static class ArenaPresentationAuthoring
         rect.offsetMax = -Vector2.one * padding;
     }
 
+    // Assign serialized test or authoring values through Unity's saved-property interface.
     private static void Set(Object target, params object[] pairs)
     {
         var data = new SerializedObject(target);
@@ -511,6 +491,7 @@ public static class ArenaPresentationAuthoring
         data.ApplyModifiedPropertiesWithoutUndo();
     }
 
+    // Use the Input System UI module for the generated Canvas controls.
     private static void EnsureInputSystem(InputActionAsset asset)
     {
         if (Object.FindFirstObjectByType<EventSystem>() != null)
@@ -525,6 +506,7 @@ public static class ArenaPresentationAuthoring
         module.scrollWheel = Input(asset, "ScrollWheel");
     }
 
+    // Build the editable text control used by the player-setup UI.
     private static InputActionReference Input(InputActionAsset asset, string name)
     {
         string path = "Assets/Settings/Arena/UI " + name + " Input.asset";

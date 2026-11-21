@@ -6,6 +6,7 @@ namespace Escape4Now.Arena
     // Event changes use the existing room connectivity and circle-fit checks, including all other active blocks.
     public static class ArenaEventSafety
     {
+        // Include the player's footprint when checking how much free space an event needs.
         public static bool ClearOfPlayers(ArenaMatch match, Vector2Int cell, float clearance)
         {
             foreach (var player in match.Players)
@@ -54,6 +55,7 @@ namespace Escape4Now.Arena
             }
         }
 
+        // Check the whole path between points so effects cannot pass through blocked ground.
         public static bool ClearLine(ArenaMatch match, Vector2 a, Vector2 b, float radius = .05f)
         {
             int steps = Mathf.Max(1, Mathf.CeilToInt(Vector2.Distance(a, b) / Mathf.Max(.05f, match.Map.Settings.playerRadius)));

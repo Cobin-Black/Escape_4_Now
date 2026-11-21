@@ -8,6 +8,7 @@ public static class SurvivalMatchingIconAuthoring
 {
     private const string Folder = "Assets/Prefabs/Survival/Puzzle Pieces";
     private static readonly string[] Supplies = { "Ball", "Towel", "Book", "Cone", "Bottle", "Tool" };
+    // Build the reusable supply and battery sprites used by physical matching puzzles.
     public static void Create()
     {
         if (!AssetDatabase.IsValidFolder(Folder)) AssetDatabase.CreateFolder("Assets/Prefabs/Survival","Puzzle Pieces");
@@ -41,6 +42,7 @@ public static class SurvivalMatchingIconAuthoring
         if (round) image.sprite = AssetDatabase.GetBuiltinExtraResource<Sprite>("UI/Skin/Knob.psd");
         return image;
     }
+    // Draw the supply item's distinct shape so matching does not depend on color alone.
     private static void Supply(Transform root,int index)
     {
         var dark = new Color(.08f,.12f,.16f); var pale = new Color(.88f,.95f,.94f);
@@ -73,6 +75,7 @@ public static class SurvivalMatchingIconAuthoring
                 Part(root,"Jaw opening",dark,new Vector2(0,12),new Vector2(8,14)); break;
         }
     }
+    // Draw the battery artwork used by the slot-matching puzzle.
     private static void Battery(Transform root,int index)
     {
         var colors = new[]{new Color(.9f,.25f,.3f),new Color(.15f,.65f,.95f),new Color(.3f,.75f,.4f),new Color(.95f,.7f,.15f),new Color(.7f,.4f,.85f),new Color(.1f,.8f,.8f)};

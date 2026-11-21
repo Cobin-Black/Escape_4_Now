@@ -30,6 +30,7 @@ public static class SurvivalRulesChecks
     private static double deadline;
     private static InputSettings.BackgroundBehavior background;
     private static InputSettings.EditorInputBehaviorInPlayMode editorInput;
+    // Resume the registered checks after Unity enters Play Mode.
     static SurvivalRulesChecks()
     {
         EditorApplication.playModeStateChanged += state =>
@@ -49,6 +50,7 @@ public static class SurvivalRulesChecks
         };
     }
 
+    // Start the saved-scene checks for Survival turns, objectives, puzzles and event rules.
     public static void Run()
     {
         SessionState.SetBool("SurvivalRulesChecks.UI", false);
@@ -76,6 +78,7 @@ public static class SurvivalRulesChecks
         SessionState.SetBool("SurvivalRulesChecks.UI", true);
     }
 
+    // Verify generated layouts meet the required space, route and spawn rules.
     public static void Generation()
     {
         try
@@ -269,7 +272,9 @@ public static class SurvivalRulesChecks
             SurvivalMonsterSpawnChecks.Check(map.Layout,mode.Objectives,mode.Rules);
             Require(mode.ActiveSurvivors.Count == (monsterSlot >= 0 ? count-1 : count),"AI and player-controlled setups retain the correct survivors");
             Debug.Log("SURVIVAL RUNTIME SPAWN CHECK PASSED: "+mode.ActiveSurvivors.Count+" survivors, monster slot "+monsterSlot+", seed "+map.LayoutSeed);
-            yield break;
+            // With -eventTriggers, keep going so the event checks run with the AI Monster on the map (Car Alarm lure).
+            if (Argument("-eventTriggers", "false") != "true")
+                yield break;
         }
         if (external != null)
             Require(mode.Turns.CopyTurnOrder().Length == 5 && mode.ActiveSurvivors.Count == 4, "Four survivors plus one external turn slot; no AI implementation");
@@ -472,6 +477,7 @@ public static class SurvivalRulesChecks
         Debug.Log("SURVIVAL RULE CHECKS PASSED: " + count + " participants, shared puzzles, cancel, clock, effects, exit, death and results; monster slot " + monsterSlot);
     }
 
+    // Find a survivor who can still participate in the current test turn.
     private static PlayerCharacter ActiveSurvivor(SurvivalModeController mode, LocalMultiplayerSession session)
     {
         for (int i = 0; i < mode.Turns.CopyTurnOrder().Length * 2; i++)
@@ -485,6 +491,7 @@ public static class SurvivalRulesChecks
         throw new Exception("No active survivor turn");
     }
 
+    // Exercise Survival event behavior against the current match state.
     private static void CheckEvents(SurvivalModeController mode, PlayerCharacter actor)
     {
         var settings = (SurvivalEventSettings)new SerializedObject(mode.Events).FindProperty("settings").objectReferenceValue;
@@ -536,6 +543,7 @@ public static class SurvivalRulesChecks
             Require(actor.GridPosition == exit || mode.GridMap.TryFindPath(actor.GridPosition, exit, out _), "Temporary blockers preserve exit access", false);
     }
 
+    // Enter the correct solution for the selected puzzle through its normal rules.
     public static void Solve(PuzzleSession puzzle)
     {
         switch (puzzle.Definition.type)
@@ -595,6 +603,7 @@ public static class SurvivalRulesChecks
         }
     }
 
+    // Run the Survival rule checks and restore their temporary input and editor state.
     private static IEnumerator Execute(IEnumerator checks)
     {
         var stack = new Stack<IEnumerator>();
@@ -812,6 +821,7 @@ public static class SurvivalRulesChecks
         Debug.Log("SURVIVAL PUZZLE UI CHECKS PASSED: " + testedPuzzles + " puzzle views fully solved, pointer controls, real drag/drop, shared pause, landscape and portrait.");
     }
 
+    // Verify wrong puzzle input gives failure feedback without completing the task.
     private static IEnumerator CheckPuzzleFailures(MatchUIContext context, SurvivalModeController mode, SerializedObject view, PlayerCharacter actor, SurvivalTaskPlacement task)
     {
         foreach (var type in new[] { SurvivalPuzzleType.MatchWires, SurvivalPuzzleType.ButtonSequence, SurvivalPuzzleType.EnterCode, SurvivalPuzzleType.ArrangeNumbers })
@@ -859,6 +869,7 @@ public static class SurvivalRulesChecks
         Debug.Log("PUZZLE FAILURE UI CHECKS PASSED: wrong wires, sequence and code, and cancelled number puzzle.");
     }
 
+    // Complete the puzzle through its actual controls rather than directly marking it solved.
     private static IEnumerator SolvePuzzleThroughUI(SerializedObject view, PuzzleSession puzzle)
     {
         var cellRefs = view.FindProperty("cells");
@@ -957,6 +968,7 @@ public static class SurvivalRulesChecks
         yield return null; yield return null;
     }
 
+    // Verify wire dragging and connection feedback while the puzzle is open.
     private static IEnumerator CheckLiveWires(MatchUIContext context, SurvivalModeController mode, SerializedObject view,
         PuzzleSession puzzle, PuzzleTokenUI leftEnd, PuzzleTokenUI rightEnd)
     {
@@ -998,6 +1010,7 @@ public static class SurvivalRulesChecks
         Require(!leftEnd.Button.interactable && !rightEnd.Button.interactable, "Correct connections lock their sockets");
     }
 
+    // Drive the held-pointer steps used to check a live wire drag.
     private static IEnumerator HoldWire(PuzzleTokenUI source,Vector2 end)
     {
         var start = Center(source);
@@ -1010,6 +1023,7 @@ public static class SurvivalRulesChecks
         }
     }
 
+    // Verify a task attempt times out and releases the player correctly.
     private static IEnumerator CheckTaskDeadline(MatchUIContext context,SurvivalModeController mode,PlayerCharacter actor,SurvivalTaskPlacement task)
     {
         Require(actor.SetGridPosition(task.InteractionCells[0]), "Move beside the timeout fixture");
@@ -1057,6 +1071,7 @@ public static class SurvivalRulesChecks
         yield return null;yield return null;
     }
 
+    // Drive the pointer along the switch track and release it through the normal input path.
     private static IEnumerator SlidePowerSwitch(PuzzleTokenUI token,float distance)
     {
         var start=Center(token);
@@ -1077,6 +1092,7 @@ public static class SurvivalRulesChecks
         return (corners[0] + corners[2]) * .5f;
     }
 
+    // Drive the actual UI input path so the check includes the control's event handling.
     private static IEnumerator Click(Component component)
     {
         yield return null;
@@ -1093,6 +1109,7 @@ public static class SurvivalRulesChecks
         yield return null;
     }
 
+    // Send pointer press, movement and release events through the real puzzle UI.
     private static IEnumerator Drag(Component source, Component target)
     {
         var start = Center(source);
@@ -1114,6 +1131,7 @@ public static class SurvivalRulesChecks
         yield return null;
     }
 
+    // Check the visible circuit path so completion agrees with the connected-piece drawing.
     private static bool RenderedCircuitConnected(PuzzleSession puzzle)
     {
         int size = puzzle.Definition.circuitSize;
@@ -1160,6 +1178,7 @@ public static class SurvivalRulesChecks
         return i >= 0 && i + 1 < args.Length ? args[i + 1] : fallback;
     }
 
+    // Stop this check with a clear message when a required behavior is missing.
     private static void Require(bool condition, string message, bool log = true)
     {
         if (!condition)
@@ -1168,6 +1187,7 @@ public static class SurvivalRulesChecks
             Debug.Log("PASS: " + message);
     }
 
+    // Fail a stuck check after its deadline so batch validation cannot wait forever.
     private static void Watchdog()
     {
         if (EditorApplication.timeSinceStartup > deadline)
@@ -1177,6 +1197,7 @@ public static class SurvivalRulesChecks
         }
     }
 
+    // Clean up the check and return its result code to the batch runner.
     private static void Finish(int result)
     {
         SessionState.SetBool(Running, false);

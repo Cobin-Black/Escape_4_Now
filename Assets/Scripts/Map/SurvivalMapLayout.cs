@@ -105,6 +105,7 @@ namespace Escape4Now.Map
         public bool IsMainPath(int x, int y) => InBounds(x, y) && mainPath[y * Width + x];
         public bool IsProtectedRoute(int x, int y) => InBounds(x, y) && protectedPath[y * Width + x];
 
+        // Return neighboring cells within the generated layout.
         public IEnumerable<int> GetNeighbours(int cell)
         {
             if (cell < 0 || cell >= Width * Height || !IsWalkable(cell % Width, cell / Width)) yield break;
@@ -327,6 +328,7 @@ namespace Escape4Now.Map
             }
         }
 
+        // Choose the garden surface while keeping its intended paths and planted areas.
         private void CarveGardenTile(OutdoorArea area, int x, int y)
         {
             for (int dy = 0; dy < settings.GardenPathWidth; dy++) for (int dx = 0; dx < settings.GardenPathWidth; dx++)
@@ -371,6 +373,7 @@ namespace Escape4Now.Map
                 }
         }
 
+        // Try prop placements that fit the selected area and preserve required routes.
         private bool PlaceProps(OutdoorPropRule rule, OutdoorArea area)
         {
             if (random.NextDouble() >= rule.Chance) return true;
@@ -455,9 +458,18 @@ namespace Escape4Now.Map
                             if (GetArea(x + dx, y + dy) != OutdoorAreaKind.None || IsMainPath(x + dx, y + dy)) nearEdge = true;
                     return nearEdge;
                 }
-                int side = random.Next(4), offset = random.Next(rule.EdgeBandWidth);
-                if (side % 2 == 0) x = side == 0 ? bounds.X + margin + offset : bounds.X + bounds.Width - margin - w - offset;
-                else y = side == 1 ? bounds.Y + margin + offset : bounds.Y + bounds.Height - margin - h - offset;
+                // Flush with the chosen edge, long side running along it and the front facing into the area,
+                // so edge props line up instead of sitting at random depths and angles.
+                // Prop fronts point down the Y axis at 0 turns: 1 faces +X, 2 faces +Y, 3 faces -X.
+                int side = random.Next(4);
+                rotation = side == 0 ? 1 : side == 1 ? 2 : side == 2 ? 3 : 0;
+                w = rotation % 2 == 0 ? rule.FootprintWidth : rule.FootprintHeight;
+                h = rotation % 2 == 0 ? rule.FootprintHeight : rule.FootprintWidth;
+                if (bounds.Width < w || bounds.Height < h) return false;
+                x = Math.Clamp(x, bounds.X, bounds.X + bounds.Width - w);
+                y = Math.Clamp(y, bounds.Y, bounds.Y + bounds.Height - h);
+                if (side % 2 == 0) x = side == 0 ? bounds.X + margin : bounds.X + bounds.Width - margin - w;
+                else y = side == 1 ? bounds.Y + margin : bounds.Y + bounds.Height - margin - h;
             }
             return x >= bounds.X && y >= bounds.Y && x + w <= bounds.X + bounds.Width && y + h <= bounds.Y + bounds.Height;
         }
@@ -536,6 +548,7 @@ namespace Escape4Now.Map
 
 
         private int Distance(int a, int b) => Math.Abs(a % Width - b % Width) + Math.Abs(a / Width - b / Width);
+        // Count walkable neighbors when checking how open a cell is.
         private int Degree(int cell)
         {
             int count = 0;
@@ -564,6 +577,7 @@ namespace Escape4Now.Map
             return longest;
         }
 
+        // Search the walkable floor to check whether required routes remain joined.
         private bool IsConnected()
         {
             int start = Array.FindIndex(blocked, value => !value);
@@ -585,6 +599,7 @@ namespace Escape4Now.Map
             return true;
         }
 
+        // Reject layouts whose areas, routes or blocked cells do not meet the generation rules.
         public bool Validate(out string reason)
         {
             reason = null;

@@ -22,6 +22,7 @@ namespace Escape4Now.UI
         private static readonly int Radius = Shader.PropertyToID("_Radius");
         private static readonly int ClearRatio = Shader.PropertyToID("_ClearRatio");
 
+        // Remember the saved message widgets before event feedback is shown.
         private void Awake()
         {
             if (blackoutMaterial == null) return;
@@ -29,6 +30,7 @@ namespace Escape4Now.UI
             blackout.material = instance;
         }
 
+        // Refresh visible event notices from the current mode without creating another event state.
         private void LateUpdate()
         {
             var events = context.Events;

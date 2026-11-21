@@ -6,6 +6,7 @@ namespace Escape4Now.Map
     // Validate every destination before moving anyone. Grid and real-time modes supply their own safety rules.
     public static class SharedPositionEffects
     {
+        // Find a position swap that moves participants while respecting each position's validity checks.
         public static bool TryPermute<T>(IReadOnlyList<T> positions, int[] destinations,
             Func<int,T,bool> canPlace, Action<int,T> place)
         {

@@ -73,6 +73,7 @@ namespace Escape4Now.UI
         private float stepStarted;
         private readonly List<string> bindingLabels = new List<string>();
 
+        // Refresh the lesson controls and highlight from the tutorial's current progress.
         private void LateUpdate()
         {
             var player = context.ActivePlayer;
@@ -179,6 +180,7 @@ namespace Escape4Now.UI
             rect.position = new Vector3(card.xMin, Screen.height - card.yMin, 0f);
         }
 
+        // Choose the guidance step from the current lesson and completed player actions.
         private string ResolveStep(PlayerCharacter player)
         {
             if (tutorial.IsSectionComplete) return tutorial.IsFinalSection ? "done-all" : "done-section";
@@ -250,6 +252,7 @@ namespace Escape4Now.UI
             }
         }
 
+        // Project the world bounds into a screen rectangle for the tutorial highlight.
         private Rect? BoundsRect(GameObject target)
         {
             var renderers = target.GetComponentsInChildren<Renderer>();
@@ -260,6 +263,7 @@ namespace Escape4Now.UI
             return WorldRect(bounds);
         }
 
+        // Convert a world-space target area to the overlay's screen coordinates.
         private Rect? WorldRect(Bounds bounds)
         {
             var camera = context.WorldCamera;

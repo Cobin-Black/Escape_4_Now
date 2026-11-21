@@ -42,7 +42,8 @@ namespace Escape4Now.Accounts
         private static IAuthenticationService Auth => AuthenticationService.Instance;
         private static bool ServicesReady => UnityServices.State == ServicesInitializationState.Initialized;
 
-        public static bool IsSignedIn => ServicesReady && Auth.IsSignedIn;
+        // The menu shows the remembered Player 1 account. Relay guests have their own profile.
+        public static bool IsSignedIn => ServicesReady && Auth.IsSignedIn && Auth.Profile == PlayerOneProfile;
         public static bool CanEnterGame => !IsBusy && (IsSignedIn || IsGuest);
         public static string DisplayName => !IsSignedIn ? "GUEST" : string.IsNullOrEmpty(username) ? "PLAYER 1" : username.ToUpperInvariant();
 

@@ -7,6 +7,7 @@ using UnityEngine;
 
 public static class SurvivalGroundAuthoring
 {
+    // Create and assign the ground-effect assets used by mud, wet surfaces and track boosts.
     public static void Apply()
     {
         try

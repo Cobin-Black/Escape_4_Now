@@ -26,6 +26,7 @@ namespace Escape4Now.UI
             rect.position += Vector3.up * (screenY - ScreenBounds.yMin);
         }
 
+        // Show this marker's current position, label and availability in the shared overlay.
         public void Present(Vector2 screen, Sprite sprite, Color tint, string text, Color accent)
         {
             rect.position = screen;

@@ -4,6 +4,8 @@ using UnityEngine;
 
 namespace Escape4Now.Arena
 {
+    // Computer-controlled arena player for King of the Hill and Hot Potato. It drives the participant's
+    // ArenaLocalInput in bot mode; online, only the host runs it and guests see the bot through the normal updates.
     public sealed class ArenaBotController : MonoBehaviour
     {
         private ArenaParticipant player;
@@ -19,6 +21,10 @@ namespace Escape4Now.Arena
         private float pathTimer;
         // Control how often the bot searches for an escape position.
         private float escapeTimer;
+        [SerializeField, Min(.05f), Tooltip("Seconds between escape searches while running from the potato holder.")]
+        private float escapeInterval = .5f;
+        [SerializeField, Min(.05f), Tooltip("Faster escape searches while Spotlight makes the potato holder faster.")]
+        private float spotlightEscapeInterval = .25f;
         private ArenaParticipant lastPotatoHolder;
         // Time remaining before each attack can be used again.
         private float rulerCooldown;
@@ -29,6 +35,9 @@ namespace Escape4Now.Arena
             player = GetComponent<ArenaParticipant>();
             input = GetComponent<ArenaLocalInput>();
         }
+
+        // Straight ahead from the way this bot is facing, in floor (grid) space, the same direction its items attack in.
+        private Vector2 AttackDirection => player.AttackDirection;
 
         private void Update()
         {
@@ -82,7 +91,9 @@ namespace Escape4Now.Arena
                     else if (escapeTimer <= 0f)
                     {
                         RunFromPotatoHolder(hotPotato);
-                        escapeTimer = 0.5f;
+                        // A spotlit holder closes in faster, so check the escape route more often.
+                        bool fastHolder = player.Match.Events != null && player.Match.Events.SpotlightSpeed(hotPotato.Holder) > 1;
+                        escapeTimer = fastHolder ? spotlightEscapeInterval : escapeInterval;
                     }
                 }
                 else
@@ -402,7 +413,7 @@ namespace Escape4Now.Arena
                         continue;
 
                     // Only attack opponents in front of the bot.
-                    if (Vector2.Angle(player.AttackDirection, difference) > 45f)
+                    if (Vector2.Angle(AttackDirection, difference) > 45f)
                         continue;
 
                     ruler.Use(inventory);
@@ -425,7 +436,7 @@ namespace Escape4Now.Arena
                 if (item is not SpitballItem spitball)
                     continue;
 
-                Vector2 direction = player.AttackDirection;
+                Vector2 direction = AttackDirection;
 
                 foreach (ArenaParticipant opponent in player.Match.Players)
                 {

@@ -13,6 +13,7 @@ public sealed class MapEventSpawnChanceDrawer : PropertyDrawer
             + (property.isExpanded ? EditorGUIUtility.standardVerticalSpacing * 2f : 0f);
     }
 
+    // Draw one event type and its probability together so the chance is edited beside the correct event.
     public override void OnGUI(Rect position, SerializedProperty property, GUIContent label)
     {
         EditorGUI.BeginProperty(position, label, property);

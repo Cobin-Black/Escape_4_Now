@@ -177,7 +177,10 @@ namespace Escape4Now.Multiplayer
                         }
                         lan.Submit("battle", value: 1);
                         while (string.IsNullOrEmpty(lan.LatestState.battleMessage)) yield return null;
-                        yield return new WaitForSecondsRealtime(1f);
+                        //The result can only close after the battle dice have landed.
+                        var keyBattle = FindFirstObjectByType<Escape4Now.GameModes.Race_Gamemode>()?.KeyBattle;
+                        float diceSeconds = keyBattle != null ? keyBattle.DiceRollSeconds + keyBattle.DiceHoldSeconds : 0f;
+                        yield return new WaitForSecondsRealtime(1f + diceSeconds);
                         sawSharedTile = sawKeyBattle = true;
                         lan.Submit("battleClose");
                         Require(session.Participants[0].Inventory.HasKey(), "The shared-tile battle gives the challenger the key");

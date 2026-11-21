@@ -12,6 +12,7 @@ using Object = UnityEngine.Object;
 
 public static class SurvivalCampusVisualChecks
 {
+    // Verify campus props and surfaces use the intended themed visual configuration.
     public static void Run()
     {
         try

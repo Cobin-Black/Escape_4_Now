@@ -15,6 +15,7 @@ public static class ArenaEventChecks
 {
     private const string Key = "ArenaEventChecks.Running";
     private static double deadline;
+    // Resume the registered checks after Unity enters Play Mode.
     static ArenaEventChecks()
     {
         EditorApplication.playModeStateChanged += state =>
@@ -29,6 +30,7 @@ public static class ArenaEventChecks
         };
     }
 
+    // Start the saved-scene checks for arena event selection, effects and cleanup.
     public static void Run()
     {
         EditorSceneManager.OpenScene("Assets/Scenes/FreeForAll.unity");
@@ -38,6 +40,7 @@ public static class ArenaEventChecks
         EditorApplication.isPlaying = true;
     }
 
+    // Advance the check steps and report failures through the normal validation cleanup.
     private static IEnumerator Guard(IEnumerator routine)
     {
         while (true)
@@ -189,6 +192,15 @@ public static class ArenaEventChecks
                         Require(filtered.x > 0 && filtered.x < 4, "Wet ground reduces immediate steering response");
                     }
 
+                    if (rule.kind == ArenaEventKind.Spotlight)
+                    {
+                        var lit = hot.Holder;
+                        var other = match.Players.Find(p => p != lit);
+                        Require(match.Events.SpotlightSpeed(lit) > 1 && match.Events.SpotlightSpeed(other) == 1, "Spotlight speeds up only the potato holder");
+                        Vector2 boosted = match.Events.FilterMovement(lit, Vector2.right * 4, Vector2.zero, .02f);
+                        Require(Mathf.Abs(boosted.x - 4 * rule.holderSpeedFactor) < .001f, "Spotlight holder really moves faster");
+                    }
+
                     if (rule.kind == ArenaEventKind.HazardZone)
                     {
                         first.Place(state.Cells[0]);
@@ -231,6 +243,8 @@ public static class ArenaEventChecks
 
                     match.Events.Step(1);
                     Require(match.Events.Active.Count == 0, "Temporary event expires");
+                    if (rule.kind == ArenaEventKind.Spotlight)
+                        Require(match.Events.SpotlightSpeed(hot.Holder) == 1, "Spotlight speed ends with the light");
                     Require(match.Map.Layout.Connected(), "Routes remain connected after expiry");
                     if (rule.IsBlock)
                         Require(match.Map.Layout.Walkable(state.Cells[0]), "Temporary block removed");
@@ -338,6 +352,7 @@ public static class ArenaEventChecks
         data.ApplyModifiedPropertiesWithoutUndo();
     }
 
+    // Start the arena fixture and prepare its configured event pool for controlled checks.
     private static void Start(ArenaMatch match, int count)
     {
         match.enabled = true;
@@ -355,12 +370,14 @@ public static class ArenaEventChecks
             player.enabled = false;
     }
 
+    // Stop this check with a clear message when a required behavior is missing.
     private static void Require(bool value, string message)
     {
         if (!value)
             throw new Exception(message);
     }
 
+    // Fail a stuck check after its deadline so batch validation cannot wait forever.
     private static void Watchdog()
     {
         if (EditorApplication.timeSinceStartup > deadline)
@@ -370,6 +387,7 @@ public static class ArenaEventChecks
         }
     }
 
+    // Clean up the check and return its result code to the batch runner.
     private static void Finish(int code)
     {
         SessionState.SetBool(Key, false);

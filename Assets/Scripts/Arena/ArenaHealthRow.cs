@@ -75,22 +75,12 @@ namespace Escape4Now.Arena
         // Display the player's current FreeForAll item and charges.
         private void ShowInventory(ArenaParticipant player)
         {
-            // Skip inventory UI if it was not assigned.
-            if (inventorySection == null)
-                return;
-
-            bool isFFA = player.Match is KingOfTheHillController;
-
-            if (!isFFA)
-            {
-                inventorySection.SetActive(false);
-                return;
-            }
+            if (inventorySection == null) return;
 
             PlayerInventory inventory = player.GetComponent<PlayerInventory>();
-
-            if (inventory == null || inventory.Items.Count == 0 ||
-                inventory.Items[0] is not FreeForAllItem item)
+            var item = inventory != null && inventory.Items.Count > 0 ? inventory.Items[0] as FreeForAllItem : null;
+            int type = player.Match.Replica ? player.OnlineItemType : item != null ? (int)item.ItemType : -1;
+            if (!(player.Match is KingOfTheHillController) || type < 0)
             {
                 inventorySection.SetActive(false);
                 return;
@@ -98,7 +88,7 @@ namespace Escape4Now.Arena
 
             inventorySection.SetActive(true);
 
-            switch (item.ItemType)
+            switch ((FreeForAllItemType)type)
             {
                 case FreeForAllItemType.Spitball:
                     itemIcon.sprite = spitballIcon;
@@ -113,7 +103,9 @@ namespace Escape4Now.Arena
                     break;
             }
 
-            itemCharges.text = item.UsesRemaining + "/" + item.MaxUses;
+            int remaining = player.Match.Replica ? player.OnlineItemUses : item.UsesRemaining;
+            int maximum = player.Match.Replica ? player.OnlineItemMaxUses : item.MaxUses;
+            itemCharges.text = remaining + "/" + maximum;
         }
     }
 }

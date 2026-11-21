@@ -73,12 +73,14 @@ namespace Escape4Now.UI
             destination = (Vector2)artwork.parent.InverseTransformPoint(target)-anchorOrigin;
             moving = true; inserted = hideWhenDone; moveRemaining = moveSeconds;
         }
+        // Return the drawing to its rest pose so a previous drag or press cannot leave an offset.
         public void ResetPiece()
         {
             moving = dragging = inserted = hovered = pressed = false;
             if (artwork != null) { artwork.anchoredPosition = Vector2.zero; artwork.localScale = Vector3.one; }
             if (artworkGroup != null) artworkGroup.alpha = 1;
         }
+        // Animate the piece toward its requested position and press or lever pose.
         private void Update()
         {
             if (Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused) return;

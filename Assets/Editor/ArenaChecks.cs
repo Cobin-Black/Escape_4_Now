@@ -18,6 +18,7 @@ public static class ArenaChecks
     private const string Running = "ArenaChecks.Running";
     private static double deadline;
     private static Keyboard keyboard;
+    // Resume the registered checks after Unity enters Play Mode.
     static ArenaChecks()
     {
         EditorApplication.playModeStateChanged += state =>
@@ -35,6 +36,7 @@ public static class ArenaChecks
         };
     }
 
+    // Start the saved-scene checks for local arena controls, generation and match rules.
     public static void Run()
     {
         EditorSceneManager.OpenScene("Assets/Scenes/FreeForAll.unity");
@@ -44,6 +46,7 @@ public static class ArenaChecks
         EditorApplication.isPlaying = true;
     }
 
+    // Verify generated layouts meet the required space, route and spawn rules.
     public static void Generation()
     {
         try
@@ -97,6 +100,7 @@ public static class ArenaChecks
         }
     }
 
+    // Advance the check steps and report failures through the normal validation cleanup.
     private static IEnumerator Guard(IEnumerator routine)
     {
         while (true)
@@ -129,6 +133,19 @@ public static class ArenaChecks
         var match = Object.FindFirstObjectByType<ArenaMatch>();
         DisableRandomEvents(match);
         Directory.CreateDirectory("Logs/ArenaPreviews");
+        var setup = Object.FindFirstObjectByType<ArenaLobbyView>();
+        if (new SerializedObject(setup).FindProperty("showControllerPanel").boolValue)
+        {
+            var controllerButton = setup.transform.Find("Controller Settings").GetComponent<UnityEngine.UI.Button>();
+            controllerButton.onClick.Invoke();
+            yield return null;
+            var controllerOverlay = setup.transform.Find("Controller Overlay");
+            Require(controllerOverlay.gameObject.activeInHierarchy, "Controller options open over the arcade lobby");
+            ScreenCapture.CaptureScreenshot("Logs/ArenaPreviews/Controllers-overlay.png");
+            yield return null;
+            controllerOverlay.Find("Controller Panel/Close").GetComponent<UnityEngine.UI.Button>().onClick.Invoke();
+            Require(!controllerOverlay.gameObject.activeSelf, "Closing controller options returns to the lobby");
+        }
         ScreenCapture.CaptureScreenshot("Logs/ArenaPreviews/FreeForAll-lobby.png");
         yield return null;
         for (int count = 2; count <= 4; count++)
@@ -190,12 +207,54 @@ public static class ArenaChecks
                 yield return null;
             }
 
+            var hill = (KingOfTheHillController)match;
+            Set(hill, "respawnDuration", .15f);
             for (int i = 1; i < count; i++)
-                match.Players[i].Damage(match.Players[i].Character.Health);
-            Require(!match.Playing && match.Result.Contains(a.name), "FFA last player wins");
+                match.Players[i].Eliminate();
+            Require(match.Playing && hill.GetRespawnSeconds(b) > 0, "King of the Hill continues after knockouts");
+            yield return new WaitForSeconds(.25f);
+            Require(b.Alive && b.Character.Health == b.InitialHealth, "Knocked-out player respawns at full health");
+            Require(hill.HillCenter.HasValue, "The gym starts with a hill");
+            a.Place(hill.HillCenter.Value);
+            int startingScore = hill.GetScore(a);
+            yield return new WaitForSeconds(1.1f);
+            Require(hill.GetScore(a) > startingScore, "Controlling the hill awards points");
             match.ReturnToSetup();
             yield return null;
         }
+
+        // A bot must keep its input when a controller is connected, and must not reserve keyboard keys.
+        Require(match.StartMatch(2, new[] { "Human", "Bot" }, new[] { -1, -1 }, new[] { false, true }), match.Error);
+        var botInput = match.Players[1].Input;
+        var human = match.Players[0];
+        var sprites = human.GetComponentsInChildren<SpriteRenderer>();
+        var originalAlpha = new float[sprites.Length];
+        for (int i = 0; i < sprites.Length; i++) originalAlpha[i] = sprites[i].color.a;
+        human.Damage(1);
+        Require(human.IsInvincible, "King of the Hill damage starts protection");
+        bool dimmed = false;
+        foreach (var sprite in human.GetComponentsInChildren<SpriteRenderer>())
+            dimmed |= sprite.color.a < .9f;
+        Require(dimmed, "Protection visibly blinks the player as on main");
+        human.ClearRoundEffects();
+        for (int i = 0; i < sprites.Length; i++)
+            Require(Mathf.Approximately(sprites[i].color.a, originalAlpha[i]), "Clearing protection restores sprite opacity");
+        human.ApplyOnlineState(human.Position, new Vector2(-1, 1), human.Character.Health, true);
+        Require(human.AttackDirection == Vector2.up, "Upper-left facing attacks along the matching floor axis");
+        human.ApplyOnlineState(human.Position, new Vector2(1, -1), human.Character.Health, true);
+        Require(human.AttackDirection == Vector2.down, "Lower-right facing attacks along the matching floor axis");
+        var swingPrefab = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Arena/FFA Items/RulerSwingEffect.prefab");
+        var swing = Object.Instantiate(swingPrefab).GetComponent<Escape4Now.Items.RulerSwingEffect>();
+        swing.Initialize(Vector2.right, 2, 90);
+        Require(swing.GetComponentInChildren<MeshFilter>().sharedMesh.triangles.Length > 0,
+            "The ruler shows main's filled attack wedge");
+        Require(botInput.IsBot && !botInput.UsesKeyboard, "Bots never claim a keyboard layout");
+        var hotplug = InputSystem.AddDevice<Gamepad>();
+        yield return null;
+        Require(botInput.IsBot, "Controller hotplug leaves the bot's input intact");
+        InputSystem.RemoveDevice(hotplug);
+        match.ReturnToSetup();
+        yield return null;
 
         // Explicitly paired gamepads must never drive both players from one device.
         var pad1 = InputSystem.AddDevice<Gamepad>();
@@ -304,6 +363,7 @@ public static class ArenaChecks
         }
     }
 
+    // Start a fresh local arena fixture with the requested number of participants.
     private static void Start(ArenaMatch match, int count)
     {
         var names = new string[count];
@@ -329,6 +389,7 @@ public static class ArenaChecks
             }
     }
 
+    // Assign serialized test or authoring values through Unity's saved-property interface.
     private static void Set(Object target, string field, float value)
     {
         var so = new SerializedObject(target);
@@ -345,12 +406,14 @@ public static class ArenaChecks
         data.ApplyModifiedPropertiesWithoutUndo();
     }
 
+    // Stop this check with a clear message when a required behavior is missing.
     private static void Require(bool value, string message)
     {
         if (!value)
             throw new Exception(message);
     }
 
+    // Fail a stuck check after its deadline so batch validation cannot wait forever.
     private static void Watchdog()
     {
         if (EditorApplication.timeSinceStartup > deadline)
@@ -360,6 +423,7 @@ public static class ArenaChecks
         }
     }
 
+    // Clean up the check and return its result code to the batch runner.
     private static void Finish(int code)
     {
         SessionState.SetBool(Running, false);

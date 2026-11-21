@@ -20,6 +20,7 @@ namespace Escape4Now.UI
         [SerializeField] private Color loseColor = new Color(1f, 0.43f, 0.4f);
         [SerializeField] private string timeFormat = "TIME LEFT {0}";
 
+        // Show the current mode's confirmed result when the match has ended.
         private void LateUpdate()
         {
             bool finished = context.Session != null && context.Session.TryGetResult(out _);
@@ -34,6 +35,7 @@ namespace Escape4Now.UI
         }
 
         //Leaving waits for the save, because it swaps between the players' accounts.
-        public void BackToLobby() { if (!AccountStats.IsSaving) context.Session?.ReturnToSetup(); }
+        //Online matches go back to the same room, so nobody has to host or enter a code again.
+        public void BackToLobby() { if (!AccountStats.IsSaving) context.Session?.ReturnAfterMatch(); }
     }
 }

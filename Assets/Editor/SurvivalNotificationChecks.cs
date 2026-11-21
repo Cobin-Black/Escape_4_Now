@@ -8,6 +8,7 @@ using UnityEngine;
 
 public static class SurvivalNotificationChecks
 {
+    // Verify immediate notices expire and ongoing event notices follow their real effect lifetime.
     public static void Run()
     {
         try

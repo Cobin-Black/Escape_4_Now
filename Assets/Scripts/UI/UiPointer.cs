@@ -9,6 +9,7 @@ namespace Escape4Now.UI
     public static class UiPointer
     {
         private static readonly List<RaycastResult> Hits = new List<RaycastResult>();
+        // Check the active pointer against UI so clicking a menu does not also affect the map.
         public static bool IsOverUI(Vector2 position)
         {
             if (EventSystem.current == null) return false;

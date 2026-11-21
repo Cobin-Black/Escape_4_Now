@@ -11,6 +11,7 @@ using UnityEngine;
 
 public static class ObstacleCatalogChecks
 {
+    // Validate the configured Race and Survival obstacle catalogs together.
     public static void Run()
     {
         int result = 0;
@@ -24,6 +25,7 @@ public static class ObstacleCatalogChecks
         if (Application.isBatchMode) EditorApplication.Exit(result);
     }
 
+    // Verify Race obstacle sections resolve to usable templates and preserve their configured choices.
     private static void CheckRace()
     {
         var scene = EditorSceneManager.OpenPreviewScene("Assets/Scenes/Race_Gamemode.unity");
@@ -82,6 +84,7 @@ public static class ObstacleCatalogChecks
         finally { EditorSceneManager.ClosePreviewScene(scene); }
     }
 
+    // Verify campus prop choices match the kinds and areas supported by the Survival layout.
     private static void CheckSurvival()
     {
         var scene = EditorSceneManager.OpenPreviewScene("Assets/Scenes/SurvivalMode.unity");
@@ -126,6 +129,7 @@ public static class ObstacleCatalogChecks
         finally { EditorSceneManager.ClosePreviewScene(scene); }
     }
 
+    // Stop this check with a clear message when a required behavior is missing.
     private static void Require(bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException("FAIL: " + message);

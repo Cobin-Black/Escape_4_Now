@@ -169,6 +169,7 @@ public static class SurvivalPresentationAuthoring
     }
     private static T Component<T>(GameObject owner) where T : Component
     { var component = owner.GetComponent<T>(); return component != null ? component : owner.AddComponent<T>(); }
+    // Apply the saved particle settings to the generated environmental effect.
     private static void ConfigureParticles(ParticleSystem system, float rate, float lifetime, float size, Color color)
     {
         var main = system.main; main.startLifetime = lifetime; main.startSize = size; main.startColor = color;

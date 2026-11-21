@@ -64,6 +64,8 @@ namespace Escape4Now.Arena
         public float steeringResponse = 2;
         [Range(.1f, 1)]
         public float lightMovementFactor = .8f;
+        [Min(1), Tooltip("Spotlight: how much faster the potato holder moves while the light is on them (1.2 = 20% faster).")]
+        public float holderSpeedFactor = 1.2f;
         [Header("Basketballs / Waves")]
         [Min(1)]
         public int ballCount = 3;
@@ -85,6 +87,7 @@ namespace Escape4Now.Arena
         public bool IsInstant => kind == ArenaEventKind.PlayerSwap || kind == ArenaEventKind.PotatoShuffle || kind == ArenaEventKind.ExtraTime || kind == ArenaEventKind.TimeCut;
         public string DisabledReason => kind == ArenaEventKind.LockerRoomOpens || kind == ArenaEventKind.StageDoorOpens ? "Requires a functional shortcut door. This room has open passages, so this event is unavailable." : kind <= ArenaEventKind.Teleport ? "Legacy proximity pickup. Items are not part of the arena event pool." : "";
 
+        // Exclude unavailable events and keep each room's event choices in its own pool.
         public bool Supports(ArenaRoom room)
         {
             if (DisabledReason.Length > 0)

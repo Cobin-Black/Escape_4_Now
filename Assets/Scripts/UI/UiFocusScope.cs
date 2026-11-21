@@ -13,6 +13,7 @@ namespace Escape4Now.UI
         private bool restorePreviousSelection;
         private GameObject previous;
 
+        // Choose a usable starting control when this UI scope opens.
         private void OnEnable()
         {
             if (!Application.isPlaying || EventSystem.current == null) return;

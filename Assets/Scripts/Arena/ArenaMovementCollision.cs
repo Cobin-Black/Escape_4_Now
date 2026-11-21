@@ -41,6 +41,7 @@ namespace Escape4Now.Arena
             return start;
         }
 
+        // Combine nearby obstacle and player directions to find which way to slide away from contact.
         private static Vector2 Normal(ArenaParticipant actor, Vector2 point)
         {
             var match = actor.Match;

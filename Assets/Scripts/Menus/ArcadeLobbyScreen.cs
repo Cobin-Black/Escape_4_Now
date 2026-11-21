@@ -1,6 +1,7 @@
 using Escape4Now.Accounts;
 using Escape4Now.GameModes;
 using Escape4Now.Multiplayer;
+using Escape4Now.Multiplayer.RelayTesting;
 using Escape4Now.Player;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -18,18 +19,19 @@ namespace Escape4Now.Menus
         [SerializeField] private Color background = new Color(0.663f, 0.863f, 1f);
         [SerializeField] private Color accent = new Color(0.212f, 0.945f, 0.804f);
 
-        private static readonly Color PanelNavy = Hex("#1d3a66");
-        private static readonly Color BoxNavy = Hex("#16305a");
-        private static readonly Color CardNavy = Hex("#0f2447");
-        private static readonly Color DeepNavy = Hex("#0b1c38");
-        private static readonly Color EdgeBlue = Hex("#2f5590");
-        private static readonly Color DashBlue = Hex("#4a6fa8");
-        private static readonly Color SoftBlue = Hex("#a9c4e6");
-        private static readonly Color PaleBlue = Hex("#8fd0ff");
-        private static readonly Color OffText = Hex("#8fa6c8");
-        private static readonly Color Tape = Hex("#d4f0ff");
+        public static readonly Color PanelNavy = Hex("#1d3a66");
+        public static readonly Color BoxNavy = Hex("#16305a");
+        public static readonly Color CardNavy = Hex("#0f2447");
+        public static readonly Color DeepNavy = Hex("#0b1c38");
+        public static readonly Color EdgeBlue = Hex("#2f5590");
+        public static readonly Color DashBlue = Hex("#4a6fa8");
+        public static readonly Color SoftBlue = Hex("#a9c4e6");
+        public static readonly Color PaleBlue = Hex("#8fd0ff");
+        public static readonly Color OffText = Hex("#8fa6c8");
+        public static readonly Color Tape = Hex("#d4f0ff");
         private static readonly Color MonsterCard = Hex("#3a1024");
-        private static readonly Color[] SlotColors = { Hex("#ffd500"), Hex("#36f1cd"), Hex("#ff4fd8"), Hex("#7dff9a") };
+        // Use the same slot color as the character and HUD.
+        private Color SlotColor(int slot) => session.GetPlayerColor(slot);
 
         private LocalMultiplayerSession session;
         private bool hidOldLobby;
@@ -64,6 +66,8 @@ namespace Escape4Now.Menus
         {
             var found = FindFirstObjectByType<LocalMultiplayerSession>();
             if (found == null || FindFirstObjectByType<ArcadeLobbyScreen>() != null) return;
+            var online = FindFirstObjectByType<OnlineRaceSession>();
+            if (online != null && online.gameObject.scene == found.gameObject.scene) return;
             var screen = new GameObject("Arcade Lobby").AddComponent<ArcadeLobbyScreen>();
             screen.session = found;
         }
@@ -444,7 +448,7 @@ namespace Escape4Now.Menus
             bool bot = session.IsBotPlayer(i);
             //A linked player must be unlinked before their slot can become a bot.
             bool canBot = session.Mode.SupportsBots && !(session.PlayerCount == 1 && i == 0) && !(i > 0 && linked[i] && !bot);
-            Color c = isMonster ? Red : SlotColors[i];
+            Color c = SlotColor(i);
 
             Fill(new Rect(card.x + 5f, card.y + 5f, card.width, card.height), DeepNavy);
             Block(card, isMonster ? MonsterCard : CardNavy, c, 4f, Color.clear, 0f);
@@ -555,7 +559,7 @@ namespace Escape4Now.Menus
             }
             if (survival)
             {
-                int pickRole = Segmented(new Rect(x, y, w, segH), "SURVIVOR", "MONSTER", isMonster ? 1 : 0, SlotColors[i], Red, true);
+                int pickRole = Segmented(new Rect(x, y, w, segH), "SURVIVOR", "MONSTER", isMonster ? 1 : 0, SlotColor(i), Red, true);
                 //SetMonsterPlayer switches the Monster on and off for that slot.
                 if ((pickRole == 1 && !isMonster) || (pickRole == 0 && isMonster)) session.SetMonsterPlayer(i);
                 y += segH + 8f;
@@ -617,7 +621,7 @@ namespace Escape4Now.Menus
         private void DrawLinkPopup(float ox)
         {
             int slot = linkingSlot;
-            Color c = SlotColors[slot];
+            Color c = SlotColor(slot);
             bool busy = AccountService.IsBusy;
 
             //Dim the whole window, including any space above and below the fitted layout.
@@ -783,7 +787,7 @@ namespace Escape4Now.Menus
 
         private Color OwnerColor(int player)
         {
-            return IsSurvival && session.IsMonsterPlayer(player) ? Red : SlotColors[player];
+            return SlotColor(player);
         }
 
         //Gives the player a skin only when no one in the match has it. A slot that is not playing

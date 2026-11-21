@@ -56,6 +56,7 @@ namespace Escape4Now.GameModes
             }
         }
 
+        // Use the supplied monster actor when building this match's participants.
         public bool ConfigureExternalMonster(PlayerCharacter actor)
         {
             if (started || actor == PlayerTemplate)
@@ -64,6 +65,7 @@ namespace Escape4Now.GameModes
             return true;
         }
 
+        // Append an external monster to the survivor roster so it gets a place in the turn order.
         public override PlayerCharacter[] BuildTurnParticipants(PlayerCharacter[] participants)
         {
             if (externalMonster == null)
@@ -109,6 +111,7 @@ namespace Escape4Now.GameModes
         public override bool FinishMovementTurn(PlayerCharacter player) => !tasks.CanInteract(player);
         public override bool AutoEndStrandedTurn => true;
 
+        // Reject missing rules, task settings or startup components before a match starts.
         public override bool ValidateConfiguration(out string error)
         {
             if (!base.ValidateConfiguration(out error))
@@ -261,8 +264,25 @@ namespace Escape4Now.GameModes
 
         private bool AllSurvivorsFinished() => started && ActiveSurvivors.Count == 0;
         // Handle deaths and timeout losses without treating survival until zero as a win.
+        public void ApplyOnlineObjectives(int completed, int[] stations)
+        {
+            CompletedPuzzles = completed;
+            foreach (int index in stations)
+                if (index >= 0 && index < Objectives.Tasks.Count) Objectives.TryCompletePuzzleType(Objectives.Tasks[index]);
+            tasks.RefreshMarkers();
+        }
+
+        // Copy the survivor outcome that the host already decided.
+        public void ApplyOnlineOutcome(PlayerCharacter player, SurvivorOutcome outcome)
+        {
+            outcomes[player] = outcome;
+            player.gameObject.SetActive(outcome == SurvivorOutcome.Active);
+        }
+
+        // Only the host or local game retires dead survivors and applies timeout losses.
         private void Update()
         {
+            if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient) return;
             if (!started) return;
             foreach (var player in ActiveSurvivors)
                 if (player.Health <= 0) MarkSurvivorKilled(player);

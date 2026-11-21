@@ -8,6 +8,7 @@ namespace Escape4Now.Items
     public sealed class SpitballItem : FreeForAllItem
     {
         [SerializeField] private SpitballProjectile projectilePrefab;
+        public SpitballProjectile ProjectilePrefab => projectilePrefab;
 
         // Fire a spitball when the player uses this item.
         public override void Use(PlayerInventory inventory)

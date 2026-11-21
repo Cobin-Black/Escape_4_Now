@@ -6,6 +6,7 @@ using UnityEditor.Build.Reporting;
 //Builds a separate development player for real multi-process LAN checks.
 public static class LanBuildChecks
 {
+    // Build the project used to check standalone LAN behavior.
     public static void Build()
     {
         BuildReport report = BuildPipeline.BuildPlayer(new BuildPlayerOptions

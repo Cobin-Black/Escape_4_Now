@@ -180,6 +180,7 @@ namespace Escape4Now.Map
         public int PlacementAttempts { get => placementAttempts; set => placementAttempts = value; }
         public OutdoorPropRule[] Rules { get => rules; set => rules = value; }
 
+        // Check generation ranges and required rules before trying to build a campus.
         public void Validate()
         {
             if (placementAttempts < 1 || placementAttempts > 256 || rules == null)
@@ -342,6 +343,7 @@ namespace Escape4Now.Map
         public int MaximumDeadEndLength { get => maximumDeadEndLength; set => maximumDeadEndLength = value; }
         public OutdoorAreaRule[] Areas => areas;
 
+        // Check generation ranges and required rules before trying to build a campus.
         public void Validate()
         {
             if (width < 24 || height < 24 || width > 96 || height > 96 || pathWidth < 1 || pathWidth > 4

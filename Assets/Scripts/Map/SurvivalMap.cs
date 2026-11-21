@@ -33,6 +33,7 @@ namespace Escape4Now.Map
         [SerializeField] private SurvivalObstacleSpawner obstacleSpawner;
         [SerializeField] private SurvivalEventController eventController;
         public int TraversalCost(Vector2Int cell) => eventController != null ? eventController.MovementCost(cell) : 1;
+        public SurvivalEventController Events => eventController;
         [SerializeField, HideInInspector, FormerlySerializedAs("obstaclePrefabs")]
         private SurvivalPropVisual[] previousObstaclePrefabs;
         [SerializeField, Range(0, 31)] private int blockedTileLayer;
@@ -103,6 +104,7 @@ namespace Escape4Now.Map
 
         private void OnEnable() { previewDirty = true; }
         private void Start() { if (Application.isPlaying && generateOnStart && Layout == null) Generate(); }
+        // Keep edited map settings consistent and refresh the editor preview when needed.
         private void OnValidate()
         {
             tileSize.x = Mathf.Max(.1f, tileSize.x); tileSize.y = Mathf.Max(.1f, tileSize.y);
@@ -112,6 +114,7 @@ namespace Escape4Now.Map
             poolLaneCount = Mathf.Clamp(poolLaneCount, 1, 6);
             previewDirty = true;
         }
+        // Refresh the optional editor preview without running a match simulation.
         private void Update()
         {
             if (!Application.isPlaying && previewDirty)
@@ -164,6 +167,7 @@ namespace Escape4Now.Map
             }
         }
 
+        // Require the assigned map presentation settings before drawing generated ground.
         private void ValidateVisuals(SurvivalMapLayout layout)
         {
             foreach (OutdoorSurface type in Enum.GetValues(typeof(OutdoorSurface)))
@@ -223,12 +227,14 @@ namespace Escape4Now.Map
         public Vector3 GridToWorld(Vector2Int cell) => GridToWorld((Vector2)cell);
         public Vector3 GridToWorld(Vector2 cell) => transform.TransformPoint(new Vector3((cell.x - cell.y) * tileSize.x * .5f,
             (cell.x + cell.y) * tileSize.y * .5f, 0f));
+        // Convert an isometric world point back to its nearest grid cell.
         public Vector2Int WorldToGrid(Vector3 world)
         {
             Vector3 local = transform.InverseTransformPoint(world);
             return new Vector2Int(Mathf.RoundToInt(local.y / tileSize.y + local.x / tileSize.x),
                 Mathf.RoundToInt(local.y / tileSize.y - local.x / tileSize.x));
         }
+        // Return a validated survivor spawn only when the requested slot exists.
         public bool TryGetPlayerSpawn(int playerIndex, out Vector2Int cell)
         {
             cell = default;
@@ -236,6 +242,7 @@ namespace Escape4Now.Map
             int index = Layout.PlayerSpawns[playerIndex]; cell = new Vector2Int(index % Layout.Width, index / Layout.Width);
             return true;
         }
+        // Yield unoccupied spawn candidates far enough from the survivor spawns and current players.
         public IEnumerable<Vector2Int> GetSpawnCandidates(int minimumDistanceFromPlayers = 0)
         {
             if (Layout == null) yield break;
@@ -251,6 +258,7 @@ namespace Escape4Now.Map
             }
         }
 
+        // Build the ground and blocked geometry from the accepted campus layout.
         private void DrawMap()
         {
             for (int y = 0; y < Layout.Height; y++) for (int x = 0; x < Layout.Width; x++)
@@ -298,6 +306,7 @@ namespace Escape4Now.Map
             return result;
         }
 
+        // Draw the sport-area markings on the surfaces generated for this campus.
         private void DrawMarkings(OutdoorArea area)
         {
             if (area.Kind != OutdoorAreaKind.TrackField && area.Kind != OutdoorAreaKind.Courts && area.Kind != OutdoorAreaKind.Pool) return;
@@ -335,6 +344,7 @@ namespace Escape4Now.Map
             DrawCourtMarkings(area);
         }
 
+        // Fit the court lines and center circle inside the generated court.
         private void DrawCourtMarkings(OutdoorArea area)
         {
             float inset = Mathf.Max(sportsMarkingInset, courtMarkingInset);
@@ -376,6 +386,7 @@ namespace Escape4Now.Map
         private void DrawRectangle(float left, float bottom, float right, float top)
             => AddLine(new[] { new Vector2(left, bottom), new Vector2(right, bottom), new Vector2(right, top), new Vector2(left, top) }, true);
 
+        // Project evenly spaced ellipse points into the map's world coordinates.
         private void DrawEllipse(Vector2 center, Vector2 radius)
         {
             var points = new List<Vector2>();
@@ -387,6 +398,7 @@ namespace Escape4Now.Map
             AddLine(points, true);
         }
 
+        // Create a sports-marking line using the configured color, width and material.
         private void AddLine(IReadOnlyList<Vector2> points, bool loop, Color? color = null)
         {
             var lineObject = new GameObject("Sports marking") { hideFlags = HideFlags.HideAndDontSave };
@@ -398,6 +410,7 @@ namespace Escape4Now.Map
             for (int i = 0; i < points.Count; i++) line.SetPosition(i, GridToWorld(points[i]));
         }
 
+        // Frame the generated campus using its world-space bounds.
         private void FitCamera()
         {
             if (!fitCamera || Layout == null || mapCamera == null || !mapCamera.orthographic) return;
@@ -409,6 +422,7 @@ namespace Escape4Now.Map
             screenWidth = Screen.width; screenHeight = Screen.height;
         }
 
+        // Remove preview geometry before a new preview or real map is drawn.
         [ContextMenu("Clear Generated Preview")]
         public void ClearPreview()
         {

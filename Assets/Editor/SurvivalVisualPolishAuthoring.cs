@@ -9,6 +9,7 @@ using UnityEngine.UI;
 public static class SurvivalVisualPolishAuthoring
 {
     private const string Folder="Assets/Prefabs/Survival/Gameplay/";
+    // Update saved puzzle and environmental visuals using their existing gameplay components.
     public static void Apply()
     {
         try
@@ -112,6 +113,7 @@ public static class SurvivalVisualPolishAuthoring
         rect.anchorMin=rect.anchorMax=anchor; rect.pivot=new Vector2(.5f,.5f); rect.anchoredPosition=position; rect.sizeDelta=size;
         var image=Add<Image>(item); image.color=color; image.raycastTarget=false; return image;
     }
+    // Build the sprinkler nozzle visual used by the outdoor effect.
     private static void Nozzle(Transform parent,string name,Color tint,Vector3 position,Vector2 size)
     {
         var found=parent.Find(name); var item=found!=null?found.gameObject:new GameObject(name);

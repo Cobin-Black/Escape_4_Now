@@ -33,6 +33,7 @@ public static class NativeUiChecks
     private static TutorialSection expectedSection;
     private static int tutorialSceneHandle;
 
+    // Resume saved UI checks on entering Play Mode and prepare their simulated input devices.
     static NativeUiChecks()
     {
         EditorApplication.playModeStateChanged += state =>
@@ -50,6 +51,7 @@ public static class NativeUiChecks
         };
     }
 
+    // Open the requested saved scene and schedule checks against its real UI.
     public static void Run()
     {
         string scene = Argument("-uiScene", "Race_Gamemode");
@@ -96,6 +98,7 @@ public static class NativeUiChecks
         EditorApplication.isPlaying = true;
     }
 
+    // Build the standalone player used for saved-scene UI validation.
     public static void Build()
     {
         var report = BuildPipeline.BuildPlayer(new BuildPlayerOptions
@@ -110,6 +113,7 @@ public static class NativeUiChecks
         EditorApplication.Exit(success ? 0 : 1);
     }
 
+    // Verify the visible HUD fits its intended area without overlapping controls.
     private static void CheckHudLayout(MatchUIContext context)
     {
         var reference = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Interface/MatchInterface.prefab")
@@ -138,8 +142,9 @@ public static class NativeUiChecks
         var hud = new SerializedObject(context.GetComponentInChildren<MatchHudUI>(true));
         Require(panel.Find("Objective").gameObject.activeSelf == hasObjective,
             "Objective appears only when the mode provides one");
-        Require(panel.rect.height == hud.FindProperty(hasObjective ? "heightWithObjective" : "heightWithoutObjective").floatValue,
-            "HUD uses its Inspector-configured height without leaving an empty objective section");
+        float expectedHeight = hud.FindProperty(hasObjective ? "heightWithObjective" : "heightWithoutObjective").floatValue;
+        expectedHeight += ModeHudHeight(context);
+        Require(panel.rect.height == expectedHeight, "HUD includes its configured objective and mode-specific sections");
         Require(panel.Find("Timer").gameObject.activeSelf == (context.Timer != null) &&
             panel.Find("Details Divider").gameObject.activeSelf == (context.Timer != null),
             "Timer and its divider are hidden together when absent");
@@ -147,6 +152,16 @@ public static class NativeUiChecks
             "HUD displays the current mode's own objective");
     }
 
+    private static float ModeHudHeight(MatchUIContext context)
+    {
+        if (context.Session == null || !(context.Session.Mode is SurvivalModeController)) return 0;
+        // Survival's existing health or ability section adds its saved height to the shared HUD.
+        var monsterHud = new SerializedObject(context.GetComponentInChildren<MonsterHudUI>(true));
+        return monsterHud.FindProperty(context.Turns.CurrentTurnOwner == TurnOwner.Enemy
+            ? "abilitiesHeight" : "healthHeight").floatValue;
+    }
+
+    // Run the UI checks and restore test state when they finish or fail.
     private static IEnumerator Execute()
     {
         var stack = new System.Collections.Generic.Stack<IEnumerator>();
@@ -216,6 +231,11 @@ public static class NativeUiChecks
             yield break;
         }
 
+        // These pointer checks exercise the saved Canvas widgets beneath the newer arcade setup.
+        var arcade = Object.FindFirstObjectByType<Escape4Now.Menus.ArcadeLobbyScreen>();
+        if (arcade != null) arcade.enabled = false;
+        session.SetTemporaryUIVisible(true);
+        yield return null;
         CheckActivePlayerName(context, false);
         var lobby = context.transform.Find("Lobby View/Lobby/Content");
         if (Argument("-soloRace", "false") == "true")
@@ -500,7 +520,9 @@ public static class NativeUiChecks
             Require(victim.SetGridPosition(player.GridPosition), "Key carrier can share the challenger's tile");
             Require(raceMode.TryNetworkBattle(player, victim), "Race battle still resolves through its mode API");
             yield return null; yield return null;
+            CheckBattleDice(context);
             yield return Capture(prefix + "-battle");
+            yield return new WaitForSeconds(raceMode.KeyBattle.DiceRollSeconds + raceMode.KeyBattle.DiceHoldSeconds);
             yield return Click(context.transform.Find("Race Battle View/Race Battle/Content/Continue").GetComponent<Button>());
             Require(!raceMode.IsBattleActive && !player.IsInMenu(), "Native battle Continue releases player control");
             context.Events.ApplyNetworkDisplay("Blackout preview", 2);
@@ -540,6 +562,7 @@ public static class NativeUiChecks
         Debug.Log("NATIVE UI CHECKS PASSED: " + prefix + ", pointer lobby/start/pause/resume, shared actions, randomized HUD, native result sizing.");
     }
 
+    // Verify Survival's task and event visibility controls change assistance without changing gameplay.
     private static IEnumerator CheckSurvivalVisibility(MatchUIContext context, SurvivalModeController mode)
     {
         var view = new SerializedObject(context.GetComponentInChildren<PauseMenuUI>(true));
@@ -592,6 +615,7 @@ public static class NativeUiChecks
         Debug.Log("SURVIVAL VISIBILITY CHECKS PASSED: native event/task toggles, named stations, preserved gameplay and shared Pause.");
     }
 
+    // Verify storage interaction hints remain readable and follow the configured controls.
     private static IEnumerator CheckStorageHints(MatchUIContext context)
     {
         Require(!LocalMultiplayerSession.ShowItemObstacles && !LocalMultiplayerSession.ShowKeyLocation,
@@ -654,6 +678,7 @@ public static class NativeUiChecks
             if (marker.name.StartsWith("StorageAssist")) Require(!marker.gameObject.activeSelf, "Switching reveal options off clears every storage hint");
     }
 
+    // Check that neighboring hint elements have enough room to remain readable.
     private static void CheckHintSpacing(MatchUIContext context)
     {
         var bounds = new System.Collections.Generic.List<Rect>();
@@ -666,6 +691,7 @@ public static class NativeUiChecks
         }
     }
 
+    // Drive the actual UI input path so the check includes the control's event handling.
     private static IEnumerator Click(Selectable selectable)
     {
         Canvas.ForceUpdateCanvases();
@@ -689,6 +715,7 @@ public static class NativeUiChecks
         for (int i = 0; i < 4; i++) yield return null;
     }
 
+    // Verify the item bar displays the intended inventory without overlapping its controls.
     internal static void CheckInventoryLayout(MatchUIContext context)
     {
         var source = AssetDatabase.LoadAssetAtPath<GameObject>("Assets/Prefabs/Interface/MatchInterface.prefab")
@@ -733,6 +760,11 @@ public static class NativeUiChecks
         var hud = context.GetComponentInChildren<MatchHudUI>();
         string original = context.Events.CurrentMessage;
         int originalBlackout = context.Events.BlackoutTurns;
+        // Hold local notification updates while testing the text received from a host.
+        // Otherwise the local queue can replace the injected message before it is measured.
+        var survivalEvents = context.Events as SurvivalEventController;
+        bool wasEnabled = survivalEvents != null && survivalEvents.enabled;
+        if (survivalEvents != null) survivalEvents.enabled = false;
         foreach (Vector2Int size in Application.isBatchMode ? new[] { Vector2Int.zero } :
             new[] { new Vector2Int(1280, 720), new Vector2Int(960, 540), new Vector2Int(720, 960) })
         {
@@ -747,7 +779,7 @@ public static class NativeUiChecks
                 Rect bounds = MatchUIContext.ScreenRect(panel), hudBounds = hud.PanelRect;
                 Require(panel.gameObject.activeInHierarchy && bounds.xMin >= hudBounds.xMin && bounds.xMax <= hudBounds.xMax &&
                     bounds.yMin >= hudBounds.yMin && bounds.yMax <= hudBounds.yMax,
-                    "Event feedback stays completely inside the existing HUD");
+                    "Event feedback stays inside the HUD. Notice " + bounds + ", HUD " + hudBounds + ", text " + text);
                 Require(bounds.xMin >= 0 && bounds.xMax <= Screen.width && bounds.yMax <= Screen.height,
                     "Event notice stays inside the viewport");
                 if (message.cachedTextGenerator.characterCountVisible < message.text.Length)
@@ -763,8 +795,8 @@ public static class NativeUiChecks
                 var objective = (Text)hudSettings.FindProperty("objective").objectReferenceValue;
                 bool hasObjective = objective.gameObject.activeInHierarchy;
                 Require(Mathf.Approximately(hudBounds.height / ((RectTransform)hud.transform.Find("HUD")).lossyScale.y,
-                    hudSettings.FindProperty(hasObjective ? "heightWithObjective" : "heightWithoutObjectiveWithNotice").floatValue),
-                    "Race and Survival keep their existing HUD height; tutorial uses its configured internal feedback area");
+                    hudSettings.FindProperty(hasObjective ? "heightWithObjective" : "heightWithoutObjectiveWithNotice").floatValue + ModeHudHeight(context)),
+                    "Event feedback leaves room for the mode-specific HUD section");
                 if (hasObjective)
                 {
                     Require(!MatchUIContext.ScreenRect(objective.rectTransform).Overlaps(bounds),
@@ -791,10 +823,12 @@ public static class NativeUiChecks
         yield return null; yield return null;
         Require(!panel.gameObject.activeSelf, "Clearing event feedback removes the notice without empty space");
         context.Events.ApplyNetworkDisplay(original, originalBlackout);
+        if (survivalEvents != null) survivalEvents.enabled = wasEnabled;
         if (!Application.isBatchMode) SetSize(1280, 720);
         yield return null; yield return null;
     }
 
+    // Verify the visible active-player name agrees with the current turn and identity.
     private static void CheckActivePlayerName(MatchUIContext context, bool visible)
     {
         var names = context.GetComponentsInChildren<ActivePlayerNameUI>(true);
@@ -847,6 +881,7 @@ public static class NativeUiChecks
             "Name width respects its Inspector limit");
     }
 
+    // Verify visible character bodies remain correctly sized for the map.
     internal static void CheckPlayerBodies(LocalMultiplayerSession session)
     {
         foreach (var participant in session.Participants)
@@ -895,6 +930,7 @@ public static class NativeUiChecks
         finally { Object.DestroyImmediate(frame); }
     }
 
+    // Select the requested Game View resolution so layout checks use a repeatable viewport.
     internal static void SetSize(int width, int height)
     {
         var assembly = typeof(Editor).Assembly;
@@ -916,6 +952,34 @@ public static class NativeUiChecks
         window.Repaint();
     }
 
+    // Verify battle dice use the intended appearance and player-color presentation.
+    public static void CheckBattleDice(MatchUIContext context)
+    {
+        var hud = context.GetComponentInChildren<MatchHudUI>(true);
+        var template = (DiceDisplay)new SerializedObject(hud).FindProperty("dice").objectReferenceValue;
+        var layer = context.GetComponentInParent<Canvas>().rootCanvas.transform.Find("Battle Dice");
+        Require(layer != null && RaceBattleDice.Rolling, "The key battle displays its rolling dice");
+        var copies = layer.GetComponentsInChildren<DiceDisplay>();
+        Require(copies.Length == 2, "The battle uses two copies of the HUD die");
+        foreach (var die in copies)
+        {
+            var frame = die.GetComponent<Image>();
+            Require(frame.sprite == template.GetComponent<Image>().sprite && frame.type == template.GetComponent<Image>().type,
+                "Battle dice keep the HUD frame shape");
+            Require(((RectTransform)die.transform).rect.size == ((RectTransform)template.transform).rect.size,
+                "Battle dice scale the whole saved layout instead of stretching only the frame");
+            bool playerColor = false;
+            foreach (var player in context.Session.Participants) playerColor |= frame.color == player.IdentityColor;
+            Require(playerColor, "Each battle die uses a participant's color");
+            var original = new SerializedObject(template).FindProperty("faces");
+            var shown = new SerializedObject(die).FindProperty("faces");
+            Require(original.arraySize == shown.arraySize, "Battle dice retain the saved HUD faces");
+            for (int i = 0; i < original.arraySize; i++)
+                Require(original.GetArrayElementAtIndex(i).objectReferenceValue == shown.GetArrayElementAtIndex(i).objectReferenceValue,
+                    "Battle die face matches the HUD sprite");
+        }
+    }
+
     private static string Argument(string name, string fallback)
     {
         var args = Environment.GetCommandLineArgs();
@@ -923,12 +987,14 @@ public static class NativeUiChecks
         return index >= 0 && index + 1 < args.Length ? args[index + 1] : fallback;
     }
 
+    // Stop this check with a clear message when a required behavior is missing.
     private static void Require(bool condition, string message)
     {
         if (!condition) throw new InvalidOperationException("FAIL: " + message);
         Debug.Log("PASS: " + message);
     }
 
+    // Fail a stuck check after its deadline so batch validation cannot wait forever.
     private static void Watchdog()
     {
         if (waitingForTutorial && UnityEngine.SceneManagement.SceneManager.GetActiveScene().handle != tutorialSceneHandle)
@@ -945,6 +1011,7 @@ public static class NativeUiChecks
         Debug.LogError("Native UI checks timed out."); Finish(1);
     }
 
+    // Clean up the check and return its result code to the batch runner.
     private static void Finish(int code)
     {
         SessionState.SetBool(Running, false);

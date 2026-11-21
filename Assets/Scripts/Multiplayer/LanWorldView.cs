@@ -21,6 +21,7 @@ namespace Escape4Now.Multiplayer
         private readonly Dictionary<int, GameObject> copies = new Dictionary<int, GameObject>();
         private bool hasLayout;
 
+        // Keep the map, players and event sources that this view copies to and from host snapshots.
         public LanWorldView(LocalMultiplayerSession owner)
         {
             session = owner;
@@ -35,6 +36,14 @@ namespace Escape4Now.Multiplayer
 
         //The host sends results, never another player's requested dice value or position.
         // Collect the host's current state into one message that clients can display.
+        //The player's slot number for the network, or -1 if they are not in this match.
+        private int ParticipantIndex(PlayerCharacter player)
+        {
+            for (int i = 0; i < session.Participants.Count; i++)
+                if (session.Participants[i] == player) return i;
+            return -1;
+        }
+
         public LanSnapshot Capture()
         {
             var state = new LanSnapshot { seed = map.LayoutSeed, exitX = map.ExitPosition.x,
@@ -46,14 +55,32 @@ namespace Escape4Now.Multiplayer
                 furnitureSettings = map.FurnitureSettings,
                 players = new LanPlayerState[session.Participants.Count] };
             state.secondsRemaining = UnityEngine.Object.FindFirstObjectByType<GameTimer>()?.TimeRemaining ?? 0f;
-            state.battleMessage = UnityEngine.Object.FindFirstObjectByType<Escape4Now.GameModes.Race_Gamemode>()?.NetworkMessage ?? "";
+            var race = UnityEngine.Object.FindFirstObjectByType<Escape4Now.GameModes.Race_Gamemode>();
+            state.battleMessage = race?.NetworkMessage ?? "";
+            var keyBattle = race != null ? race.KeyBattle : null;
+            if (keyBattle != null && keyBattle.Challenger != null)
+            {
+                state.battleNumber = keyBattle.BattleNumber;
+                state.battleChallenger = ParticipantIndex(keyBattle.Challenger);
+                state.battleOpponent = ParticipantIndex(keyBattle.Opponent);
+                state.battleChallengerRoll = keyBattle.ChallengerRoll;
+                state.battleOpponentRoll = keyBattle.OpponentRoll;
+            }
+            var openStorage = ObstacleStorage.OpenStorage;
+            if (openStorage != null && openStorage.ViewingPlayer == session.Participants[state.turn])
+            {
+                state.storageOpen = true;
+                state.storageName = openStorage.name;
+                state.storageItem = ItemType(openStorage.StoredItemPrefab);
+            }
             for (int i = 0; i < state.players.Length; i++)
             {
                 PlayerCharacter player = session.Participants[i];
                 state.players[i] = new LanPlayerState { x = player.GridPosition.x, y = player.GridPosition.y,
+                    displayName = session.GetPlayerName(i), skin = session.Skins != null ? session.Skins.GetSkinIndex(i) : -1,
                     worldX = player.transform.position.x, worldY = player.transform.position.y,
-                    roll = player.LastRoll, moves = player.MovesRemaining, rolled = player.HasRolled,
-                    moving = player.IsMoving, won = player.HasReachedExit,
+                    roll = player.LastRoll, firstDie = player.FirstDie, secondDie = player.SecondDie, moves = player.MovesRemaining, rolled = player.HasRolled,
+                    moving = player.IsMoving, rolling = player.IsRollAnimating, won = player.HasReachedExit, health = player.Health,
                     protectedFromPlayers = player.EventState.IsProtectedFromPlayers,
                     hasKey = player.Inventory.HasKey(),
                     item = player.Inventory.Items.Count == 0 ? 0 : ItemType(player.Inventory.Items[0]) };
@@ -113,7 +140,11 @@ namespace Escape4Now.Multiplayer
                 || state.message == null || state.message.Length > 1024 || !Cell(state.exitX, state.exitY)
                 || state.battleMessage == null || state.battleMessage.Length > 1024
                 || float.IsNaN(state.secondsRemaining) || float.IsInfinity(state.secondsRemaining)
-                || state.secondsRemaining < 0 || state.secondsRemaining > 86400f) return false;
+                || state.secondsRemaining < 0 || state.secondsRemaining > 86400f
+                || state.battleNumber < 0 || state.battleChallengerRoll < 0 || state.battleChallengerRoll > 6
+                || state.battleOpponentRoll < 0 || state.battleOpponentRoll > 6
+                || state.battleChallenger < -1 || state.battleChallenger >= state.players.Length
+                || state.battleOpponent < -1 || state.battleOpponent >= state.players.Length) return false;
             bool edgeX = state.exitX == 0 || state.exitX == SchoolMapLayout.Size - 1;
             bool edgeY = state.exitY == 0 || state.exitY == SchoolMapLayout.Size - 1;
             if (edgeX == edgeY) return false;
@@ -143,6 +174,14 @@ namespace Escape4Now.Multiplayer
             if (!IsValid(state)) return false;
             if (!hasLayout)
             {
+                session.Skins?.ClearAll();
+                for (int i = 0; i < state.players.Length; i++)
+                {
+                    if (!string.IsNullOrWhiteSpace(state.players[i].displayName))
+                        session.SetPlayerName(i, state.players[i].displayName);
+                    if (state.players[i].skin >= 0) session.Skins?.TryAssign(i, state.players[i].skin);
+                }
+                session.Skins?.FillMissing();
                 map.UseNetworkLayout(state.seed, state.mapSettings, state.furnitureSettings);
                 if (!session.StartNetworkMatch(state.players.Length)) return false;
                 map.PlaceNetworkExit(new Vector2Int(state.exitX, state.exitY));
@@ -154,6 +193,7 @@ namespace Escape4Now.Multiplayer
             for (int i = 0; i < state.players.Length; i++)
             {
                 session.Participants[i].ApplyNetworkState(state.players[i], false);
+                if (state.players[i].health >= 0) session.Participants[i].ApplyReplicatedHealth(state.players[i].health);
                 occupied.Add(session.Participants[i].GridPosition);
             }
             map.ReplacePlayerOccupants(occupied);

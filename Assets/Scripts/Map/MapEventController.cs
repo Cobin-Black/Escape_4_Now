@@ -71,18 +71,21 @@ namespace Escape4Now.Map
         public string CurrentMessage => message;
         public int BlackoutTurns => visibilityTurnsRemaining;
         public bool EventLocationsVisible => showEventLocations;
+        // Use the registered cell when possible so a marker's visual offset does not change its location.
         public Vector2Int GetEventCell(EventTileMarker marker)
         {
             return marker != null && cellsByMarker.TryGetValue(marker, out Vector2Int cell)
                 ? cell : map.WorldToGrid(marker.transform.position);
         }
 
+        // Remember the event marker and apply the current visibility choice.
         public void RegisterMarker(EventTileMarker marker)
         {
             if (marker == null || map == null) return;
             RegisterMarker(marker, map.WorldToGrid(marker.transform.position));
         }
 
+        // Remember the event marker and apply the current visibility choice.
         public void RegisterMarker(EventTileMarker marker, Vector2Int cell)
         {
             if (marker == null || map == null) return;
@@ -91,6 +94,7 @@ namespace Escape4Now.Map
             marker.SetVisible(showEventLocations);
         }
 
+        // Change marker visibility while leaving event placement and behavior active.
         public void SetEventLocationsVisible(bool visible)
         {
             showEventLocations = visible;
@@ -161,6 +165,7 @@ namespace Escape4Now.Map
             eventPrefabsDirty = true;
         }
 
+        // Rebuild the event lookup only when the assigned catalog has changed.
         private void RefreshEventPrefabs()
         {
             InitializeEventCatalog();
@@ -173,6 +178,7 @@ namespace Escape4Now.Map
             eventPrefabsDirty = false;
         }
 
+        // Keep edited event settings valid and mark the prefab lookup for rebuilding.
         private void OnValidate()
         {
             eventPrefabsDirty = true;

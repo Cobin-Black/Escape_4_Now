@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using Escape4Now.Map;
 using UnityEngine;
 
 namespace Escape4Now.Arena
@@ -47,6 +48,107 @@ namespace Escape4Now.Arena
 
         public bool BlackoutActive => active.Exists(e => !e.Warning && !e.Ended && e.Rule.IsBlackout);
 
+        [Serializable]
+        public sealed class OnlineEvent
+        {
+            public ArenaEventKind kind;
+            public bool warning;
+            public float remaining, elapsed;
+            public Vector2 center, direction;
+            public Vector2Int source;
+            public Vector2Int block;
+            public int equipment = -1, first = -1, second = -1;
+            public Vector2Int[] cells;
+            public Vector2[] balls;
+            public float[] ballTravel;
+        }
+
+        // Copy active event timers, targets and moving objects so guests can show the host's events.
+        public OnlineEvent[] CaptureOnlineEvents()
+        {
+            return active.ConvertAll(state => new OnlineEvent
+            {
+                kind = state.Rule.kind, warning = state.Warning, remaining = state.WarningRemaining,
+                elapsed = state.Elapsed, center = state.Center, direction = state.Direction,
+                source = state.sourceCell, block = state.blockCell, cells = state.Cells.ToArray(),
+                equipment = Match.Map.EquipmentViews.IndexOf(state.equipment),
+                first = state.first != null ? state.first.Slot : -1, second = state.second != null ? state.second.Slot : -1,
+                balls = state.balls.ConvertAll(ball => ball.position).ToArray(),
+                ballTravel = state.balls.ConvertAll(ball => ball.travel).ToArray()
+            }).ToArray();
+        }
+
+        // Reuse the visual component while keeping event placement, damage and movement on the host.
+        public void ApplyOnlineEvents(OnlineEvent[] snapshots)
+        {
+            if (pool == null || pool.visuals == null) return;
+            snapshots ??= Array.Empty<OnlineEvent>();
+            for (int i = active.Count - 1; i >= 0; i--)
+            {
+                var state = active[i];
+                if (!Array.Exists(snapshots, value => value != null && value.kind == state.Rule.kind)) End(state);
+            }
+            foreach (var snapshot in snapshots)
+            {
+                if (snapshot == null || snapshot.cells == null || snapshot.cells.Length > 1024) continue;
+                var state = active.Find(value => value.Rule.kind == snapshot.kind);
+                if (state == null)
+                {
+                    var rule = Array.Find(pool.entries, value => value != null && value.kind == snapshot.kind);
+                    if (rule == null) continue;
+                    state = new ArenaEventState { Rule = rule, sourceCell = snapshot.source };
+                    state.Cells.AddRange(snapshot.cells);
+                    state.View = ArenaEventView.Create(this, state);
+                    active.Add(state);
+                    if (snapshot.warning) Play(rule.warningSound);
+                }
+                state.first = snapshot.first >= 0 && snapshot.first < Match.Players.Count ? Match.Players[snapshot.first] : null;
+                state.second = snapshot.second >= 0 && snapshot.second < Match.Players.Count ? Match.Players[snapshot.second] : null;
+                state.Center = snapshot.center;
+                state.Direction = snapshot.direction;
+                state.Elapsed = snapshot.elapsed;
+                state.WarningRemaining = snapshot.remaining;
+                if (state.Warning && !snapshot.warning)
+                {
+                    Play(state.Rule.activationSound);
+                    state.View.ActivateGround();
+                    if (state.Rule.kind == ArenaEventKind.BleachersMove && snapshot.equipment >= 0
+                        && snapshot.equipment < Match.Map.EquipmentViews.Count)
+                    {
+                        state.equipment = Match.Map.EquipmentViews[snapshot.equipment];
+                        state.originalPosition = state.equipment.Visual.position;
+                        state.originalScale = state.equipment.Visual.localScale;
+                        state.blockCell = snapshot.block;
+                        state.landed = true;
+                        effects.ShowExtendedBleachers(state);
+                    }
+                    else if (state.Rule.IsBlock && state.Rule.obstaclePrefab != null)
+                    {
+                        var obstacle = state.View.SpawnObstacle(state.Rule.obstaclePrefab, state.Center);
+                        if (obstacle.TryGetComponent<SurvivalBranchFall>(out var fall))
+                            fall.Configure(() => true, null, () => Match.Paused || !Match.Playing);
+                    }
+                }
+                state.Warning = snapshot.warning;
+                if (pool.visuals.basketballPrefab == null || snapshot.balls == null) continue;
+                int count = Mathf.Min(snapshot.balls.Length, 32);
+                while (state.balls.Count > count)
+                {
+                    int last = state.balls.Count - 1;
+                    Destroy(state.balls[last].visual);
+                    state.balls.RemoveAt(last);
+                }
+                while (state.balls.Count < count)
+                    state.balls.Add(new ArenaEventBall { visual = state.View.SpawnBall() });
+                for (int i = 0; i < count; i++)
+                {
+                    float distance = snapshot.ballTravel != null && i < snapshot.ballTravel.Length ? snapshot.ballTravel[i] : 0;
+                    float bounce = Mathf.Abs(Mathf.Sin(distance * pool.visuals.bounceRate)) * pool.visuals.bounceHeight + .15f;
+                    state.balls[i].visual.transform.position = Match.Map.World(snapshot.balls[i]) + Vector3.up * bounce;
+                }
+            }
+        }
+
         // Choose the match subset once using the generated map seed.
         public void Begin(ArenaMatch owner)
         {
@@ -78,6 +180,7 @@ namespace Escape4Now.Arena
             round = 0;
         }
 
+        // Use each event's weight when choosing, so rarer events are picked less often.
         private ArenaEventEntry Pick(List<ArenaEventEntry> entries)
         {
             float total = 0;
@@ -95,6 +198,7 @@ namespace Escape4Now.Arena
         }
 
         private float Range(Vector2 range) => Mathf.Max(.1f, Mathf.Lerp(range.x, Mathf.Max(range.x, range.y), (float)random.NextDouble()));
+        // Pause event audio with the match, then advance the event timers.
         private void Update()
         {
             bool pause = Match != null && Match.Paused;
@@ -114,7 +218,7 @@ namespace Escape4Now.Arena
         // Advance warnings and effects only while the match is playing and unpaused.
         public void Step(float seconds)
         {
-            if (Match == null || !Match.Playing || Match.Paused)
+            if (Match == null || !Match.Playing || Match.Paused || Match.Replica)
                 return;
             if (pool == null || !pool.enableEvents || pool.visuals == null)
             {
@@ -228,6 +332,7 @@ namespace Escape4Now.Arena
             return true;
         }
 
+        // Keep another event from placing effects on cells already in use.
         internal bool Reserved(Vector2Int cell)
         {
             foreach (var state in active)
@@ -247,6 +352,7 @@ namespace Escape4Now.Arena
             return ArenaEventSafety.CanChange(Match, new List<Vector2Int>(unsafeCells), open);
         }
 
+        // Apply active slippery-floor steering, moving-light slowdown and the holder's Spotlight boost.
         public Vector2 FilterMovement(ArenaParticipant player, Vector2 desired, Vector2 previous, float dt)
         {
             if (effects == null || Match == null || !Match.Playing)
@@ -261,10 +367,23 @@ namespace Escape4Now.Arena
                         factor = Mathf.Min(factor, state.Rule.lightMovementFactor);
                 }
 
-            desired *= factor;
+            desired *= factor * SpotlightSpeed(player);
             return response > 0 ? Vector2.Lerp(previous, desired, 1 - Mathf.Exp(-response * dt)) : desired;
         }
 
+        // Spotlight follows the potato, so whoever holds it moves faster until the light ends.
+        public float SpotlightSpeed(ArenaParticipant player)
+        {
+            if (player == null || !(Match is HotPotatoController potato) || potato.Holder != player)
+                return 1;
+            float speed = 1;
+            foreach (var state in active)
+                if (!state.Warning && !state.Ended && state.Rule.kind == ArenaEventKind.Spotlight)
+                    speed = Mathf.Max(speed, state.Rule.holderSpeedFactor);
+            return speed;
+        }
+
+        // Play the assigned event sound at the volume set in the event pool.
         internal void Play(AudioClip clip)
         {
             if (clip == null || pool == null)
@@ -274,6 +393,7 @@ namespace Escape4Now.Arena
                 audio.PlayOneShot(clip, pool.volume);
         }
 
+        // Restore this event's temporary changes before removing its visuals.
         private void End(ArenaEventState state)
         {
             if (!active.Contains(state))
@@ -285,6 +405,7 @@ namespace Escape4Now.Arena
             active.Remove(state);
         }
 
+        // End every active effect so no temporary blocks or visuals remain.
         private void ClearActive()
         {
             while (active.Count > 0)

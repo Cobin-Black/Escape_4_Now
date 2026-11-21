@@ -34,6 +34,7 @@ namespace Escape4Now.UI
                 });
         }
 
+        // Keep the pause menu and available actions consistent with the current match and connection.
         private void LateUpdate()
         {
             bool running = context.Session != null && context.Playing && !context.Finished;

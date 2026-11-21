@@ -10,6 +10,7 @@ namespace Escape4Now.Map
         [Serializable] private sealed class Cue { public SurvivalEventType type; public SurvivalWorldBurst prefab; }
         [Header("Outdoor Feedback Prefabs")]
         [SerializeField] private Cue[] cues = new Cue[0];
+        // Find the assigned cue for this event and show it at the affected player.
         public void Emit(SurvivalEventType type, PlayerCharacter player)
         {
             if (player == null || Escape4Now.Multiplayer.LocalMultiplayerSession.GameplayPaused) return;

@@ -68,6 +68,7 @@ namespace Escape4Now.Obstacles
             if (map != null && map.GetComponent<ObstacleSpawner>() != this) map.SetObstacleSpawner(this);
         }
 
+        // Keep the edited obstacle catalog valid and refresh the choices used for spawning.
         private void OnValidate()
         {
             minimumObstacleCount = Mathf.Clamp(minimumObstacleCount, 0, 10);
@@ -133,6 +134,7 @@ namespace Escape4Now.Obstacles
             specialSectionsInitialized = true;
         }
 
+        // Read the prefab list assigned to the requested special-room section.
         private Component[] GetSpecialSection(SchoolSpaceType space)
         {
             switch (space)
@@ -147,6 +149,7 @@ namespace Escape4Now.Obstacles
             }
         }
 
+        // Replace only the requested special-room section in the configured catalog.
         private void SetSpecialSection(SchoolSpaceType space, Component[] prefabs)
         {
             switch (space)
@@ -360,6 +363,7 @@ namespace Escape4Now.Obstacles
             HasSpawnedObstacles = true;
         }
 
+        // Protect doorway approaches when deciding where an obstacle can fit.
         private bool IsNearDoorway(Vector2Int cell)
         {
             placementSettings ??= map.FurnitureSettings;

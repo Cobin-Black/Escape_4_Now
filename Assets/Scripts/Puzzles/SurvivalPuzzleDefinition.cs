@@ -69,6 +69,7 @@ namespace Escape4Now.Puzzles
         public bool Allows(OutdoorAreaKind area) => compatibleAreas != null && Array.IndexOf(compatibleAreas, area) >= 0;
         public int Count => type == SurvivalPuzzleType.MatchWires ? wireCount : type == SurvivalPuzzleType.SortSupplies ? supplyCount : type == SurvivalPuzzleType.Batteries ? batteryCount : type == SurvivalPuzzleType.ArrangeNumbers ? numberCount : type == SurvivalPuzzleType.Breaker ? breakerCount : type == SurvivalPuzzleType.ButtonSequence ? sequenceButtonCount : switchCount;
 
+        // Reject invalid puzzle sizes, targets and timings before a player starts the task.
         public void Validate()
         {
             if (timeLimitSeconds < 1f || float.IsNaN(timeLimitSeconds) || float.IsInfinity(timeLimitSeconds))

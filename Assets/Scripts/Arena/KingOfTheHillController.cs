@@ -33,8 +33,33 @@ namespace Escape4Now.Arena
         public override GameModeType Type => GameModeType.FreeForAll;
         public override string Objective => objective;
         public int ScoreToWin => scoreToWin;
+        public Vector2? HillCenter => activeHill != null ? activeHill.Center : null;
+        public FreeForAllItemSpawner Items => itemSpawner;
+        // Used by ArenaBotController to find the hill and the items lying on the floor.
         public KingOfTheHillZone ActiveHill => activeHill;
         public FreeForAllItemSpawner ItemSpawner => itemSpawner;
+
+        // Guests show host results with the same hill prefab and scoreboard.
+        public void ApplyOnlineHill(bool active, Vector2 center)
+        {
+            if (!active || hillPrefab == null) return;
+            if (activeHill == null)
+            {
+                activeHill = Instantiate(hillPrefab, transform);
+                activeHill.Initialize(Map, center);
+            }
+            else if (activeHill.Center != center)
+                activeHill.SetOnlineCenter(center);
+        }
+
+        // Copy the host's score and respawn countdown into the existing player display.
+        public void ApplyOnlineScore(ArenaParticipant player, int score, int respawn)
+        {
+            scores[player] = score;
+            player.UpdateScoreLabel(score);
+            if (respawn > 0) respawnTimers[player] = respawn;
+            else respawnTimers.Remove(player);
+        }
 
         // Spawn the existing arena items.
         protected override void BeginRules()
@@ -157,7 +182,7 @@ namespace Escape4Now.Arena
             // The Input System's Attack action uses the held item (ruler swing, spit ball, ...).
             foreach (ArenaParticipant participant in Players)
             {
-                if (!participant.Alive || !participant.Input.AttackPressed)
+                if (!participant.Alive || !participant.UseItemPressed)
                     continue;
 
                 var inventory = participant.GetComponent<PlayerInventory>();

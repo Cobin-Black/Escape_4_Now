@@ -28,7 +28,7 @@ namespace Escape4Now.Items
                 attacker.Match.Paused)
                 return;
 
-            // Swing straight ahead from the way the player's sprite is facing.
+            // Use the sprite's facing for both the hit and its visible swing.
             Vector2 direction = attacker.AttackDirection;
 
             foreach (ArenaParticipant target in attacker.Match.Players)
@@ -57,26 +57,18 @@ namespace Escape4Now.Items
                     target.Knockback(direction * knockback);
             }
 
-            // Show the Ruler swing effect.
-            if (swingEffectPrefab != null)
-            {
-                GameObject effect = Instantiate(
-                    swingEffectPrefab,
-                    attacker.transform.position,
-                    Quaternion.identity
-                );
-
-                // Draw the arc along the same on-screen diagonal the hit check uses.
-                Vector2 visualDirection = attacker.Match.Map.ScreenDirection(direction).normalized;
-
-                effect.GetComponent<RulerSwingEffect>()?.Initialize(
-                    visualDirection,
-                    attackRange,
-                    swingAngle
-                );
-            }
-
+            Vector2 visualDirection = attacker.Match.Map.ScreenDirection(direction).normalized;
+            ShowSwing(attacker.transform.position, visualDirection);
+            if (attacker.Match.Online) attacker.RecordOnlineSwing();
             ConsumeUse(inventory);
+        }
+
+        public void ShowSwing(Vector3 position, Vector2 direction)
+        {
+            // The host and guests share this effect prefab; guests never repeat the hit check.
+            if (swingEffectPrefab == null) return;
+            var effect = Instantiate(swingEffectPrefab, position, Quaternion.identity);
+            effect.GetComponent<RulerSwingEffect>()?.Initialize(direction.normalized, attackRange, swingAngle);
         }
     }
 }

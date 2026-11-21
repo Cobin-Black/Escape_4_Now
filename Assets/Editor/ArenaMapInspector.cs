@@ -115,6 +115,7 @@ public sealed class ArenaMapInspector : Editor
             "labelColor"
         }
     };
+    // Show map settings alongside the event and obstacle configuration used by this room.
     public override void OnInspectorGUI()
     {
         DrawDefaultInspector();
@@ -153,6 +154,7 @@ public sealed class ArenaMapInspector : Editor
         }
     }
 
+    // Draw a referenced asset's settings without making the designer switch Inspector selections.
     private static void Inline(Object asset, string label, ref bool expanded, ref Editor editor)
     {
         if (asset == null)
@@ -164,6 +166,7 @@ public sealed class ArenaMapInspector : Editor
         editor.OnInspectorGUI();
     }
 
+    // Release the cached inline editors when this Inspector closes.
     private void OnDisable()
     {
         if (obstacleEditor != null)

@@ -33,6 +33,7 @@ namespace Escape4Now.UI
         }
         private void OnEnable(){Canvas.willRenderCanvases+=Draw;}
         private void OnDisable(){Canvas.willRenderCanvases-=Draw;}
+        // Draw the switch-board indicators from the current positions and target configuration.
         private void Draw()
         {
             if(puzzle==null || !isActiveAndEnabled)return;

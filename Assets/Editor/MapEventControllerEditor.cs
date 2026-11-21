@@ -11,6 +11,7 @@ public sealed class MapEventControllerEditor : Editor
     private int selected;
     private Editor prefabEditor;
 
+    // Show the assigned Race event prefabs and their spawn chances as editable Inspector choices.
     public override void OnInspectorGUI()
     {
         DrawDefaultInspector();

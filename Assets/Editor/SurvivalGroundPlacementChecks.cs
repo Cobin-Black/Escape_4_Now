@@ -9,6 +9,7 @@ using UnityEngine;
 
 public static class SurvivalGroundPlacementChecks
 {
+    // Verify ground effects use compatible campus surfaces and avoid protected placements.
     public static void Run()
     {
         try

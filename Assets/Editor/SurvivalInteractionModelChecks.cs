@@ -6,6 +6,7 @@ using UnityEngine;
 
 public static class SurvivalInteractionModelChecks
 {
+    // Verify each puzzle definition uses the intended physical interaction model and saved visual references.
     public static void Run()
     {
         try

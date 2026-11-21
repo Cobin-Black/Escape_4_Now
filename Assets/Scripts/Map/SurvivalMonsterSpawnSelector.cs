@@ -72,6 +72,7 @@ namespace Escape4Now.Map
             return objectives.ValidateConnectivity(occupied,false);
         }
 
+        // Check the monster's clearance around this cell, rather than testing only the center tile.
         private static bool Fits(SurvivalObjectiveLayout objectives, SurvivalRulesSettings settings, Vector2Int anchor)
         {
             for (int y = 0; y < settings.monsterFootprint.y; y++)

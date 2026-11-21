@@ -36,6 +36,7 @@ namespace Escape4Now.UI
         private readonly List<Rect> placedStorageBounds = new List<Rect>();
         private float nextScan;
 
+        // Refresh map markers from the active match and remove ones that no longer apply.
         private void LateUpdate()
         {
             if (Time.unscaledTime >= nextScan)
@@ -51,7 +52,7 @@ namespace Escape4Now.UI
             foreach (var pair in badges)
             {
                 bool show = context.Playing && !context.Finished && pair.Key != null
-                    && pair.Key.isActiveAndEnabled && pair.Key.HasKey && keyLook != null
+                    && pair.Key.isActiveAndEnabled && pair.Key.HasKey && keyLook != null && !RaceBattleDice.Rolling
                     && (activePlayerName == null || !activePlayerName.ShowsKeyFor(pair.Key));
                 UpdateMarker(pair.Value, show, pair.Key != null ? pair.Key.transform.position + keyOffset : Vector3.zero,
                     keyLook != null ? keyLook.sprite : null, keyLook != null ? keyLook.color : Color.white, "", keyColor);
@@ -104,6 +105,7 @@ namespace Escape4Now.UI
             }
         }
 
+        // Project the world marker into the overlay and show its current presentation.
         private void UpdateMarker(WorldMarkerUI marker, bool show, Vector3 world, Sprite sprite, Color tint, string label, Color color)
         {
             var camera = context.WorldCamera;

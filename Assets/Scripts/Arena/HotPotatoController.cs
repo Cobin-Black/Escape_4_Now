@@ -42,6 +42,24 @@ namespace Escape4Now.Arena
         // A presentation-only signal, sent before the eliminated holder is hidden.
         public event System.Action<Vector3> PotatoExploded;
         private float cooldown, delay;
+
+        // Copy the host's holder, timer and round so guests do not run another elimination clock.
+        public void ApplyOnlineRound(int round, float seconds, int holder, bool betweenRounds)
+        {
+            Round = round;
+            RemainingSeconds = seconds;
+            Holder = holder >= 0 ? Players[holder] : null;
+            delay = betweenRounds ? 1 : 0;
+        }
+
+        // Guests animate the clock between updates. The host decides expiry and elimination.
+        public void AdvanceOnlineClock(float seconds)
+        {
+            if (Replica && Playing && !Paused && !BetweenRounds)
+                RemainingSeconds = Mathf.Max(0, RemainingSeconds - Mathf.Max(0, seconds));
+        }
+
+        public void ShowOnlineExplosion(Vector3 position) => PotatoExploded?.Invoke(position);
         protected override void BeginRules()
         {
             Round = 0;
@@ -68,6 +86,7 @@ namespace Escape4Now.Arena
             ShuffleHolder();
         }
 
+        // Choose a new potato holder through the same rules used by normal rounds.
         public void ShuffleHolder(bool excludeCurrent = false)
         {
             var alive = Players.FindAll(p => p.Alive && (!excludeCurrent || p != Holder));
@@ -113,7 +132,8 @@ namespace Escape4Now.Arena
                 return;
             }
 
-            if (cooldown <= 0 && (transferOnContact || Holder.Input.PassPressed))
+            bool tag = Holder.TagPressed;
+            if (cooldown <= 0 && (transferOnContact || tag))
                 TryPass();
         }
 
@@ -156,6 +176,7 @@ namespace Escape4Now.Arena
             return true;
         }
 
+        // Finish when one player remains, or prepare the next round if the holder was eliminated.
         protected override void ParticipantEliminated(ArenaParticipant player)
         {
             if (CheckLastPlayer())

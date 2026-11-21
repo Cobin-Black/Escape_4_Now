@@ -189,6 +189,7 @@ namespace Escape4Now.Items
             return choices[Random.Range(0, choices.Count)].TryStoreItem(prefab);
         }
 
+        // Use storage only when it is still available for this item placement.
         private bool IsAvailableStorage(ObstacleStorage storage, SchoolSpaceType roomType)
         {
             return storage != null && storage.CanInteract && !storage.HasItem
