@@ -22,10 +22,15 @@ namespace Escape4Now.Map
         }
         [SerializeField] private SchoolFurnitureKind kind;
         [SerializeField] private Part[] parts;
+        [SerializeField, Tooltip("Prefab whose Parts are drawn while this obstacle has no item inside. Leave it blank to look the same either way.")]
+        private SchoolFurniture emptyVersion;
         public SchoolFurnitureKind Kind => kind;
         public Vector2Int Cell { get; private set; }
         public ObstacleFacing Facing { get; private set; }
         private IsometricMapTemplate owner;
+        private Escape4Now.Obstacles.ObstacleStorage contents;
+        //Both versions are drawn once, and only the one matching the contents is shown.
+        private GameObject filledLook, emptyLook;
         private MeshRenderer[] renderers;
         private MaterialPropertyBlock fade;
 
@@ -81,6 +86,11 @@ namespace Escape4Now.Map
         //Checks the full footprint before the prefab is allowed to reserve a tile.
         public bool IsValidTemplate()
         {
+            return HasValidParts() && (emptyVersion == null || emptyVersion.HasValidParts());
+        }
+
+        private bool HasValidParts()
+        {
             if (parts == null || parts.Length == 0 || parts.Length > 32) return false;
             foreach (Part part in parts)
                 if (!(part.width > 0 && part.depth > 0 && part.height > 0 && part.bottom >= 0
@@ -108,20 +118,43 @@ namespace Escape4Now.Map
             if (storage == null) storage = gameObject.AddComponent<Escape4Now.Obstacles.ObstacleStorage>();
             //Items are assigned after all obstacles exist.
             storage.SetStoredItem(null);
+            if (contents != null) contents.ContentsChanged -= RefreshLook;
+            contents = storage;
+            contents.ContentsChanged += RefreshLook;
             int order = 500 - (cell.x + cell.y) * 10;
             //Keep all parts on this tile's drawing layer, even when a prefab has many parts.
             var group = GetComponent<SortingGroup>();
             if (group == null) group = gameObject.AddComponent<SortingGroup>();
             group.sortingOrder = order;
-            DrawParts(facing, (part, index) => map.CreateBlock(transform, "Furniture part",
-                part.offset, part.width, part.depth, part.bottom, part.height, part.color, index));
+            filledLook = CreateLook("Filled version", this, map, facing);
+            emptyLook = emptyVersion != null ? CreateLook("Empty version", emptyVersion, map, facing) : null;
             //The collider uses the tile footprint, not the tall drawing above it.
             var collider = GetComponent<PolygonCollider2D>();
             if (collider == null) collider = gameObject.AddComponent<PolygonCollider2D>();
             collider.points = new[] { new Vector2(0, map.TileHeight * 0.45f), new Vector2(map.TileWidth * 0.45f, 0),
                 new Vector2(0, -map.TileHeight * 0.45f), new Vector2(-map.TileWidth * 0.45f, 0) };
-            renderers = GetComponentsInChildren<MeshRenderer>();
+            renderers = GetComponentsInChildren<MeshRenderer>(true);
             owner.OccupantsChanged += RefreshFade;
+            RefreshLook();
+        }
+
+        //Draws one version's parts under its own object so the whole version can be shown or hidden.
+        private GameObject CreateLook(string label, SchoolFurniture source, IsometricMapTemplate map, ObstacleFacing facing)
+        {
+            var look = new GameObject(label);
+            look.transform.SetParent(transform, false);
+            source.DrawParts(facing, (part, index) => map.CreateBlock(look.transform, "Furniture part",
+                part.offset, part.width, part.depth, part.bottom, part.height, part.color, index));
+            return look;
+        }
+
+        //Shows the version that matches the contents. Its tile, collider, and storage stay the same.
+        private void RefreshLook()
+        {
+            if (filledLook == null) return;
+            bool showEmpty = emptyLook != null && contents != null && !contents.HasItem;
+            filledLook.SetActive(!showEmpty);
+            if (emptyLook != null) emptyLook.SetActive(showEmpty);
             RefreshFade();
         }
 
@@ -184,7 +217,8 @@ namespace Escape4Now.Map
         {
             if (owner == null || renderers == null) return;
             float top = 0f;
-            foreach (Part part in parts) top = Mathf.Max(top, part.bottom + part.height);
+            Part[] shown = emptyLook != null && emptyLook.activeSelf ? emptyVersion.parts : parts;
+            foreach (Part part in shown) top = Mathf.Max(top, part.bottom + part.height);
             float rowHeight = owner.TileHeight * 0.5f;
             int rows = Mathf.CeilToInt((top + rowHeight) / rowHeight);
             bool behind = false;
@@ -204,6 +238,7 @@ namespace Escape4Now.Map
             ClearPreview();
 #endif
             if (owner != null) owner.OccupantsChanged -= RefreshFade;
+            if (contents != null) contents.ContentsChanged -= RefreshLook;
         }
     }
 }

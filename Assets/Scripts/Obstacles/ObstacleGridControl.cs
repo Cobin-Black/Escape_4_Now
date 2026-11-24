@@ -27,6 +27,7 @@ namespace Escape4Now.Obstacles
         private bool ownsRegisteredPosition;
         private IsometricMapTemplate registeredMap;
         private IsometricMapTemplate subscribedMap;
+        private ObstacleStorage subscribedStorage;
 
         //Read-only obstacle details for other scripts.
         public Vector2Int GridPosition => gridPosition;
@@ -41,6 +42,7 @@ namespace Escape4Now.Obstacles
         private void OnEnable()
         {
             ApplyPlacement();
+            WatchContents();
         }
 
         //Frees the tile and stops listening when the obstacle is turned off or removed.
@@ -48,6 +50,8 @@ namespace Escape4Now.Obstacles
         {
             ReleaseRegisteredPosition();
             SubscribeToMap(null);
+            if (subscribedStorage != null) subscribedStorage.ContentsChanged -= RefreshLook;
+            subscribedStorage = null;
         }
 
         //Reapplies placement after Inspector changes. Waits a frame in the editor because Unity blocks moving objects during OnValidate.
@@ -103,6 +107,21 @@ namespace Escape4Now.Obstacles
             gridPosition = cell;
             ApplyPlacement();
             return ownsRegisteredPosition;
+        }
+
+        //Follows the stored item during a match. Prefab Mode keeps the normal look.
+        private void WatchContents()
+        {
+            if (!Application.IsPlaying(gameObject) || subscribedStorage != null
+                || !TryGetComponent(out subscribedStorage)) return;
+            subscribedStorage.ContentsChanged += RefreshLook;
+            RefreshLook();
+        }
+
+        //Shows the filled or empty version without moving the obstacle.
+        private void RefreshLook()
+        {
+            if (cubeMesh != null && subscribedStorage != null) cubeMesh.ShowEmpty(!subscribedStorage.HasItem);
         }
 
         //Turns the obstacle so its front face points another way.

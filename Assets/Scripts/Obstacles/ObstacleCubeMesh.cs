@@ -27,10 +27,18 @@ namespace Escape4Now.Obstacles
         [SerializeField, Range(0f, 1f)] private float leftSideShade = 0.48f;
         //Only locker prefabs draw a door, vents, and a metal handle.
         [SerializeField] private bool lockerDetails;
+        //Empty lockers draw their door swung open instead of closed.
+        [SerializeField] private bool doorOpen;
+        [SerializeField, Tooltip("Prefab whose colors and door are drawn while this obstacle has no item inside. Leave it blank to look the same either way.")]
+        private ObstacleCubeMesh emptyVersion;
 
         //Set by ObstacleGridControl so the Inspector only has one place to change them.
         [SerializeField, HideInInspector] private ObstacleFacing facing = ObstacleFacing.South;
         [SerializeField, HideInInspector] private int sortingOrder;
+
+        //The size always comes from this obstacle, so switching versions never changes its tile or collider.
+        private bool showEmpty;
+        private ObstacleCubeMesh Look => showEmpty && emptyVersion != null ? emptyVersion : this;
 
         //Mesh and material owned by this obstacle only.
         private Mesh obstacleMesh;
@@ -76,6 +84,14 @@ namespace Escape4Now.Obstacles
             RebuildMesh();
         }
 
+        //Switches between the filled and empty versions.
+        public void ShowEmpty(bool empty)
+        {
+            if (showEmpty == empty) return;
+            showEmpty = empty;
+            RebuildMesh();
+        }
+
         //Returns the four base corners so a collider can match the footprint.
         public Vector2[] GetFootprintPoints()
         {
@@ -97,8 +113,10 @@ namespace Escape4Now.Obstacles
             Vector3 up = Vector3.up * obstacleHeight;
 
             //The right side faces grid south and the left side faces grid west, so the front color lands on whichever one matches.
-            Color right = ShadeSide(facing == ObstacleFacing.South ? frontFaceColor : topColor, rightSideShade);
-            Color left = ShadeSide(facing == ObstacleFacing.West ? frontFaceColor : topColor, leftSideShade);
+            ObstacleCubeMesh look = Look;
+            Color top = look.topColor;
+            Color right = ShadeSide(facing == ObstacleFacing.South ? look.frontFaceColor : top, look.rightSideShade);
+            Color left = ShadeSide(facing == ObstacleFacing.West ? look.frontFaceColor : top, look.leftSideShade);
 
             if (obstacleMesh == null)
             {
@@ -109,11 +127,14 @@ namespace Escape4Now.Obstacles
             obstacleMesh.vertices = new[] { a + up, b + up, c + up, d + up,
                 b + up, b, c, c + up, c + up, c, d, d + up };
             obstacleMesh.triangles = new[] { 0, 1, 2, 0, 2, 3, 4, 5, 6, 4, 6, 7, 8, 9, 10, 8, 10, 11 };
-            obstacleMesh.colors = new[] { topColor, topColor, topColor, topColor,
+            obstacleMesh.colors = new[] { top, top, top, top,
                 right, right, right, right, left, left, left, left };
             //The door is visible only when the locker's front faces the camera.
-            if (lockerDetails && facing == ObstacleFacing.South) AddLockerDetails(c, b);
-            if (lockerDetails && facing == ObstacleFacing.West) AddLockerDetails(d, c);
+            if (look.lockerDetails && facing == ObstacleFacing.South) AddLockerDetails(c, b, look);
+            if (look.lockerDetails && facing == ObstacleFacing.West) AddLockerDetails(d, c, look);
+            //An open door sticks out past the side of the box, so it can be seen from every direction.
+            if (look.lockerDetails && look.doorOpen)
+                AddOpenDoor(facing == ObstacleFacing.South || facing == ObstacleFacing.East ? b : d, look);
             obstacleMesh.RecalculateBounds();
             meshFilter.sharedMesh = obstacleMesh;
 
@@ -128,36 +149,60 @@ namespace Escape4Now.Obstacles
 
         //Adds flat details to the visible face using the same mesh and fading material.
         // Add the locker door, vents and handle to the chosen visible face.
-        private void AddLockerDetails(Vector3 start, Vector3 end)
+        private void AddLockerDetails(Vector3 start, Vector3 end, ObstacleCubeMesh look)
         {
-            var vertices = new List<Vector3>(obstacleMesh.vertices);
-            var triangles = new List<int>(obstacleMesh.triangles);
-            var colors = new List<Color>(obstacleMesh.colors);
             Color seam = new Color(0.08f, 0.1f, 0.12f, 1f);
-            Color panel = Color.Lerp(topColor, Color.black, 0.2f);
+            Color panel = Color.Lerp(look.topColor, Color.black, 0.2f);
             Color metal = new Color(0.8f, 0.84f, 0.86f, 1f);
             AddPanel(0.08f, 0.06f, 0.84f, 0.88f, seam);
+            if (look.doorOpen)
+            {
+                //With the door open, the front shows a bare shelf inside.
+                AddPanel(0.12f, 0.62f, 0.76f, 0.04f, panel);
+                return;
+            }
             AddPanel(0.12f, 0.09f, 0.76f, 0.82f, panel);
             for (int i = 0; i < 3; i++) AddPanel(0.24f, 0.72f + i * 0.055f, 0.5f, 0.025f, seam);
             AddPanel(0.66f, 0.39f, 0.12f, 0.2f, seam);
             AddPanel(0.68f, 0.43f, 0.07f, 0.13f, metal);
             AddPanel(0.29f, 0.61f, 0.35f, 0.055f, metal);
+
+            void AddPanel(float x, float y, float width, float height, Color color) =>
+                AddFacePanel(start, end, x, y, width, height, color);
+        }
+
+        //Draws the open door from its hinge corner, pointing straight out from the front.
+        private void AddOpenDoor(Vector3 hinge, ObstacleCubeMesh look)
+        {
+            Vector3 gridX = new Vector3(CurrentTileWidth * 0.5f, CurrentTileHeight * 0.5f, 0f);
+            Vector3 gridY = new Vector3(-CurrentTileWidth * 0.5f, CurrentTileHeight * 0.5f, 0f);
+            Vector3 outward = facing == ObstacleFacing.South ? -gridY : facing == ObstacleFacing.North ? gridY
+                : facing == ObstacleFacing.West ? -gridX : gridX;
+            //The door never reaches past the edge of its own tile.
+            Vector3 end = hinge + outward * Mathf.Min(0.2f, Mathf.Max(0.05f, 0.48f - footprintDepth * 0.5f));
+            Color seam = new Color(0.08f, 0.1f, 0.12f, 1f);
+            AddFacePanel(hinge, end, 0f, 0.04f, 1f, 0.92f, seam);
+            AddFacePanel(hinge, end, 0.12f, 0.07f, 0.76f, 0.86f, ShadeSide(look.frontFaceColor, 0.8f));
+            for (int i = 0; i < 3; i++) AddFacePanel(hinge, end, 0.28f, 0.72f + i * 0.055f, 0.44f, 0.025f, seam);
+        }
+
+        //Adds one flat panel to the mesh, using fractions of the face so details still fit when the locker is resized.
+        private void AddFacePanel(Vector3 start, Vector3 end, float x, float y, float width, float height, Color color)
+        {
+            var vertices = new List<Vector3>(obstacleMesh.vertices);
+            var triangles = new List<int>(obstacleMesh.triangles);
+            var colors = new List<Color>(obstacleMesh.colors);
+            int index = vertices.Count;
+            Vector3 origin = Vector3.Lerp(start, end, x) + Vector3.up * (y * obstacleHeight);
+            origin.z -= 0.001f * (index / 4);
+            Vector3 across = (end - start) * width;
+            Vector3 up = Vector3.up * (height * obstacleHeight);
+            vertices.AddRange(new[] { origin, origin + across, origin + across + up, origin + up });
+            triangles.AddRange(new[] { index, index + 1, index + 2, index, index + 2, index + 3 });
+            for (int i = 0; i < 4; i++) colors.Add(color);
             obstacleMesh.SetVertices(vertices);
             obstacleMesh.SetTriangles(triangles, 0);
             obstacleMesh.SetColors(colors);
-
-            //Uses fractions of the face so details still fit when the locker is resized.
-            void AddPanel(float x, float y, float width, float height, Color color)
-            {
-                int index = vertices.Count;
-                Vector3 origin = Vector3.Lerp(start, end, x) + Vector3.up * (y * obstacleHeight);
-                origin.z -= 0.001f * (index / 4);
-                Vector3 across = (end - start) * width;
-                Vector3 up = Vector3.up * (height * obstacleHeight);
-                vertices.AddRange(new[] { origin, origin + across, origin + across + up, origin + up });
-                triangles.AddRange(new[] { index, index + 1, index + 2, index, index + 2, index + 3 });
-                for (int i = 0; i < 4; i++) colors.Add(color);
-            }
         }
 
         //Finds the base corners: a is the back (top of screen), b right, c front (bottom of screen), d left.

@@ -117,6 +117,8 @@ MonoBehaviour:
   rightSideShade: 0.7
   leftSideShade: 0.48
   lockerDetails: 1
+  doorOpen: 0
+  emptyVersion: {fileID: 8049985892936872278, guid: ce30b85cceb34fdcd361e2a900164295, type: 3}
   facing: 3
   sortingOrder: 380
 --- !u!114 &8008263496219192108
