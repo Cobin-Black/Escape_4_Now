@@ -1041,7 +1041,8 @@ namespace Escape4Now.Map
                 Transform child = transform.GetChild(i);
                 if (child.name.StartsWith("Tile ") && child.GetComponent<IsometricMapTile>() != null)
                 {
-                    foreach (MeshFilter filter in child.GetComponentsInChildren<MeshFilter>())
+                    //Include the hidden filled or empty version of each obstacle.
+                    foreach (MeshFilter filter in child.GetComponentsInChildren<MeshFilter>(true))
                     {
                         DestroyGeneratedObject(filter.sharedMesh);
                     }

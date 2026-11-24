@@ -1049,8 +1049,12 @@ public static class LocalMultiplayerChecks
                         Require(copy.transform.rotation == Quaternion.identity
                             && copy.GetComponent<SortingGroup>().sortingOrder == 480,
                             "Rotated obstacle stays upright and on its tile's drawing layer");
+                        //A new obstacle has no item, so its empty version is the one drawn.
+                        var emptyVersion = new SerializedObject(template).FindProperty("emptyVersion").objectReferenceValue as SchoolFurniture;
+                        Require(emptyVersion != null && emptyVersion.Kind == template.Kind,
+                            "Every obstacle has a matching empty version: " + template.name);
                         var meshes = new List<MeshFilter>(copy.GetComponentsInChildren<MeshFilter>());
-                        var data = new SerializedObject(template);
+                        var data = new SerializedObject(emptyVersion);
                         SerializedProperty parts = data.FindProperty("parts");
                         Require(meshes.Count == parts.arraySize, "Turning keeps every prefab part");
                         for (int i = 0; i < parts.arraySize; i++)
@@ -1079,7 +1083,7 @@ public static class LocalMultiplayerChecks
                     }
                     finally
                     {
-                        foreach (MeshFilter mesh in copy.GetComponentsInChildren<MeshFilter>())
+                        foreach (MeshFilter mesh in copy.GetComponentsInChildren<MeshFilter>(true))
                             UnityEngine.Object.DestroyImmediate(mesh.sharedMesh);
                         UnityEngine.Object.DestroyImmediate(copy.gameObject);
                     }

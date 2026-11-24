@@ -77,6 +77,7 @@ MonoBehaviour:
     bottom: 0.5
     height: 0.04
     color: {r: 0.39, g: 0.45, b: 0.47, a: 1}
+  emptyVersion: {fileID: 11400000, guid: 5614921321d9fc2ace7d7a2558a62d36, type: 3}
 --- !u!114 &11400001
 MonoBehaviour:
   m_ObjectHideFlags: 0

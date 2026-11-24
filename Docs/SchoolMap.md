@@ -54,6 +54,7 @@ The Obstacle Spawner exposes separate Computer Lab, Classroom, Hallway, Library,
 Furniture counts as an obstacle. Each piece blocks its tile and uses the same one-item storage as lockers.
 Their small colored parts are simple placeholders drawn in the same style as the map.
 Each prefab fits inside one tile. Its `Parts` fields control its shape and colors.
+Every obstacle also has an empty version in `Assets/Prefabs/Obstacles/Empty`, linked through its `Empty Version` field. The normal version shows while an item is inside and the empty version shows otherwise, including after the item is taken. Empty versions are drawings only: do not add them to the Obstacle Spawner sections or a `Resources` folder.
 
 Each main room has required furniture, then a few optional pieces:
 

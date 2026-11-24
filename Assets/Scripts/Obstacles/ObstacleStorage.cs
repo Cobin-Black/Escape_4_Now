@@ -28,6 +28,8 @@ namespace Escape4Now.Obstacles
         public bool HasItem => Escape4Now.Multiplayer.LanMultiplayerSession.IsClient ? networkHasItem : storedItemPrefab != null;
         public bool ContainsKey => Escape4Now.Multiplayer.LanMultiplayerSession.IsClient
             ? networkContainsKey : storedItemPrefab is KeyItem;
+        //Tells the obstacle's drawing to switch between its filled and empty versions.
+        public event System.Action ContentsChanged;
         public bool IsMenuOpen => openStorage == this;
         public Vector2Int GridPosition => gridControl != null ? gridControl.GridPosition : furniture != null ? furniture.Cell : new Vector2Int(-1, -1);
         public bool CanInteract => gridControl != null ? gridControl.IsInteractable : furniture != null;
@@ -77,6 +79,7 @@ namespace Escape4Now.Obstacles
         public void SetStoredItem(Item itemPrefab)
         {
             storedItemPrefab = itemPrefab;
+            ContentsChanged?.Invoke();
         }
 
         //Stores an item only when this obstacle is empty.
@@ -84,6 +87,7 @@ namespace Escape4Now.Obstacles
         {
             if (itemPrefab == null || HasItem) return false;
             storedItemPrefab = itemPrefab;
+            ContentsChanged?.Invoke();
             return true;
         }
 
@@ -92,8 +96,11 @@ namespace Escape4Now.Obstacles
         {
             if (Escape4Now.Multiplayer.LanMultiplayerSession.IsClient)
             {
+                //The host reports contents constantly, so only a real change redraws the obstacle.
+                bool changed = networkHasItem != hasItem;
                 networkHasItem = hasItem;
                 networkContainsKey = containsKey;
+                if (changed) ContentsChanged?.Invoke();
             }
         }
 
@@ -270,6 +277,7 @@ namespace Escape4Now.Obstacles
 
                     storedItemPrefab = null;
                     hasBeenSearched = true;
+                    ContentsChanged?.Invoke();
                 }
                 else
                 {
