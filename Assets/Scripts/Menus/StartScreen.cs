@@ -1,4 +1,5 @@
 using Escape4Now.Accounts;
+using Escape4Now.Audio;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using static Escape4Now.Menus.ArcadeMenuKit;
@@ -28,6 +29,7 @@ namespace Escape4Now.Menus
             if (AccountService.LoginRequested) OpenLogin();
             AccountService.LoginRequested = false;
             _ = AccountService.ConnectAsync();
+            MainScreenAudio.PlayTitleScreen();
         }
 
         private void Update()

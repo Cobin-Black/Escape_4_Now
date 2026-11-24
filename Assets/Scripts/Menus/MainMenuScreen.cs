@@ -1,4 +1,5 @@
 using Escape4Now.Accounts;
+using Escape4Now.Audio;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using static Escape4Now.Menus.ArcadeMenuKit;
@@ -55,7 +56,8 @@ namespace Escape4Now.Menus
         private static readonly int[] Barcode = { 3, 1, 2, 1, 4, 1, 1, 3, 2, 1, 1, 2, 4, 1, 2, 1, 3, 1, 1, 2, 1, 4, 2, 1, 1, 3, 1, 2, 1, 1, 4, 1, 2, 3, 1, 1, 2, 1, 3, 1 };
 
         private const string MusicKey = "E4N_Music";
-        private const string SfxKey = "E4N_Sfx";
+        internal const string SfxKey = "E4N_Sfx";
+        internal const int DefaultSfx = 6;
 
         private readonly LeaderboardPanel leaderboard = new LeaderboardPanel();
         private readonly MatchHistoryPanel history = new MatchHistoryPanel();
@@ -66,7 +68,7 @@ namespace Escape4Now.Menus
         private int infoMode = -1;
 
         private int music = 5;
-        private int sfx = 6;
+        private int sfx = DefaultSfx;
         private string toast = "";
         private float toastUntil;
         private GUIStyle h2, menuTitle, menuSub, body, small, smallBold, button, tagStyle, logoShade, logoNow, idStyle, passTitle, stamp, keyName;
@@ -99,6 +101,7 @@ namespace Escape4Now.Menus
             music = PlayerPrefs.GetInt(MusicKey, music);
             sfx = PlayerPrefs.GetInt(SfxKey, sfx);
             AudioListener.volume = sfx / 8f;
+            MainScreenAudio.Prepare();
         }
 
         private void Update()
@@ -161,12 +164,15 @@ namespace Escape4Now.Menus
         {
             string scene = modeScenes != null && mode < modeScenes.Length ? modeScenes[mode] : "";
             if (string.IsNullOrEmpty(scene)) ShowToast(ModeNames[mode] + " is coming soon.");
-            else OpenScene(scene, ModeNames[mode]);
+            else if (OpenScene(scene, ModeNames[mode])) MainScreenAudio.PlayModeSelect(mode);
         }
 
-        private void OpenScene(string scene, string what)
+        //Returns false when the scene could not be opened.
+        private bool OpenScene(string scene, string what)
         {
-            if (!TryLoadScene(scene)) ShowToast(what + " isn't built yet (add \"" + scene + "\" to Build Settings).");
+            if (TryLoadScene(scene)) return true;
+            ShowToast(what + " isn't built yet (add \"" + scene + "\" to Build Settings).");
+            return false;
         }
 
         private void ShowToast(string text)
@@ -299,7 +305,7 @@ namespace Escape4Now.Menus
                 2 => onlineFreeForAllScene,
                 _ => onlineHotPotatoScene
             };
-            OpenScene(destination, "Online Mode");
+            if (OpenScene(destination, "Online Mode")) MainScreenAudio.PlayModeSelect(onlineMode);
         }
 
         private void DrawModeSelection(Rect inner, bool online)
